@@ -3,16 +3,18 @@
 
 {% block main %}
 {{ imports }}
-
-{% if instruction.docs and instruction.docs.length > 0 %}
+{%- if instruction.docs and instruction.docs.length > 0 %}
 {{ macros.docblock(instruction.docs) }}
-{% endif %}
+{%- endif %}
 {{ macros.coreDecoderDerives() }}
 pub struct {{ instruction.name | pascalCase }} {
 {% for arg in instruction.arguments -%}
-  {% if arg.docs %}{% for doc in arg.docs %}{% set lines = doc.split('\n') %}{% for line in lines %}    /// {{ line }}
-{% endfor %}{% endfor %}{% endif %}
+  {% if arg.docs %}{{ macros.fieldDocblock(arg.docs) }}{% endif %}
   {% if argumentTypes[loop.index0].requiredBigArray %}  #[cfg_attr(feature = "serde", serde(with = "serde_big_array::BigArray"))]
+  {% endif %}
+  {% if withBase58 and argumentTypes[loop.index0].isPubkey %}  #[cfg_attr(feature = "base58", serde(serialize_with = "crate::base58::serialize"))]
+  {% endif %}
+  {% if withBase58 and argumentTypes[loop.index0].isOptionPubkey %}  #[cfg_attr(feature = "base58", serde(serialize_with = "crate::base58::serialize_option"))]
   {% endif %}
   pub {{ arg.name | snakeCase }}: {{ argumentTypes[loop.index0].type }},
 {% endfor -%}
@@ -21,6 +23,11 @@ pub struct {{ instruction.name | pascalCase }} {
 {{ macros.simpleStructDerives() }}
 pub struct {{ instruction.name | pascalCase }}InstructionAccounts {
 {% for account in instruction.accounts %}
+    {% if withBase58 %}
+    {% if account.isOptional %}#[cfg_attr(feature = "base58", serde(serialize_with = "crate::base58::serialize_option"))]
+    {% else %}#[cfg_attr(feature = "base58", serde(serialize_with = "crate::base58::serialize"))]
+    {% endif %}
+    {% endif %}
     pub {{ macros.escapeRustKeyword(account.name | snakeCase) }}: {% if account.isOptional %}Option<solana_pubkey::Pubkey>{% else %}solana_pubkey::Pubkey{% endif %},
 {% endfor %}
 {% if instruction.accounts | length > 0 %}
@@ -34,13 +41,13 @@ impl {{ instruction.name | pascalCase }} {
 {{ discriminatorManifest.checkCode | safe }}
 {% endif %}
 
-        let data_slice = data;
+        let mut data_slice = data;
 
 {% if discriminatorManifest %}
-        let data_slice = &data_slice[{{ discriminatorManifest.size }}..];
+        data_slice = &data_slice[{{ discriminatorManifest.size }}..];
 {% endif %}
 
-        Self::deserialize(data_slice)
+        borsh::BorshDeserialize::deserialize(&mut data_slice).ok()
     }
 }
 

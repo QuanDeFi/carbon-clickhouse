@@ -69,6 +69,8 @@ pub async fn main() -> CarbonResult<()> {
         Default::default(),
         Arc::new(RwLock::new(HashSet::new())),
         geyser_config,
+        None,
+        None,
     );
 
     carbon_core::pipeline::Pipeline::builder()
@@ -102,7 +104,7 @@ impl Processor for RaydiumCpmmInstructionProcessor {
         let logs = metadata.decode_log_events::<SwapEvent>();
 
         if !logs.is_empty() {
-            println!("Swap Events: {:?}", logs);
+            println!("Swap Events: {logs:?}");
         }
 
         Ok(())

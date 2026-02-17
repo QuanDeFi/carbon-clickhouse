@@ -33,11 +33,13 @@
 //! - Ensure implementations handle errors gracefully, especially when fetching
 //!   data and sending updates to the pipeline.
 
+use solana_clock::Slot;
 use solana_program::hash::Hash;
 use solana_transaction_status::Rewards;
 use {
     crate::{error::CarbonResult, metrics::MetricsCollection},
     async_trait::async_trait,
+    chrono::{DateTime, Utc},
     solana_account::Account,
     solana_pubkey::Pubkey,
     solana_signature::Signature,
@@ -46,6 +48,16 @@ use {
     std::sync::Arc,
     tokio_util::sync::CancellationToken,
 };
+
+#[derive(Debug, Clone)]
+pub struct DatasourceDisconnection {
+    pub source: String,
+    pub disconnect_time: DateTime<Utc>,
+    pub last_slot_before_disconnect: Slot,
+    pub first_slot_after_reconnect: Slot,
+    /// Number of slots missed during disconnection
+    pub missed_slots: u64,
+}
 
 /// Defines the interface for data sources that produce updates for accounts,
 /// transactions, and account deletions.
@@ -299,10 +311,11 @@ pub struct AccountDeletion {
 ///   and logs.
 /// - `is_vote`: A boolean indicating whether the transaction is a vote.
 /// - `slot`: The slot number in which the transaction was recorded.
+/// - `index`: The index of the transaction within the slot (block).
 /// - `block_time`: The Unix timestamp of when the transaction was processed.
 /// - `block_hash`: Block hash that can be used to detect a fork.
 ///
-/// Note: The `block_time` field may not be returned in all scenarios.
+/// Note: The `block_time` and `index` fields may not be available in all scenarios.
 #[derive(Debug, Clone)]
 pub struct TransactionUpdate {
     pub signature: Signature,
@@ -310,6 +323,7 @@ pub struct TransactionUpdate {
     pub meta: TransactionStatusMeta,
     pub is_vote: bool,
     pub slot: u64,
+    pub index: Option<u64>,
     pub block_time: Option<i64>,
     pub block_hash: Option<Hash>,
 }

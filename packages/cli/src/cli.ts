@@ -3,13 +3,22 @@ import { resolve, join } from 'path';
 import { promptForParse, promptForScaffold } from './lib/prompts';
 import { generateDecoder, parseIdlSource, getIdlMetadata } from './lib/decoder';
 import { validateDataSource, validateMetrics } from './lib/validation';
-import { resolveRpcUrl } from './lib/utils';
+import { resolveRpcUrl, runCargoFmt } from './lib/utils';
 import { logger, showBanner } from './lib/logger';
 
 const program = new Command();
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const pkg = require('../package.json');
+
+// Rustfmt configuration options matching carbon's rustfmt.toml
+const cargoFmtOptions: Record<string, string | number | boolean> = {
+    comment_width: 80,
+    edition: '2021',
+    group_imports: 'One',
+    imports_granularity: 'One',
+    wrap_comments: true,
+};
 
 program
     .name('carbon-cli')
@@ -37,7 +46,6 @@ program.addHelpText(
 `,
 );
 
-// Parse command
 program
     .command('parse')
     .description('Parse an IDL and generate a decoder')
@@ -52,6 +60,7 @@ program
     .option('--with-postgres <boolean>', 'Include Postgres wiring and deps (default: true)')
     .option('--with-graphql <boolean>', 'Include GraphQL wiring and deps (default: true)')
     .option('--with-serde <boolean>', 'Include serde feature for decoder (default: false)')
+    .option('--with-base58 <boolean>', 'Include base58 feature for decoder (default: false)')
     .option('--no-clean', 'Do not delete output directory before rendering', false)
     .action(async opts => {
         showBanner();
@@ -67,7 +76,11 @@ program
             opts.withPostgres !== undefined ? opts.withPostgres === 'true' || opts.withPostgres === true : true;
         const withGraphql =
             opts.withGraphql !== undefined ? opts.withGraphql === 'true' || opts.withGraphql === true : true;
-        const withSerde = opts.withSerde !== undefined ? opts.withSerde === 'true' || opts.withSerde === true : false;
+        const withSerdeDefault = !withPostgres && !withGraphql ? true : false;
+        const withSerde =
+            opts.withSerde !== undefined ? opts.withSerde === 'true' || opts.withSerde === true : withSerdeDefault;
+        const withBase58 =
+            opts.withBase58 !== undefined ? opts.withBase58 === 'true' || opts.withBase58 === true : false;
 
         const outDir = resolve(process.cwd(), opts.outDir);
 
@@ -87,12 +100,21 @@ program
                 withPostgres,
                 withGraphql,
                 withSerde,
+                withBase58,
                 standalone: true,
             });
 
             logger.succeedSpinner('Decoder generated');
 
-            // Print success message
+            logger.startSpinner('Formatting generated code...');
+            try {
+                await runCargoFmt(outDir, cargoFmtOptions);
+                logger.succeedSpinner('Code formatted successfully');
+            } catch (error) {
+                logger.failSpinner('Failed to format code');
+                logger.warning(`Formatting failed: ${error instanceof Error ? error.message : String(error)}`);
+            }
+
             const idlSource = parseIdlSource(String(opts.idl));
             const source =
                 idlSource.type === 'program'
@@ -123,6 +145,7 @@ program
     .option('--with-postgres <boolean>', 'Include Postgres wiring and deps (default: true)')
     .option('--with-graphql <boolean>', 'Include GraphQL wiring and deps (default: true)')
     .option('--with-serde <boolean>', 'Include serde feature for decoder (default: false)')
+    .option('--with-base58 <boolean>', 'Include base58 feature for decoder (default: false)')
     .option('--postgres-mode <generic|typed>', 'Postgres table storage mode', 'typed')
     .option('--force', 'Overwrite output directory if it exists', false)
     .action(async opts => {
@@ -146,7 +169,13 @@ program
             opts.withPostgres !== undefined ? opts.withPostgres === 'true' || opts.withPostgres === true : true;
         const withGraphql =
             opts.withGraphql !== undefined ? opts.withGraphql === 'true' || opts.withGraphql === true : true;
-        const withSerde = opts.withSerde !== undefined ? opts.withSerde === 'true' || opts.withSerde === true : false;
+        // Default serde to true if both postgres and graphql are disabled (since generated code always includes serde attributes)
+        // Otherwise, serde will be auto-enabled by postgres/graphql, so default to false
+        const withSerdeDefault = !withPostgres && !withGraphql ? true : false;
+        const withSerde =
+            opts.withSerde !== undefined ? opts.withSerde === 'true' || opts.withSerde === true : withSerdeDefault;
+        const withBase58 =
+            opts.withBase58 !== undefined ? opts.withBase58 === 'true' || opts.withBase58 === true : false;
         const force = Boolean(opts.force);
 
         // Use provided decoder name or auto-detect from IDL
@@ -184,6 +213,7 @@ program
                 withPostgres,
                 withGraphql,
                 withSerde,
+                withBase58,
                 force,
                 postgresMode: opts.postgresMode,
             });
@@ -214,6 +244,7 @@ program
                 withPostgres,
                 withGraphql,
                 withSerde,
+                withBase58,
                 standalone: false,
             });
 
@@ -223,7 +254,15 @@ program
             throw error;
         }
 
-        // Print success message
+        logger.startSpinner('Formatting generated code...');
+        try {
+            await runCargoFmt(workspaceDir, cargoFmtOptions);
+            logger.succeedSpinner('Code formatted successfully');
+        } catch (error) {
+            logger.failSpinner('Failed to format code');
+            logger.warning(`Formatting failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
         const decoderInfo = `${decoder} (generated from IDL)`;
 
         logger.scaffoldSuccess(join(outDir, name), decoderInfo);

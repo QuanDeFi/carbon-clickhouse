@@ -2,7 +2,7 @@
 
 set -ex
 
-VERSION="0.11.0"
+VERSION="0.12.0"
 
 workspace_crates=(
     carbon-macros
@@ -11,14 +11,17 @@ workspace_crates=(
     carbon-core
 
     carbon-helius-atlas-ws-datasource
+    carbon-helius-gpa-v2-datasource
+    carbon-helius-gtfa-datasource
     carbon-helius-laserstream-datasource
     carbon-rpc-block-crawler-datasource
     carbon-rpc-block-subscribe-datasource
+    carbon-rpc-gpa-datasource
     carbon-rpc-program-subscribe-datasource
     carbon-rpc-transaction-crawler-datasource
     carbon-jito-shredstream-grpc-datasource
     carbon-yellowstone-grpc-datasource
-    carbon-stream-message-datasource
+    carbon-stream-message-datasource 
 
     carbon-log-metrics
     carbon-prometheus-metrics
@@ -28,6 +31,9 @@ workspace_crates=(
     carbon-bonkswap-decoder
     carbon-boop-decoder
     carbon-bubblegum-decoder
+    carbon-circle-message-transmitter-v2-decoder
+    carbon-circle-token-messenger-v2-decoder
+    carbon-dflow-aggregator-v4-decoder
     carbon-drift-v2-decoder
     carbon-fluxbeam-decoder
     carbon-gavel-decoder
@@ -55,6 +61,8 @@ workspace_crates=(
     carbon-mpl-token-metadata-decoder
     carbon-name-service-decoder
     carbon-okx-dex-decoder
+    carbon-onchain-labs-dex-v1-decoder
+    carbon-onchain-labs-dex-v2-decoder
     carbon-openbook-v2-decoder
     carbon-orca-whirlpool-decoder
     carbon-pancake-swap-decoder
@@ -73,9 +81,11 @@ workspace_crates=(
     carbon-stabble-stable-swap-decoder
     carbon-stabble-weighted-swap-decoder
     carbon-stake-program-decoder
+    carbon-swig-decoder
     carbon-system-program-decoder
     carbon-token-2022-decoder
     carbon-token-program-decoder
+    carbon-validator-snapshot-datasource
     carbon-vertigo-decoder
     carbon-virtuals-decoder
     carbon-wavebreak-decoder

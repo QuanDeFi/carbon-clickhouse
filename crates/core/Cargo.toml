@@ -1,6 +1,6 @@
 [package]
 name = "carbon-core"
-version = "0.11.0"
+version = "0.12.0"
 edition = { workspace = true }
 description = "Core library for Carbon"
 license = { workspace = true }
@@ -17,6 +17,7 @@ graphql = ["juniper", "axum", "juniper_axum"]
 
 [dependencies]
 solana-account = { workspace = true }
+solana-clock = { workspace = true }
 solana-hash = { workspace = true }
 solana-instruction = { workspace = true, default-features = false }
 solana-message = { workspace = true }
@@ -31,6 +32,7 @@ async-trait = { workspace = true }
 borsh = { workspace = true }
 bs58 = { workspace = true }
 base64 = { workspace = true }
+chrono = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

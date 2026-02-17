@@ -11,12 +11,15 @@ import { extendVisitor, mergeVisitor, pipe, visit } from '@codama/visitors-core'
 
 import { ImportMap } from './ImportMap';
 import { getDiscriminatorBytes } from './utils';
+import { formatDocComments } from './utils/render';
 
 export type TypeManifest = {
     imports: ImportMap;
     type: string;
     borshType: string;
     requiredBigArray?: number;
+    isPubkey?: boolean;
+    isOptionPubkey?: boolean;
 };
 
 export type DiscriminatorManifest = {
@@ -25,7 +28,11 @@ export type DiscriminatorManifest = {
     checkCode: string;
 };
 
-export function getTypeManifestVisitor(definedTypesMap?: Map<string, any> | null, newtypeWrapperTypes?: Set<string>) {
+export function getTypeManifestVisitor(
+    definedTypesMap?: Map<string, any> | null,
+    newtypeWrapperTypes?: Set<string>,
+    withBase58?: boolean,
+) {
     const baseVisitor = pipe(
         mergeVisitor(
             (): TypeManifest => ({
@@ -179,19 +186,24 @@ export function getTypeManifestVisitor(definedTypesMap?: Map<string, any> | null
                             }
 
                             const docs = node.docs || [];
-                            const docComments =
-                                docs.length > 0
-                                    ? docs
-                                          .map(doc => {
-                                              const lines = doc.split('\n');
-                                              return lines.map(line => `    /// ${line}`).join('\n');
-                                          })
-                                          .join('\n') + '\n'
-                                    : '';
+                            // Use formatDocComments to properly handle list item indentation
+                            const docComments = docs.length > 0 ? formatDocComments(docs) + '\n' : '';
+
+                            // Add base58 attribute for Pubkey fields (only if withBase58 is enabled)
+                            let base58Attr = '';
+                            if (withBase58) {
+                                if (fieldManifest.isPubkey === true) {
+                                    base58Attr =
+                                        '#[cfg_attr(feature = "base58", serde(serialize_with = "crate::base58::serialize"))]\n';
+                                } else if (fieldManifest.isOptionPubkey === true) {
+                                    base58Attr =
+                                        '#[cfg_attr(feature = "base58", serde(serialize_with = "crate::base58::serialize_option"))]\n';
+                                }
+                            }
 
                             return {
                                 imports: fieldManifest.imports,
-                                type: `${docComments}${needsBigArray ? '    #[cfg_attr(feature = "serde", serde(with = "serde_big_array::BigArray"))]\n' : ''}    ${fieldName}: ${fieldManifest.type},`,
+                                type: `${docComments}${needsBigArray ? '#[cfg_attr(feature = "serde", serde(with = "serde_big_array::BigArray"))]\n' : ''}${base58Attr}${fieldName}: ${fieldManifest.type},`,
                                 borshType: `${fieldName}: ${fieldManifest.borshType},`,
                             };
                         },
@@ -223,8 +235,8 @@ export function getTypeManifestVisitor(definedTypesMap?: Map<string, any> | null
                 visitEnumType(node, { self }) {
                     const variants = node.variants.map(variant => visit(variant, self));
                     const mergedImports = new ImportMap().mergeWith(...variants.map(v => v.imports));
-                    const variantTypes = variants.map(v => '    ' + v.type).join('\n');
-                    const variantBorshTypes = variants.map(v => '    ' + v.borshType).join('\n');
+                    const variantTypes = variants.map(v => v.type).join('\n');
+                    const variantBorshTypes = variants.map(v => v.borshType).join('\n');
 
                     return {
                         imports: mergedImports,
@@ -274,6 +286,7 @@ export function getTypeManifestVisitor(definedTypesMap?: Map<string, any> | null
                         imports: childManifest.imports,
                         type: `Option<${childManifest.type}>`,
                         borshType: `Option<${childManifest.borshType}>`,
+                        isOptionPubkey: childManifest.isPubkey === true,
                     };
                 },
 
@@ -283,6 +296,7 @@ export function getTypeManifestVisitor(definedTypesMap?: Map<string, any> | null
                         imports: itemManifest.imports,
                         type: `Option<${itemManifest.type}>`,
                         borshType: `Option<${itemManifest.borshType}>`,
+                        isOptionPubkey: itemManifest.isPubkey === true,
                     };
                 },
 
@@ -296,6 +310,7 @@ export function getTypeManifestVisitor(definedTypesMap?: Map<string, any> | null
                         imports: new ImportMap().add('solana_pubkey::Pubkey'),
                         type: 'Pubkey',
                         borshType: 'Pubkey',
+                        isPubkey: true,
                     };
                 },
 
@@ -341,20 +356,25 @@ export function getTypeManifestVisitor(definedTypesMap?: Map<string, any> | null
                     }
 
                     const docs = node.docs || [];
-                    const docComments =
-                        docs.length > 0
-                            ? docs
-                                  .map(doc => {
-                                      const lines = doc.split('\n');
-                                      return lines.map(line => `    /// ${line}`).join('\n');
-                                  })
-                                  .join('\n') + '\n'
-                            : '';
+                    // Use formatDocComments to properly handle list item indentation
+                    const docComments = docs.length > 0 ? formatDocComments(docs) + '\n' : '';
+
+                    // Add base58 attribute for Pubkey fields (only if withBase58 is enabled)
+                    let base58Attr = '';
+                    if (withBase58) {
+                        if (fieldManifest.isPubkey === true) {
+                            base58Attr =
+                                '#[cfg_attr(feature = "base58", serde(serialize_with = "crate::base58::serialize"))]\n';
+                        } else if (fieldManifest.isOptionPubkey === true) {
+                            base58Attr =
+                                '#[cfg_attr(feature = "base58", serde(serialize_with = "crate::base58::serialize_option"))]\n';
+                        }
+                    }
 
                     return {
                         imports: fieldManifest.imports,
-                        type: `${docComments}${needsBigArray ? '    #[cfg_attr(feature = "serde", serde(with = "serde_big_array::BigArray"))]\n' : ''}    pub ${fieldName}: ${fieldManifest.type},`,
-                        borshType: `    ${fieldName}: ${fieldManifest.borshType},`,
+                        type: `${docComments}${needsBigArray ? '#[cfg_attr(feature = "serde", serde(with = "serde_big_array::BigArray"))]\n' : ''}${base58Attr}pub ${fieldName}: ${fieldManifest.type},`,
+                        borshType: `${fieldName}: ${fieldManifest.borshType},`,
                     };
                 },
 
@@ -397,6 +417,7 @@ export function getTypeManifestVisitor(definedTypesMap?: Map<string, any> | null
                         imports: childManifest.imports,
                         type: `Option<${childManifest.type}>`,
                         borshType: `Option<${childManifest.borshType}>`,
+                        isOptionPubkey: childManifest.isPubkey === true,
                     };
                 },
             });
@@ -411,37 +432,123 @@ export function getTypeManifestVisitor(definedTypesMap?: Map<string, any> | null
 
 export function getDiscriminatorManifest(
     discriminators: DiscriminatorNode[] | undefined,
+    programName?: string | null,
+    discriminatorNames?: Map<number, string>,
 ): DiscriminatorManifest | null {
     if (!discriminators || discriminators.length === 0) return null;
 
-    // For now, handle the first discriminator (can be extended for multiple)
+    // Handle multiple discriminators explicitly (for any IDL with nested discriminators)
+    if (discriminators.length > 1) {
+        const constantDiscriminators = discriminators.filter(d => d.kind === 'constantDiscriminatorNode');
+
+        if (constantDiscriminators.length > 1) {
+            // Sort by offset to ensure correct order
+            const sorted = [...constantDiscriminators].sort((a, b) => {
+                if (a.kind === 'constantDiscriminatorNode' && b.kind === 'constantDiscriminatorNode') {
+                    return a.offset - b.offset;
+                }
+                return 0;
+            });
+
+            // Calculate maximum required size
+            const maxRequiredSize = Math.max(
+                ...sorted.map(d => {
+                    if (d.kind === 'constantDiscriminatorNode') {
+                        const bytes = getDiscriminatorBytes(d.constant);
+                        return d.offset + bytes.length;
+                    }
+                    return 0;
+                }),
+            );
+
+            // Generate check code for all discriminators
+            const checkParts: string[] = [];
+            const lengthCheck = maxRequiredSize === 1 ? 'data.is_empty()' : `data.len() < ${maxRequiredSize}`;
+            checkParts.push(`if ${lengthCheck} {`);
+            checkParts.push(`    return None;`);
+            checkParts.push(`}`);
+
+            // Check each discriminator in sequence
+            for (const discriminator of sorted) {
+                if (discriminator.kind === 'constantDiscriminatorNode') {
+                    const bytes = getDiscriminatorBytes(discriminator.constant);
+                    const size = bytes.length;
+                    // Get variable name: use provided name map, or default based on offset
+                    let varName: string;
+                    if (discriminator.offset === 0) {
+                        varName = 'discriminator';
+                    } else if (discriminatorNames && discriminatorNames.has(discriminator.offset)) {
+                        const name = discriminatorNames.get(discriminator.offset)!;
+                        // Convert camelCase to snake_case
+                        varName = name.replace(/([A-Z])/g, '_$1').toLowerCase();
+                    } else {
+                        varName = `discriminator_${discriminator.offset}`;
+                    }
+
+                    if (size === 1) {
+                        // Single byte discriminator
+                        checkParts.push(`let ${varName} = data[${discriminator.offset}];`);
+                        checkParts.push(`if ${varName} != ${bytes[0]} {`);
+                        checkParts.push(`    return None;`);
+                        checkParts.push(`}`);
+                    } else {
+                        // Multi-byte discriminator
+                        checkParts.push(
+                            `let ${varName} = &data[${discriminator.offset}..${discriminator.offset + size}];`,
+                        );
+                        checkParts.push(`if ${varName} != [${bytes.join(', ')}] {`);
+                        checkParts.push(`    return None;`);
+                        checkParts.push(`}`);
+                    }
+                }
+            }
+
+            // Use the size of the first discriminator for slicing (as per manually modified version)
+            const firstDiscriminator = sorted[0];
+            if (firstDiscriminator.kind === 'constantDiscriminatorNode') {
+                const firstBytes = getDiscriminatorBytes(firstDiscriminator.constant);
+                const firstSize = firstBytes.length;
+                const checkCode = checkParts.join('\n');
+                return {
+                    bytes: `[${firstBytes.join(', ')}]`,
+                    size: firstSize,
+                    checkCode,
+                };
+            }
+        }
+    }
+
+    // For other programs or single discriminator, use original logic
     const discriminator = discriminators[0];
 
     switch (discriminator.kind) {
         case 'constantDiscriminatorNode': {
             const bytes = getDiscriminatorBytes(discriminator.constant);
             const size = bytes.length;
-            const checkCode = `        if data.len() < ${discriminator.offset + size} {
-            return None;
-        }
-        let discriminator = &data[${discriminator.offset}..${discriminator.offset + size}];
-        if discriminator != &[${bytes.join(', ')}] {
-            return None;
-        }`;
+            const requiredSize = discriminator.offset + size;
+            // Use is_empty() when checking for size 1, otherwise use len() < size
+            const lengthCheck = requiredSize === 1 ? 'data.is_empty()' : `data.len() < ${requiredSize}`;
+            const checkCode = `if ${lengthCheck} {
+    return None;
+}
+let discriminator = &data[${discriminator.offset}..${discriminator.offset + size}];
+if discriminator != [${bytes.join(', ')}] {
+    return None;
+}`;
             return { bytes: `[${bytes.join(', ')}]`, size, checkCode };
         }
 
         case 'fieldDiscriminatorNode': {
             // Field discriminators check a specific field value after deserialization
-            const checkCode = `        // Field discriminator: ${discriminator.name} at offset ${discriminator.offset}
-        // This check happens after deserialization`;
+            const checkCode = `// Field discriminator: ${discriminator.name} at offset ${discriminator.offset}
+// This check happens after deserialization`;
             return { bytes: '[]', size: 0, checkCode };
         }
 
         case 'sizeDiscriminatorNode': {
-            const checkCode = `        if data.len() != ${discriminator.size} {
-            return None;
-        }`;
+            const checkCode = `if data.len() != ${discriminator.size} {
+    return None;
+}`;
             return { bytes: '[]', size: 0, checkCode };
         }
 

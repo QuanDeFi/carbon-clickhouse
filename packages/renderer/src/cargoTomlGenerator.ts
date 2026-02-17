@@ -1,21 +1,38 @@
 import { kebabCase } from '@codama/nodes';
 import { VERSIONS, getCrateDependencyString } from '@sevenlabs-hq/carbon-versions';
+import { isToken2022Program } from './utils/helpers';
 
 export type DecoderCargoTomlOptions = {
     packageName?: string;
     programName: string;
+    originalProgramName?: string; // Original program name from IDL (for token-2022 checks)
     withPostgres: boolean;
     withGraphQL: boolean;
     withSerde: boolean;
+    withBase58?: boolean;
+    withSerdeBigArray?: boolean;
     standalone?: boolean;
 };
 
 export function generateDecoderCargoToml(options: DecoderCargoTomlOptions): string {
-    const { packageName, programName, withPostgres, withGraphQL, withSerde, standalone = true } = options;
+    const {
+        packageName,
+        programName,
+        originalProgramName,
+        withPostgres,
+        withGraphQL,
+        withSerde,
+        withBase58 = false,
+        withSerdeBigArray = false,
+        standalone = true,
+    } = options;
 
-    const decoderPackageName = packageName
-        ? `carbon-${kebabCase(packageName)}-decoder`
-        : `carbon-${kebabCase(programName)}-decoder`;
+    const decoderPackageName =
+        packageName && packageName.trim()
+            ? `carbon-${kebabCase(packageName)}-decoder`
+            : programName && programName.trim()
+              ? `carbon-${kebabCase(programName)}-decoder`
+              : 'carbon-decoder';
 
     const carbonCoreDep = getCrateDependencyString('carbon-core', VERSIONS['carbon-core'], ['macros']);
     const carbonTestUtilsDep = getCrateDependencyString('carbon-test-utils', VERSIONS['carbon-test-utils']);
@@ -30,13 +47,13 @@ export function generateDecoderCargoToml(options: DecoderCargoTomlOptions): stri
     const sqlxDep = getCrateDependencyString('sqlx', VERSIONS['sqlx'], ['postgres', 'rust_decimal'], true);
     const sqlxMigratorDep = getCrateDependencyString('sqlx_migrator', VERSIONS['sqlx_migrator'], undefined, true);
     const juniperDep = getCrateDependencyString('juniper', VERSIONS['juniper'], undefined, true);
-    const base64Dep = getCrateDependencyString('base64', VERSIONS['base64'], undefined, true);
 
     const features: string[] = ['default = []'];
 
-    if (withSerde || withPostgres || withGraphQL) {
+    if (withSerde || withPostgres || withGraphQL || withBase58) {
         features.push('');
-        features.push('serde = ["dep:serde", "dep:serde-big-array"]');
+        const serdeDeps = withSerdeBigArray ? 'serde = ["dep:serde", "dep:serde-big-array"]' : 'serde = ["dep:serde"]';
+        features.push(serdeDeps);
     }
 
     if (withPostgres) {
@@ -55,9 +72,13 @@ export function generateDecoderCargoToml(options: DecoderCargoTomlOptions): stri
         features.push('graphql = [');
         features.push('    "carbon-core/graphql",');
         features.push('    "dep:juniper",');
-        features.push('    "dep:base64",');
         features.push('    "serde",');
         features.push(']');
+    }
+
+    if (withBase58) {
+        features.push('');
+        features.push('base58 = ["serde"]');
     }
 
     const dependencies: string[] = [
@@ -67,17 +88,41 @@ export function generateDecoderCargoToml(options: DecoderCargoTomlOptions): stri
         solanaAccountDep,
         solanaInstructionDep,
         serdeJsonDep,
-        '',
-        serdeDep,
-        serdeBigArrayDep,
-        '',
-        sqlxDep,
-        asyncTraitDep,
-        sqlxMigratorDep,
-        '',
-        juniperDep,
-        base64Dep,
     ];
+
+    if (withSerde || withPostgres || withGraphQL || withBase58) {
+        dependencies.push('');
+        dependencies.push(serdeDep);
+        if (withSerdeBigArray) {
+            dependencies.push(serdeBigArrayDep);
+        }
+    }
+
+    if (withPostgres) {
+        dependencies.push('');
+        dependencies.push(sqlxDep);
+        dependencies.push(asyncTraitDep);
+        dependencies.push(sqlxMigratorDep);
+    }
+
+    if (withGraphQL) {
+        dependencies.push('');
+        dependencies.push(juniperDep);
+    }
+
+    // Add SPL Token 2022 dependencies for token-2022 program
+    // Check originalProgramName or packageName to handle PascalCase transformation
+    if (isToken2022Program(undefined, originalProgramName, packageName)) {
+        dependencies.push('');
+        dependencies.push(getCrateDependencyString('solana-program-pack', VERSIONS['solana-program-pack']));
+        dependencies.push(getCrateDependencyString('spl-token-2022', VERSIONS['spl-token-2022']));
+        dependencies.push(getCrateDependencyString('spl-pod', VERSIONS['spl-pod'], ['borsh']));
+        dependencies.push(
+            getCrateDependencyString('spl-token-metadata-interface', VERSIONS['spl-token-metadata-interface']),
+        );
+        dependencies.push(getCrateDependencyString('spl-token-group-interface', VERSIONS['spl-token-group-interface']));
+        dependencies.push(getCrateDependencyString('spl-type-length-value', VERSIONS['spl-type-length-value']));
+    }
 
     const toml = [
         '[package]',
