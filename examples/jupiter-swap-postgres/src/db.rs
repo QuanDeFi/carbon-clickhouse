@@ -437,10 +437,7 @@ impl JupiterSwapRepository {
         Ok(slot_value)
     }
 
-    pub async fn persist_swap_event(
-        &self,
-        record: SwapEventRecord,
-    ) -> CarbonResult<Option<u64>> {
+    pub async fn persist_swap_event(&self, record: SwapEventRecord) -> CarbonResult<Option<u64>> {
         let mut tx = self.pool.begin().await.map_err(to_carbon_error)?;
         let MetadataParts {
             signature,
@@ -771,8 +768,8 @@ fn metadata_parts(metadata: &InstructionRowMetadata) -> MetadataParts {
     let slot_decimal = slot_value.map(decimal_from_u64);
     MetadataParts {
         signature: metadata.signature.clone(),
-        instruction_index: i64::from(*metadata.instruction_index),
-        stack_height: i64::from(*metadata.stack_height),
+        instruction_index: *metadata.instruction_index,
+        stack_height: *metadata.stack_height,
         slot_decimal,
         slot_value,
     }

@@ -148,7 +148,7 @@ pub fn swap_variant_name(swap: &Swap) -> String {
             .keys()
             .next()
             .cloned()
-            .unwrap_or_else(|| format!("{:?}", swap)),
-        _ => format!("{:?}", swap),
+            .unwrap_or_else(|| format!("{swap:?}")),
+        _ => format!("{swap:?}"),
     }
 }

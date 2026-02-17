@@ -46,14 +46,15 @@ fn init_logging() -> CarbonResult<()> {
 
     let config = ConfigBuilder::new().build();
 
-    let mut loggers: Vec<Box<dyn SharedLogger>> = Vec::new();
-    loggers.push(TermLogger::new(
-        LevelFilter::Info,
-        config.clone(),
-        TerminalMode::Mixed,
-        ColorChoice::Auto,
-    ));
-    loggers.push(WriteLogger::new(LevelFilter::Info, config, log_file));
+    let loggers: Vec<Box<dyn SharedLogger>> = vec![
+        TermLogger::new(
+            LevelFilter::Info,
+            config.clone(),
+            TerminalMode::Mixed,
+            ColorChoice::Auto,
+        ),
+        WriteLogger::new(LevelFilter::Info, config, log_file),
+    ];
 
     CombinedLogger::init(loggers)
         .map_err(|err| CarbonError::Custom(format!("Failed to initialize logger: {err}")))?;
@@ -73,7 +74,7 @@ enum DatasourceMode {
 }
 
 enum DatasourceSelection {
-    TransactionCrawler(RpcTransactionCrawler),
+    TransactionCrawler(Box<RpcTransactionCrawler>),
     BlockCrawler(RpcBlockCrawler),
 }
 
@@ -88,7 +89,7 @@ async fn configure_datasource(rpc_url: String) -> CarbonResult<DatasourceSelecti
             );
             let filters = Filters::new(None, None, None);
             let connection_config = ConnectionConfig::default().with_rate_limit(rate_limit);
-            Ok(DatasourceSelection::TransactionCrawler(
+            Ok(DatasourceSelection::TransactionCrawler(Box::new(
                 RpcTransactionCrawler::new(
                     rpc_url,
                     JUPITER_SWAP_PROGRAM_ID,
@@ -96,7 +97,7 @@ async fn configure_datasource(rpc_url: String) -> CarbonResult<DatasourceSelecti
                     filters,
                     None,
                 ),
-            ))
+            )))
         }
         DatasourceMode::BlockCrawler => {
             let rpc_client = RpcClient::new(rpc_url.clone());
@@ -114,13 +115,12 @@ async fn configure_datasource(rpc_url: String) -> CarbonResult<DatasourceSelecti
             };
 
             log::info!(
-                "Using RpcBlockCrawler datasource (start_slot: {}, interval: 100ms, max_concurrent_requests: 10)",
-                start_slot,
+                "Using RpcBlockCrawler datasource (start_slot: {start_slot}, interval: 100ms, max_concurrent_requests: 10)",
             );
 
-            let rate_limit = read_optional_env_var::<u32>("RATE_LIMIT")?
-                .filter(|value| *value > 0);
-            let request_throttle = rate_limit.map(|value| Duration::from_secs_f64(1.0 / value as f64));
+            let rate_limit = read_optional_env_var::<u32>("RATE_LIMIT")?.filter(|value| *value > 0);
+            let request_throttle =
+                rate_limit.map(|value| Duration::from_secs_f64(1.0 / value as f64));
 
             let mut crawler = RpcBlockCrawler::new(
                 rpc_url,
@@ -229,7 +229,7 @@ pub async fn main() -> CarbonResult<()> {
 
     let pipeline_builder = match datasource {
         DatasourceSelection::TransactionCrawler(datasource) => {
-            carbon_core::pipeline::Pipeline::builder().datasource(datasource)
+            carbon_core::pipeline::Pipeline::builder().datasource(*datasource)
         }
         DatasourceSelection::BlockCrawler(datasource) => {
             carbon_core::pipeline::Pipeline::builder().datasource(datasource)

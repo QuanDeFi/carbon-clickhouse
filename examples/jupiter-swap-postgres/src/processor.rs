@@ -16,9 +16,10 @@ use {
         processor::Processor,
     },
     carbon_jupiter_swap_decoder::instructions::{
-        exact_out_route, exact_out_route_v2, route, route_v2, route_with_token_ledger,
-        shared_accounts_exact_out_route, shared_accounts_exact_out_route_v2, shared_accounts_route,
-        shared_accounts_route_v2, shared_accounts_route_with_token_ledger, JupiterSwapInstruction,
+        cpi_event::CpiEvent, exact_out_route, exact_out_route_v2, route, route_v2,
+        route_with_token_ledger, shared_accounts_exact_out_route,
+        shared_accounts_exact_out_route_v2, shared_accounts_route, shared_accounts_route_v2,
+        shared_accounts_route_with_token_ledger, JupiterSwapInstruction,
     },
     solana_instruction::AccountMeta,
     solana_pubkey::Pubkey,
@@ -45,6 +46,7 @@ impl JupiterSwapProcessor {
         capture_account_metas(accounts)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn base_route_record(
         metadata: InstructionRowMetadata,
         variant: &str,
@@ -443,55 +445,58 @@ impl Processor for JupiterSwapProcessor {
                 );
                 self.repository.upsert_route_instruction(record).await
             }
-            JupiterSwapInstruction::SwapEvent(event) => {
-                handled = true;
-                let row_metadata = Self::instruction_metadata(&metadata);
-                let raw_event = serde_json::to_value(&event)
-                    .map_err(|err| CarbonError::Custom(err.to_string()))?;
-                let record = SwapEventRecord {
-                    metadata: row_metadata,
-                    event_type: SwapEventType::SwapEvent,
-                    event_index: 0,
-                    batch_size: Some(1),
-                    input_mint: event.input_mint.to_string(),
-                    output_mint: event.output_mint.to_string(),
-                    input_amount: event.input_amount,
-                    output_amount: event.output_amount,
-                    amm: Some(event.amm.to_string()),
-                    raw_event,
-                };
-                self.repository.persist_swap_event(record).await
-            }
-            JupiterSwapInstruction::SwapsEvent(event) => {
-                handled = true;
-                if event.swap_events.is_empty() {
-                    Ok(None)
-                } else {
-                    let mut last_slot = None;
-                    for (index, swap) in event.swap_events.iter().enumerate() {
-                        let row_metadata = Self::instruction_metadata(&metadata);
-                        let raw_event = serde_json::to_value(swap)
-                            .map_err(|err| CarbonError::Custom(err.to_string()))?;
-                        let record = SwapEventRecord {
-                            metadata: row_metadata.clone(),
-                            event_type: SwapEventType::SwapsEvent,
-                            event_index: index as i32,
-                            batch_size: Some(event.swap_events.len() as i32),
-                            input_mint: swap.input_mint.to_string(),
-                            output_mint: swap.output_mint.to_string(),
-                            input_amount: swap.input_amount,
-                            output_amount: swap.output_amount,
-                            amm: None,
-                            raw_event,
-                        };
-                        let slot = self.repository.persist_swap_event(record).await?;
-                        if slot.is_some() {
-                            last_slot = slot;
-                        }
-                    }
-                    Ok(last_slot)
+            JupiterSwapInstruction::CpiEvent(event) => match event.as_ref() {
+                CpiEvent::SwapEvent(event) => {
+                    handled = true;
+                    let row_metadata = Self::instruction_metadata(&metadata);
+                    let raw_event = serde_json::to_value(event)
+                        .map_err(|err| CarbonError::Custom(err.to_string()))?;
+                    let record = SwapEventRecord {
+                        metadata: row_metadata,
+                        event_type: SwapEventType::SwapEvent,
+                        event_index: 0,
+                        batch_size: Some(1),
+                        input_mint: event.input_mint.to_string(),
+                        output_mint: event.output_mint.to_string(),
+                        input_amount: event.input_amount,
+                        output_amount: event.output_amount,
+                        amm: Some(event.amm.to_string()),
+                        raw_event,
+                    };
+                    self.repository.persist_swap_event(record).await
                 }
-            }
+                CpiEvent::SwapsEvent(event) => {
+                    handled = true;
+                    if event.swap_events.is_empty() {
+                        Ok(None)
+                    } else {
+                        let mut last_slot = None;
+                        for (index, swap) in event.swap_events.iter().enumerate() {
+                            let row_metadata = Self::instruction_metadata(&metadata);
+                            let raw_event = serde_json::to_value(swap)
+                                .map_err(|err| CarbonError::Custom(err.to_string()))?;
+                            let record = SwapEventRecord {
+                                metadata: row_metadata.clone(),
+                                event_type: SwapEventType::SwapsEvent,
+                                event_index: index as i32,
+                                batch_size: Some(event.swap_events.len() as i32),
+                                input_mint: swap.input_mint.to_string(),
+                                output_mint: swap.output_mint.to_string(),
+                                input_amount: swap.input_amount,
+                                output_amount: swap.output_amount,
+                                amm: None,
+                                raw_event,
+                            };
+                            let slot = self.repository.persist_swap_event(record).await?;
+                            if slot.is_some() {
+                                last_slot = slot;
+                            }
+                        }
+                        Ok(last_slot)
+                    }
+                }
+                _ => Ok(None),
+            },
             _ => Ok(None),
         };
 
@@ -509,10 +514,7 @@ impl Processor for JupiterSwapProcessor {
                         .await?;
                     if let Some(slot) = last_slot {
                         metrics
-                            .update_gauge(
-                                "postgres.instructions.last_processed_slot",
-                                slot as f64,
-                            )
+                            .update_gauge("postgres.instructions.last_processed_slot", slot as f64)
                             .await?;
                     }
                 }

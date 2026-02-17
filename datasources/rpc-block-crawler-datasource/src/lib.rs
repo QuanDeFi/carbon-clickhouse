@@ -193,8 +193,6 @@ fn block_fetcher(
                 .map(|slot| {
                     let rpc_client = Arc::clone(&rpc_client);
                     let metrics = metrics.clone();
-                    let block_config = block_config.clone();
-                    let request_throttle = request_throttle;
 
                     async move {
                         loop {
@@ -203,7 +201,7 @@ fn block_fetcher(
                             }
                             let start = Instant::now();
                             match rpc_client
-                                .get_block_with_config(slot, block_config.clone())
+                                .get_block_with_config(slot, block_config)
                                 .await
                             {
                                 Ok(block) => {
@@ -240,16 +238,12 @@ fn block_fetcher(
                                         || error_string.contains("429")
                                     {
                                         log::debug!(
-                                            "Block at slot {} not ready yet ({}); retrying...",
-                                            slot,
-                                            error_string
+                                            "Block at slot {slot} not ready yet ({error_string}); retrying..."
                                         );
                                         tokio::time::sleep(retry_delay).await;
                                         continue;
                                     } else {
-                                        log::error!(
-                                            "Error fetching block at slot {slot}: {e:?}"
-                                        );
+                                        log::error!("Error fetching block at slot {slot}: {e:?}");
                                         break None;
                                     }
                                 }
