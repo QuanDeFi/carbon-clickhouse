@@ -5,12 +5,11 @@ edition = { workspace = true }
 
 [dependencies]
 carbon-core = { workspace = true, features = ["postgres"] }
-carbon-jupiter-swap-decoder = { workspace = true, features = ["serde"] }
+carbon-jupiter-swap-decoder = { workspace = true, features = ["serde", "postgres"] }
 carbon-log-metrics = { workspace = true }
 carbon-rpc-block-crawler-datasource = { workspace = true }
 carbon-rpc-transaction-crawler-datasource = { workspace = true }
 
-async-trait = { workspace = true }
 dotenv = { workspace = true }
 log = { workspace = true }
 solana-client = { workspace = true }
@@ -19,7 +18,3 @@ sqlx = { workspace = true }
 sqlx_migrator = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 simplelog = "0.12"
-bigdecimal = { workspace = true }
-serde_json = { workspace = true }
-solana-instruction = { workspace = true }
-solana-pubkey = { workspace = true }

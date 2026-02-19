@@ -1,14 +1,16 @@
-mod db;
-mod models;
-mod processor;
-
 use {
     carbon_core::error::{CarbonResult, Error as CarbonError},
-    carbon_jupiter_swap_decoder::{JupiterSwapDecoder, PROGRAM_ID as JUPITER_SWAP_PROGRAM_ID},
+    carbon_core::postgres::processors::PostgresInstructionProcessor,
+    carbon_jupiter_swap_decoder::{
+        instructions::{
+            postgres::{JupiterSwapInstructionWithMetadata, JupiterSwapInstructionsMigration},
+            JupiterSwapInstruction,
+        },
+        JupiterSwapDecoder, PROGRAM_ID as JUPITER_SWAP_PROGRAM_ID,
+    },
     carbon_log_metrics::LogMetrics,
     carbon_rpc_block_crawler_datasource::{RpcBlockConfig, RpcBlockCrawler},
     carbon_rpc_transaction_crawler_datasource::{ConnectionConfig, Filters, RpcTransactionCrawler},
-    processor::JupiterSwapProcessor,
     simplelog::{
         ColorChoice, CombinedLogger, ConfigBuilder, LevelFilter, SharedLogger, TermLogger,
         TerminalMode, WriteLogger,
@@ -212,8 +214,12 @@ pub async fn main() -> CarbonResult<()> {
 
     let mut migrator = Migrator::default();
     migrator
-        .add_migration(db::JupiterSwapMigration::boxed())
-        .map_err(|err| CarbonError::Custom(format!("Failed to add Jupiter migration: {err}")))?;
+        .add_migration(Box::new(JupiterSwapInstructionsMigration))
+        .map_err(|err| {
+            CarbonError::Custom(format!(
+                "Failed to add Jupiter instructions migration: {err}"
+            ))
+        })?;
 
     let mut conn = pool.acquire().await.map_err(|err| {
         CarbonError::Custom(format!("Failed to acquire Postgres connection: {err}"))
@@ -239,7 +245,13 @@ pub async fn main() -> CarbonResult<()> {
     pipeline_builder
         .metrics(Arc::new(LogMetrics::new()))
         .metrics_flush_interval(5)
-        .instruction(JupiterSwapDecoder, JupiterSwapProcessor::new(pool.clone()))
+        .instruction(
+            JupiterSwapDecoder,
+            PostgresInstructionProcessor::<
+                JupiterSwapInstruction,
+                JupiterSwapInstructionWithMetadata,
+            >::new(pool.clone()),
+        )
         .shutdown_strategy(carbon_core::pipeline::ShutdownStrategy::Immediate)
         .build()?
         .run()

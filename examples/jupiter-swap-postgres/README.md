@@ -4,7 +4,7 @@ This example wires a Carbon pipeline that:
 
 1. Listens to Jupiter swap transactions on Solana mainnet using either the `RpcTransactionCrawler` (default) or `RpcBlockCrawler` datasource.
 2. Decodes swap instructions with `carbon-jupiter-swap-decoder`.
-3. Persists a structured view of each swap and its route metadata into Postgres using sqlx migrations.
+3. Persists decoded instructions into decoder-generated Postgres tables using Carbon's built-in Postgres processor and migrations.
 
 The goal of this document is to walk through the full setup (from Docker + Postgres to `.env` wiring) and describe exactly which tables and columns are populated.
 
@@ -39,26 +39,23 @@ The goal of this document is to walk through the full setup (from Docker + Postg
                           v
             +-------------+--------------+
             | carbon-jupiter-swap-decoder|
-            |  + JupiterSwapProcessor    |
+            |  + PostgresInstruction...  |
             +-------------+--------------+
                           |
                           v
             +-------------+--------------+
-            | JupiterSwapRepository      |
-            | (sqlx migrations)          |
+            | Decoder postgres wrappers  |
+            | + built-in migrations      |
             +-------------+--------------+
                           |
                           v
    +----------------------+------+------------------------------+
    | Postgres (Docker)                                        |
    | Tables populated:                                        |
-   |  • jupiter_route_instructions                            |
-   |  • jupiter_route_instruction_accounts                    |
-   |  • jupiter_route_plan_steps                              |
-   |  • jupiter_swap_hops                                     |
-   |  • jupiter_swap_event_envelopes                          |
-   |  • venue_labels                                          |
-   |  • mint_reference_data                                   |
+   |  • route_instruction / route_v2_instruction              |
+   |  • exact_out_route_instruction (+ v2)                    |
+   |  • shared_accounts_* route tables                        |
+   |  • cpi_events                                             |
    +----------------------------------------------------------+
 ```
 
@@ -136,11 +133,11 @@ cargo run
 What happens during startup:
 
 1. Logging is set up (stdout + rotating `/logs/run-*.log` files).
-2. A sqlx migration creates all Jupiter-specific tables if they do not already exist.
+2. `JupiterSwapInstructionsMigration` creates decoder-provided instruction tables if they do not already exist.
 3. The datasource selected via `DATASOURCE` is initialized:
    - `RpcTransactionCrawler` polls for signatures mentioning the Jupiter program (`JUP6L...`) when backfilling via HTTP.
    - `RpcBlockCrawler` fetches the most recent slot via `getSlot` and immediately begins streaming new blocks forward using the same ~10 req/s pacing.
-4. For each decoded instruction, `JupiterSwapProcessor` writes structured records via `JupiterSwapRepository`.
+4. For each decoded instruction, `PostgresInstructionProcessor<JupiterSwapInstruction, JupiterSwapInstructionWithMetadata>` upserts into the appropriate decoder table.
 
 You can inspect progress / warnings via the generated log file or by watching stdout. To confirm data is flowing, connect with `psql` and query the tables listed below.
 
@@ -148,51 +145,27 @@ You can inspect progress / warnings via the generated log file or by watching st
 
 ### 5. Data Model
 
-Once the pipeline runs you should see the following tables (listed in dependency order):
+Once the pipeline runs you should see decoder-generated instruction tables, including:
 
-#### `jupiter_route_instructions`
-| Column | Meaning |
-|--------|---------|
-| `__signature`, `__instruction_index`, `__stack_height` | Composite primary key identifying the precise instruction within a transaction. |
-| `__slot` | Slot in which the transaction landed. |
-| `variant` | Jupiter instruction variant (e.g., `Route`, `RouteV2`, `SharedAccountsRoute`). |
-| `shared_accounts_id` | The shared accounts ID emitted by Jupiter for shared routes (optional). |
-| `in_amount` / `out_amount` | Raw u64 amounts (lamports / token base units) for in/out legs when available. |
-| `quoted_in_amount` / `quoted_out_amount` | Quoted amounts from the route plan. |
-| `slippage_bps`, `platform_fee_bps`, `positive_slippage_bps` | Risk/fee parameters inside the instruction. |
-| `source_mint`, `destination_mint` | Inferred public keys for the route source and destination mints. |
-| `route_plan` | JSONB representation of the route plan exactly as Jupiter emitted it. |
-| `route_plan_version` | Distinguishes V1 vs V2 plan structures. |
-| `created_at`, `updated_at` | Timestamps managed by the repository. |
+- `route_instruction`
+- `route_v2_instruction`
+- `route_with_token_ledger_instruction`
+- `exact_out_route_instruction`
+- `exact_out_route_v2_instruction`
+- `shared_accounts_route_instruction`
+- `shared_accounts_route_v2_instruction`
+- `shared_accounts_route_with_token_ledger_instruction`
+- `shared_accounts_exact_out_route_instruction`
+- `shared_accounts_exact_out_route_v2_instruction`
+- `claim_instruction`
+- `claim_token_instruction`
+- `close_token_instruction`
+- `create_token_account_instruction`
+- `create_token_ledger_instruction`
+- `set_token_ledger_instruction`
+- `cpi_events`
 
-#### `jupiter_route_instruction_accounts`
-Contains every `AccountMeta` supplied to the instruction (position, pubkey, signer, writable flags). Useful for auditing who paid fees, which pools were touched, etc.
-
-#### `jupiter_route_plan_steps`
-Each row represents a normalized step in Jupiter’s route plan (step index, swap variant, accounts used, JSON payload). This roughly mirrors the logical hops Jupiter intends to execute.
-
-#### `jupiter_swap_hops`
-Represents *actual* on-chain swap events observed in the decoded instruction stream. Key columns:
-
-| Column | Notes |
-|--------|-------|
-| `hop_index` | Order of the hop within the instruction. |
-| `event_type` | Enumerated event (currently `SwapEvent`). |
-| `input_mint` / `output_mint` | Token mints involved in this hop. |
-| `input_amount` / `output_amount` | Amounts in base units (BigDecimal). |
-| `input_amount_decimal` / `output_amount_decimal`, `price` | Optional normalized representations (set once mint decimals are known). |
-| `swap_variant` / `swap_json` | The venue type (Raydium, Orca, Pump, etc.) and the JSON event payload. |
-| `venue_label`, `venue_category` | Human-readable labels derived from `venue_labels`. |
-| `metadata` | JSON describing event index, normalization state, links to route steps, etc. |
-
-#### `jupiter_swap_event_envelopes`
-Raw JSON envelopes for every swap-related event, keyed by signature/instruction/stack height/event index. This is useful for replay or reprocessing.
-
-#### `venue_labels`
-Simple reference table mapping each `swap_variant` to a label/category (auto-populated the first time a variant appears).
-
-#### `mint_reference_data`
-Holds decimals + symbol for mints as they are discovered. When a hop references a mint that we do not know, the hop is marked `normalization_pending` until decimals are backfilled.
+Each table includes instruction metadata columns (`__signature`, `__instruction_index`, `__stack_height`, `__slot`) and decoded instruction payload fields for that variant.
 
 ---
 
@@ -204,8 +177,8 @@ Holds decimals + symbol for mints as they are discovered. When a hop references 
 4. **Run the pipeline** (`cargo run`). Leave it running to keep ingesting swaps; restart as needed.
 5. **Inspect data** with `psql` queries such as:
    ```sql
-   SELECT variant, COUNT(*) FROM jupiter_route_instructions GROUP BY 1;
-   SELECT swap_variant, COUNT(*) FROM jupiter_swap_hops GROUP BY 1 ORDER BY 2 DESC;
+   SELECT COUNT(*) FROM route_instruction;
+   SELECT name, COUNT(*) FROM cpi_events GROUP BY 1 ORDER BY 2 DESC;
    ```
 
 ---

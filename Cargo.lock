@@ -5240,8 +5240,6 @@ dependencies = [
 name = "jupiter-swap-postgres"
 version = "0.1.0"
 dependencies = [
- "async-trait",
- "bigdecimal",
  "carbon-core",
  "carbon-jupiter-swap-decoder",
  "carbon-log-metrics",
@@ -5249,11 +5247,8 @@ dependencies = [
  "carbon-rpc-transaction-crawler-datasource",
  "dotenv",
  "log",
- "serde_json",
  "simplelog",
  "solana-client",
- "solana-instruction",
- "solana-pubkey 3.0.0",
  "solana-transaction-status",
  "sqlx",
  "sqlx_migrator",
