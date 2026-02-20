@@ -189,6 +189,7 @@ Each table includes instruction metadata columns (`__signature`, `__instruction_
 |---------|--------------|-----|
 | `Failed to run migrations: password authentication failed` | `.env` creds do not match container env | Update `DATABASE_URL` or recreate the container with matching `POSTGRES_*` values. |
 | RPC related warnings or errors in logs | RPC rate-limiting or methods not supported | Lower `RATE_LIMIT`, upgrade RPC plan or change RPC provider. |
+| Pipeline starts but stays idle with little/no output (`0 processed`) | Free-tier RPC plan may restrict methods required by `rpc_transaction_crawler` and/or `rpc_block_crawler` | Upgrade the RPC plan or switch to another RPC provider that allows required methods. |
 | Block crawler logs `Failed to fetch the most recent slot...` | Temporary RPC hiccup retrieving `getSlot` | Re-run after the RPC endpoint recovers or switch back to `rpc_transaction_crawler`. |
 | `0 processed` forever | RPC endpoint not returning Jupiter transactions | Verify RPC connection, run `curl getSignaturesForAddress JUP6...`, upgrade RPC plan or switch providers. |
 
