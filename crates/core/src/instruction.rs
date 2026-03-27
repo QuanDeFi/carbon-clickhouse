@@ -30,7 +30,8 @@ use {
     solana_pubkey::Pubkey,
     std::{
         ops::{Deref, DerefMut},
-        sync::Arc,
+        sync::{Arc, OnceLock},
+        time::Instant,
     },
 };
 
@@ -77,6 +78,11 @@ const PRECOMPILE_PROGRAMS: &[&str] = &[
     "KeccakSecp256k11111111111111111111111111111",
     "Secp256r1SigVerify1111111111111111111111111",
 ];
+const DECODE_INSTRUCTION_STAGE: &str = "stage.decode_instruction_jupiter_swap_decoder.slot";
+const DECODE_INSTRUCTION_STAGE_EXIT: &str =
+    "stage.decode_instruction_jupiter_swap_decoder.exit.slot";
+const PROCESS_INSTRUCTION_STAGE: &str =
+    "stage.process_instruction_postgres_instruction_processor.slot";
 
 impl InstructionMetadata {
     /// Decodes the log events `T` thrown by this instruction.
@@ -310,6 +316,34 @@ pub struct InstructionPipe<T: Send> {
     pub filters: Vec<Box<dyn Filter + Send + Sync + 'static>>,
 }
 
+fn debug_processor_metrics_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        std::env::var("CARBON_DEBUG_STAGE_METRICS")
+            .map(|value| {
+                matches!(
+                    value.trim().to_ascii_lowercase().as_str(),
+                    "1" | "true" | "yes" | "on"
+                )
+            })
+            .unwrap_or(false)
+    })
+}
+
+async fn debug_inc(metrics: &MetricsCollection, name: &str) {
+    metrics
+        .increment_counter(name, 1)
+        .await
+        .unwrap_or_else(|error| log::error!("error recording debug counter {name}: {error:?}"));
+}
+
+async fn debug_hist(metrics: &MetricsCollection, name: &str, value: f64) {
+    metrics
+        .record_histogram(name, value)
+        .await
+        .unwrap_or_else(|error| log::error!("error recording debug histogram {name}: {error:?}"));
+}
+
 /// An async trait for processing instructions within nested contexts.
 ///
 /// The `InstructionPipes` trait allows for recursive processing of instructions
@@ -341,12 +375,41 @@ impl<T: Send + 'static> InstructionPipes<'_> for InstructionPipe<T> {
         metrics: Arc<MetricsCollection>,
     ) -> CarbonResult<()> {
         log::trace!("InstructionPipe::run(nested_instruction: {nested_instruction:?}, metrics)",);
+        let debug = debug_processor_metrics_enabled();
+        if debug {
+            debug_inc(
+                &metrics,
+                "core.pipeline.debug.processor.instruction.run_enter",
+            )
+            .await;
+        }
 
+        metrics
+            .update_gauge(
+                DECODE_INSTRUCTION_STAGE,
+                nested_instruction.metadata.transaction_metadata.slot as f64,
+            )
+            .await?;
         if let Some(decoded_instruction) = self
             .decoder
             .decode_instruction(&nested_instruction.instruction)
         {
-            self.processor
+            if debug {
+                debug_inc(
+                    &metrics,
+                    "core.pipeline.debug.processor.instruction.decode_success",
+                )
+                .await;
+            }
+            let start = Instant::now();
+            metrics
+                .update_gauge(
+                    PROCESS_INSTRUCTION_STAGE,
+                    nested_instruction.metadata.transaction_metadata.slot as f64,
+                )
+                .await?;
+            let result = self
+                .processor
                 .process(
                     (
                         nested_instruction.metadata.clone(),
@@ -356,9 +419,65 @@ impl<T: Send + 'static> InstructionPipes<'_> for InstructionPipe<T> {
                     ),
                     metrics.clone(),
                 )
+                .await;
+            if debug {
+                debug_hist(
+                    &metrics,
+                    "core.pipeline.debug.processor.instruction.run_nanoseconds",
+                    start.elapsed().as_nanos() as f64,
+                )
+                .await;
+            }
+            match result {
+                Ok(()) => {
+                    if debug {
+                        debug_inc(
+                            &metrics,
+                            "core.pipeline.debug.processor.instruction.run_success",
+                        )
+                        .await;
+                    }
+                }
+                Err(error) => {
+                    if debug {
+                        debug_inc(
+                            &metrics,
+                            "core.pipeline.debug.processor.instruction.run_error",
+                        )
+                        .await;
+                    }
+                    return Err(error);
+                }
+            }
+        } else {
+            if debug {
+                debug_inc(
+                    &metrics,
+                    "core.pipeline.debug.processor.instruction.decode_miss",
+                )
+                .await;
+            }
+            metrics
+                .update_gauge(
+                    DECODE_INSTRUCTION_STAGE_EXIT,
+                    nested_instruction.metadata.transaction_metadata.slot as f64,
+                )
                 .await?;
         }
 
+        if debug && !nested_instruction.inner_instructions.is_empty() {
+            metrics
+                .increment_counter(
+                    "core.pipeline.debug.processor.instruction.inner_instruction_count",
+                    nested_instruction.inner_instructions.len() as u64,
+                )
+                .await
+                .unwrap_or_else(|error| {
+                    log::error!(
+                        "error recording debug counter core.pipeline.debug.processor.instruction.inner_instruction_count: {error:?}"
+                    )
+                });
+        }
         for nested_inner_instruction in nested_instruction.inner_instructions.iter() {
             self.run(nested_inner_instruction, metrics.clone()).await?;
         }

@@ -5240,11 +5240,12 @@ dependencies = [
 name = "jupiter-swap-postgres"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "carbon-core",
  "carbon-jupiter-swap-decoder",
- "carbon-log-metrics",
  "carbon-rpc-block-crawler-datasource",
  "carbon-rpc-transaction-crawler-datasource",
+ "chrono",
  "dotenv",
  "log",
  "simplelog",

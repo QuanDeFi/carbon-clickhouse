@@ -74,7 +74,12 @@ use {
     },
     core::time,
     serde::de::DeserializeOwned,
-    std::{convert::TryInto, sync::Arc, time::Instant},
+    std::{
+        convert::TryInto,
+        env,
+        sync::{Arc, Mutex, OnceLock},
+        time::{Duration, Instant},
+    },
     tokio_util::sync::CancellationToken,
 };
 
@@ -117,6 +122,229 @@ pub enum ShutdownStrategy {
 ///
 /// The default size is 10,000 updates, which provides a reasonable balance
 pub const DEFAULT_CHANNEL_BUFFER_SIZE: usize = 1_000;
+const DEQUEUE_PIPELINE_UPDATE_STAGE: &str = "stage.dequeue_pipeline_update.slot";
+const BUILD_CORE_TRANSACTION_METADATA_STAGE: &str = "stage.build_core_transaction_metadata.slot";
+const EXTRACT_INSTRUCTIONS_WITH_METADATA_STAGE: &str =
+    "stage.extract_instructions_with_metadata.slot";
+const NEST_INSTRUCTIONS_STAGE: &str = "stage.nest_instructions.slot";
+const APPLY_INSTRUCTION_FILTERS_STAGE: &str = "stage.apply_instruction_filters.slot";
+const APPLY_INSTRUCTION_FILTERS_STAGE_EXIT: &str = "stage.apply_instruction_filters.exit.slot";
+const PIPELINE_UPDATE_PROCESS_TIMEOUT_ENV: &str = "CARBON_PIPELINE_UPDATE_TIMEOUT_MS";
+const INSTRUCTION_PIPE_TIMEOUT_ENV: &str = "CARBON_INSTRUCTION_PIPE_TIMEOUT_MS";
+
+fn debug_stage_metrics_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        std::env::var("CARBON_DEBUG_STAGE_METRICS")
+            .map(|value| {
+                matches!(
+                    value.trim().to_ascii_lowercase().as_str(),
+                    "1" | "true" | "yes" | "on"
+                )
+            })
+            .unwrap_or(false)
+    })
+}
+
+fn pipeline_update_process_timeout() -> Option<Duration> {
+    static TIMEOUT: OnceLock<Option<Duration>> = OnceLock::new();
+    *TIMEOUT.get_or_init(|| {
+        env::var(PIPELINE_UPDATE_PROCESS_TIMEOUT_ENV)
+            .ok()
+            .and_then(|value| value.trim().parse::<u64>().ok())
+            .filter(|value| *value > 0)
+            .map(Duration::from_millis)
+    })
+}
+
+fn instruction_pipe_timeout() -> Option<Duration> {
+    static TIMEOUT: OnceLock<Option<Duration>> = OnceLock::new();
+    *TIMEOUT.get_or_init(|| {
+        env::var(INSTRUCTION_PIPE_TIMEOUT_ENV)
+            .ok()
+            .and_then(|value| value.trim().parse::<u64>().ok())
+            .filter(|value| *value > 0)
+            .map(Duration::from_millis)
+    })
+}
+
+async fn debug_inc(metrics: &MetricsCollection, name: &str, value: u64) {
+    metrics
+        .increment_counter(name, value)
+        .await
+        .unwrap_or_else(|error| log::error!("error recording debug counter {name}: {error:?}"));
+}
+
+async fn debug_hist(metrics: &MetricsCollection, name: &str, value: f64) {
+    metrics
+        .record_histogram(name, value)
+        .await
+        .unwrap_or_else(|error| log::error!("error recording debug histogram {name}: {error:?}"));
+}
+
+async fn debug_gauge(metrics: &MetricsCollection, name: &str, value: f64) {
+    metrics
+        .update_gauge(name, value)
+        .await
+        .unwrap_or_else(|error| log::error!("error recording debug gauge {name}: {error:?}"));
+}
+
+fn update_kind(update: &Update) -> &'static str {
+    match update {
+        Update::Account(_) => "account",
+        Update::Transaction(_) => "transaction",
+        Update::AccountDeletion(_) => "account_deletion",
+        Update::BlockDetails(_) => "block_details",
+    }
+}
+
+fn update_slot(update: &Update) -> Option<u64> {
+    match update {
+        Update::Account(account_update) => Some(account_update.slot),
+        Update::Transaction(transaction_update) => Some(transaction_update.slot),
+        Update::AccountDeletion(account_deletion) => Some(account_deletion.slot),
+        Update::BlockDetails(block_details) => Some(block_details.slot),
+    }
+}
+
+fn describe_update(update: &Update) -> String {
+    match update {
+        Update::Account(account_update) => {
+            format!(
+                "kind=account slot={} pubkey={}",
+                account_update.slot, account_update.pubkey
+            )
+        }
+        Update::Transaction(transaction_update) => {
+            format!(
+                "kind=transaction slot={} signature={}",
+                transaction_update.slot, transaction_update.signature
+            )
+        }
+        Update::AccountDeletion(account_deletion) => {
+            format!(
+                "kind=account_deletion slot={} pubkey={}",
+                account_deletion.slot, account_deletion.pubkey
+            )
+        }
+        Update::BlockDetails(block_details) => {
+            format!("kind=block_details slot={}", block_details.slot)
+        }
+    }
+}
+
+fn is_instruction_pipe_timeout(error: &crate::error::Error) -> bool {
+    matches!(
+        error,
+        crate::error::Error::Custom(message)
+            if message.starts_with("instruction pipe timed out after ")
+    )
+}
+
+#[derive(Debug, Clone)]
+struct TransactionProgress {
+    stage: &'static str,
+    top_level_instruction_count: usize,
+    instruction_entry_count: usize,
+    nested_instruction_count: usize,
+    current_instruction_index: Option<u32>,
+    current_stack_height: Option<u32>,
+    instruction_filter_checks: u64,
+    instruction_pipe_runs: u64,
+}
+
+impl TransactionProgress {
+    fn new() -> Self {
+        Self {
+            stage: "received",
+            top_level_instruction_count: 0,
+            instruction_entry_count: 0,
+            nested_instruction_count: 0,
+            current_instruction_index: None,
+            current_stack_height: None,
+            instruction_filter_checks: 0,
+            instruction_pipe_runs: 0,
+        }
+    }
+
+    fn describe(&self) -> String {
+        format!(
+            "stage={} top_level={} instruction_entries={} nested_roots={} current_instruction_index={:?} current_stack_height={:?} filter_checks={} pipe_runs={}",
+            self.stage,
+            self.top_level_instruction_count,
+            self.instruction_entry_count,
+            self.nested_instruction_count,
+            self.current_instruction_index,
+            self.current_stack_height,
+            self.instruction_filter_checks,
+            self.instruction_pipe_runs,
+        )
+    }
+}
+
+fn transaction_progress_stage(
+    progress: &Option<Arc<Mutex<TransactionProgress>>>,
+    stage: &'static str,
+) {
+    if let Some(progress) = progress {
+        if let Ok(mut progress) = progress.lock() {
+            progress.stage = stage;
+        }
+    }
+}
+
+fn transaction_progress_counts(
+    progress: &Option<Arc<Mutex<TransactionProgress>>>,
+    top_level_instruction_count: usize,
+    instruction_entry_count: usize,
+    nested_instruction_count: usize,
+) {
+    if let Some(progress) = progress {
+        if let Ok(mut progress) = progress.lock() {
+            progress.top_level_instruction_count = top_level_instruction_count;
+            progress.instruction_entry_count = instruction_entry_count;
+            progress.nested_instruction_count = nested_instruction_count;
+        }
+    }
+}
+
+fn transaction_progress_instruction(
+    progress: &Option<Arc<Mutex<TransactionProgress>>>,
+    instruction_index: u32,
+    stack_height: u32,
+) {
+    if let Some(progress) = progress {
+        if let Ok(mut progress) = progress.lock() {
+            progress.current_instruction_index = Some(instruction_index);
+            progress.current_stack_height = Some(stack_height);
+        }
+    }
+}
+
+fn transaction_progress_inc_filter_checks(progress: &Option<Arc<Mutex<TransactionProgress>>>) {
+    if let Some(progress) = progress {
+        if let Ok(mut progress) = progress.lock() {
+            progress.instruction_filter_checks =
+                progress.instruction_filter_checks.saturating_add(1);
+        }
+    }
+}
+
+fn transaction_progress_inc_pipe_runs(progress: &Option<Arc<Mutex<TransactionProgress>>>) {
+    if let Some(progress) = progress {
+        if let Ok(mut progress) = progress.lock() {
+            progress.instruction_pipe_runs = progress.instruction_pipe_runs.saturating_add(1);
+        }
+    }
+}
+
+fn transaction_progress_context(
+    progress: &Option<Arc<Mutex<TransactionProgress>>>,
+) -> Option<String> {
+    progress
+        .as_ref()
+        .and_then(|progress| progress.lock().ok().map(|progress| progress.describe()))
+}
 
 /// Represents the primary data processing pipeline in the `carbon-core`
 /// framework.
@@ -337,6 +565,10 @@ impl Pipeline {
         );
 
         log::trace!("run(self)");
+        let debug_stage_metrics = debug_stage_metrics_enabled();
+        if debug_stage_metrics {
+            log::info!("CARBON_DEBUG_STAGE_METRICS enabled");
+        }
 
         self.metrics.initialize_metrics().await?;
         let (update_sender, mut update_receiver) =
@@ -371,14 +603,33 @@ impl Pipeline {
 
         drop(update_sender);
 
-        let mut interval = tokio::time::interval(time::Duration::from_secs(
-            self.metrics_flush_interval.unwrap_or(5),
-        ));
+        let metrics_flush_interval_secs = self.metrics_flush_interval.unwrap_or(5);
+        let metrics_flush_token = CancellationToken::new();
+        let metrics_flush_token_clone = metrics_flush_token.clone();
+        let metrics_for_flush = self.metrics.clone();
+        let metrics_flush_task = tokio::spawn(async move {
+            let mut interval =
+                tokio::time::interval(time::Duration::from_secs(metrics_flush_interval_secs));
+            loop {
+                tokio::select! {
+                    _ = metrics_flush_token_clone.cancelled() => {
+                        break;
+                    }
+                    _ = interval.tick() => {
+                        if let Err(error) = metrics_for_flush.flush_metrics().await {
+                            log::error!("error flushing metrics: {error:?}");
+                        }
+                    }
+                }
+            }
+        });
 
         loop {
             tokio::select! {
                 _ = datasource_cancellation_token.cancelled() => {
                     log::trace!("datasource cancellation token cancelled, shutting down.");
+                    metrics_flush_token.cancel();
+                    let _ = metrics_flush_task.await;
                     self.metrics.flush_metrics().await?;
                     self.metrics.shutdown_metrics().await?;
                     break;
@@ -389,6 +640,8 @@ impl Pipeline {
 
                     if self.shutdown_strategy == ShutdownStrategy::Immediate {
                         log::info!("shutting down the pipeline immediately.");
+                        metrics_flush_token.cancel();
+                        let _ = metrics_flush_task.await;
                         self.metrics.flush_metrics().await?;
                         self.metrics.shutdown_metrics().await?;
                         break;
@@ -396,20 +649,75 @@ impl Pipeline {
                         log::info!("shutting down the pipeline after processing pending updates.");
                     }
                 }
-                _ = interval.tick() => {
-                    self.metrics.flush_metrics().await?;
-                }
                 update = update_receiver.recv() => {
                     match update {
                         Some((update, datasource_id)) => {
+                            let update_kind = update_kind(&update);
+                            let transaction_progress = matches!(update, Update::Transaction(_))
+                                .then(|| Arc::new(Mutex::new(TransactionProgress::new())));
+                            if debug_stage_metrics {
+                                debug_inc(
+                                    &self.metrics,
+                                    &format!("core.pipeline.debug.stage.{update_kind}.received"),
+                                    1,
+                                )
+                                .await;
+                                debug_gauge(
+                                    &self.metrics,
+                                    "core.pipeline.debug.gauge.updates_queued_before_process",
+                                    update_receiver.len() as f64,
+                                )
+                                .await;
+                            }
+                            if let Some(slot) = update_slot(&update) {
+                                self.metrics
+                                    .update_gauge(DEQUEUE_PIPELINE_UPDATE_STAGE, slot as f64)
+                                    .await?;
+                            }
                             self
                                 .metrics.increment_counter("updates_received", 1)
                                 .await?;
 
                             let start = Instant::now();
-                            let process_result = self.process(update.clone(), datasource_id.clone()).await;
+                            let process_result = if let Some(timeout) = pipeline_update_process_timeout() {
+                                match tokio::time::timeout(
+                                    timeout,
+                                    self.process(
+                                        update.clone(),
+                                        datasource_id.clone(),
+                                        transaction_progress.clone(),
+                                    ),
+                                )
+                                .await
+                                {
+                                    Ok(result) => result,
+                                    Err(_) => Err(crate::error::Error::Custom(format!(
+                                        "pipeline update processing timed out after {} ms (kind={update_kind}, slot={:?}{}{})",
+                                        timeout.as_millis(),
+                                        update_slot(&update),
+                                        if transaction_progress.is_some() { ", " } else { "" },
+                                        transaction_progress_context(&transaction_progress)
+                                            .unwrap_or_default(),
+                                    ))),
+                                }
+                            } else {
+                                self.process(
+                                    update.clone(),
+                                    datasource_id.clone(),
+                                    transaction_progress.clone(),
+                                )
+                                .await
+                            };
                             let time_taken_nanoseconds = start.elapsed().as_nanos();
                             let time_taken_milliseconds = time_taken_nanoseconds / 1_000_000;
+                            if debug_stage_metrics {
+                                debug_hist(
+                                    &self.metrics,
+                                    &format!("core.pipeline.debug.latency.{update_kind}.process_nanoseconds"),
+                                    time_taken_nanoseconds as f64,
+                                )
+                                .await;
+                            }
 
                             self
                                 .metrics
@@ -423,6 +731,14 @@ impl Pipeline {
 
                             match process_result {
                                 Ok(_) => {
+                                    if debug_stage_metrics {
+                                        debug_inc(
+                                            &self.metrics,
+                                            &format!("core.pipeline.debug.stage.{update_kind}.processed_success"),
+                                            1,
+                                        )
+                                        .await;
+                                    }
                                     self
                                         .metrics.increment_counter("updates_successful", 1)
                                         .await?;
@@ -430,7 +746,18 @@ impl Pipeline {
                                     log::trace!("processed update")
                                 }
                                 Err(error) => {
-                                    log::error!("error processing update ({update:?}): {error:?}");
+                                    log::error!(
+                                        "error processing update {}: {error:?}",
+                                        describe_update(&update)
+                                    );
+                                    if debug_stage_metrics {
+                                        debug_inc(
+                                            &self.metrics,
+                                            &format!("core.pipeline.debug.stage.{update_kind}.processed_error"),
+                                            1,
+                                        )
+                                        .await;
+                                    }
                                     self.metrics.increment_counter("updates_failed", 1).await?;
                                 }
                             };
@@ -442,9 +769,19 @@ impl Pipeline {
                             self
                                 .metrics.update_gauge("updates_queued", update_receiver.len() as f64)
                                 .await?;
+                            if debug_stage_metrics {
+                                debug_gauge(
+                                    &self.metrics,
+                                    "core.pipeline.debug.gauge.updates_queued_after_process",
+                                    update_receiver.len() as f64,
+                                )
+                                .await;
+                            }
                         }
                         None => {
                             log::info!("update_receiver closed, shutting down.");
+                            metrics_flush_token.cancel();
+                            let _ = metrics_flush_task.await;
                             self.metrics.flush_metrics().await?;
                             self.metrics.shutdown_metrics().await?;
                             break;
@@ -513,10 +850,25 @@ impl Pipeline {
     /// Returns an error if any of the pipes fail during processing, or if an
     /// issue arises while incrementing counters or updating metrics. Handle
     /// errors gracefully to ensure continuous pipeline operation.
-    async fn process(&mut self, update: Update, datasource_id: DatasourceId) -> CarbonResult<()> {
+    async fn process(
+        &mut self,
+        update: Update,
+        datasource_id: DatasourceId,
+        transaction_progress: Option<Arc<Mutex<TransactionProgress>>>,
+    ) -> CarbonResult<()> {
         log::trace!("process(self, update: {update:?}, datasource_id: {datasource_id:?})");
+        let debug_stage_metrics = debug_stage_metrics_enabled();
         match update {
             Update::Account(account_update) => {
+                if debug_stage_metrics {
+                    debug_inc(&self.metrics, "core.pipeline.debug.stage.account.enter", 1).await;
+                    debug_gauge(
+                        &self.metrics,
+                        "core.pipeline.debug.gauge.account.slot",
+                        account_update.slot as f64,
+                    )
+                    .await;
+                }
                 let account_metadata = AccountMetadata {
                     slot: account_update.slot,
                     pubkey: account_update.pubkey,
@@ -531,11 +883,37 @@ impl Pipeline {
                             &account_update.account,
                         )
                     }) {
-                        pipe.run(
-                            (account_metadata.clone(), account_update.account.clone()),
-                            self.metrics.clone(),
+                        if debug_stage_metrics {
+                            debug_inc(
+                                &self.metrics,
+                                "core.pipeline.debug.stage.account.pipe_filter_passed",
+                                1,
+                            )
+                            .await;
+                        }
+                        let stage_start = Instant::now();
+                        let run_result = pipe
+                            .run(
+                                (account_metadata.clone(), account_update.account.clone()),
+                                self.metrics.clone(),
+                            )
+                            .await;
+                        if debug_stage_metrics {
+                            debug_hist(
+                                &self.metrics,
+                                "core.pipeline.debug.latency.account.pipe_run_nanoseconds",
+                                stage_start.elapsed().as_nanos() as f64,
+                            )
+                            .await;
+                        }
+                        run_result?;
+                    } else if debug_stage_metrics {
+                        debug_inc(
+                            &self.metrics,
+                            "core.pipeline.debug.stage.account.pipe_filter_dropped",
+                            1,
                         )
-                        .await?;
+                        .await;
                     }
                 }
 
@@ -544,27 +922,249 @@ impl Pipeline {
                     .await?;
             }
             Update::Transaction(transaction_update) => {
-                let transaction_metadata = Arc::new((*transaction_update).clone().try_into()?);
+                transaction_progress_stage(&transaction_progress, "transaction_enter");
+                if debug_stage_metrics {
+                    debug_inc(
+                        &self.metrics,
+                        "core.pipeline.debug.stage.transaction.enter",
+                        1,
+                    )
+                    .await;
+                    debug_gauge(
+                        &self.metrics,
+                        "core.pipeline.debug.gauge.transaction.slot",
+                        transaction_update.slot as f64,
+                    )
+                    .await;
+                }
+                transaction_progress_stage(&transaction_progress, "metadata_build");
+                let metadata_build_start = Instant::now();
+                let transaction_metadata: Arc<crate::transaction::TransactionMetadata> =
+                    Arc::new((*transaction_update).clone().try_into()?);
+                self.metrics
+                    .update_gauge(
+                        BUILD_CORE_TRANSACTION_METADATA_STAGE,
+                        transaction_metadata.slot as f64,
+                    )
+                    .await?;
+                if debug_stage_metrics {
+                    debug_inc(
+                        &self.metrics,
+                        "core.pipeline.debug.stage.transaction.metadata_built",
+                        1,
+                    )
+                    .await;
+                    debug_hist(
+                        &self.metrics,
+                        "core.pipeline.debug.latency.transaction.metadata_build_nanoseconds",
+                        metadata_build_start.elapsed().as_nanos() as f64,
+                    )
+                    .await;
+                }
 
+                let top_level_instruction_count = match &transaction_update.transaction.message {
+                    solana_message::VersionedMessage::Legacy(message) => message.instructions.len(),
+                    solana_message::VersionedMessage::V0(message) => message.instructions.len(),
+                };
+                transaction_progress_stage(&transaction_progress, "instruction_extract");
+                let extract_start = Instant::now();
                 let instructions_with_metadata: InstructionsWithMetadata =
                     transformers::extract_instructions_with_metadata(
                         &transaction_metadata,
                         &transaction_update,
                     )?;
+                self.metrics
+                    .update_gauge(
+                        EXTRACT_INSTRUCTIONS_WITH_METADATA_STAGE,
+                        transaction_metadata.slot as f64,
+                    )
+                    .await?;
+                if debug_stage_metrics {
+                    debug_inc(
+                        &self.metrics,
+                        "core.pipeline.debug.stage.transaction.instructions_extracted",
+                        1,
+                    )
+                    .await;
+                    debug_hist(
+                        &self.metrics,
+                        "core.pipeline.debug.latency.transaction.instructions_extract_nanoseconds",
+                        extract_start.elapsed().as_nanos() as f64,
+                    )
+                    .await;
+                }
 
+                transaction_progress_stage(&transaction_progress, "instruction_nest");
+                let nest_start = Instant::now();
+                let instruction_entry_count = instructions_with_metadata.len();
                 let nested_instructions: NestedInstructions = instructions_with_metadata.into();
+                transaction_progress_counts(
+                    &transaction_progress,
+                    top_level_instruction_count,
+                    instruction_entry_count,
+                    nested_instructions.len(),
+                );
+                self.metrics
+                    .update_gauge(NEST_INSTRUCTIONS_STAGE, transaction_metadata.slot as f64)
+                    .await?;
+                if debug_stage_metrics {
+                    debug_inc(
+                        &self.metrics,
+                        "core.pipeline.debug.stage.transaction.instructions_nested",
+                        1,
+                    )
+                    .await;
+                    debug_hist(
+                        &self.metrics,
+                        "core.pipeline.debug.latency.transaction.instructions_nest_nanoseconds",
+                        nest_start.elapsed().as_nanos() as f64,
+                    )
+                    .await;
+                    debug_gauge(
+                        &self.metrics,
+                        "core.pipeline.debug.gauge.transaction.nested_instruction_count",
+                        nested_instructions.len() as f64,
+                    )
+                    .await;
+                }
 
+                transaction_progress_stage(&transaction_progress, "instruction_pipe_loop");
                 for pipe in self.instruction_pipes.iter_mut() {
                     for nested_instruction in nested_instructions.iter() {
+                        transaction_progress_instruction(
+                            &transaction_progress,
+                            nested_instruction.metadata.index,
+                            nested_instruction.metadata.stack_height,
+                        );
+                        self.metrics
+                            .update_gauge(
+                                APPLY_INSTRUCTION_FILTERS_STAGE,
+                                nested_instruction.metadata.transaction_metadata.slot as f64,
+                            )
+                            .await?;
+                        if debug_stage_metrics {
+                            debug_inc(
+                                &self.metrics,
+                                "core.pipeline.debug.stage.instruction.filter_checks",
+                                1,
+                            )
+                            .await;
+                        }
+                        transaction_progress_inc_filter_checks(&transaction_progress);
                         if pipe.filters().iter().all(|filter| {
                             filter.filter_instruction(&datasource_id, nested_instruction)
                         }) {
-                            pipe.run(nested_instruction, self.metrics.clone()).await?;
+                            if debug_stage_metrics {
+                                debug_inc(
+                                    &self.metrics,
+                                    "core.pipeline.debug.stage.instruction.filter_passed",
+                                    1,
+                                )
+                                .await;
+                            }
+                            transaction_progress_stage(
+                                &transaction_progress,
+                                "instruction_pipe_run",
+                            );
+                            transaction_progress_inc_pipe_runs(&transaction_progress);
+                            let instruction_pipe_start = Instant::now();
+                            let run_result = if let Some(timeout) = instruction_pipe_timeout() {
+                                match tokio::time::timeout(
+                                    timeout,
+                                    pipe.run(nested_instruction, self.metrics.clone()),
+                                )
+                                .await
+                                {
+                                    Ok(result) => result,
+                                    Err(_) => Err(crate::error::Error::Custom(format!(
+                                        "instruction pipe timed out after {} ms (slot={}, instruction_index={}, stack_height={})",
+                                        timeout.as_millis(),
+                                        nested_instruction.metadata.transaction_metadata.slot,
+                                        nested_instruction.metadata.index,
+                                        nested_instruction.metadata.stack_height,
+                                    ))),
+                                }
+                            } else {
+                                pipe.run(nested_instruction, self.metrics.clone()).await
+                            };
+                            if debug_stage_metrics {
+                                debug_hist(
+                                    &self.metrics,
+                                    "core.pipeline.debug.latency.instruction.pipe_run_nanoseconds",
+                                    instruction_pipe_start.elapsed().as_nanos() as f64,
+                                )
+                                .await;
+                            }
+                            match run_result {
+                                Ok(()) => {
+                                    if debug_stage_metrics {
+                                        debug_inc(
+                                            &self.metrics,
+                                            "core.pipeline.debug.stage.instruction.pipe_run_success",
+                                            1,
+                                        )
+                                        .await;
+                                    }
+                                }
+                                Err(error) => {
+                                    if debug_stage_metrics {
+                                        debug_inc(
+                                            &self.metrics,
+                                            "core.pipeline.debug.stage.instruction.pipe_run_error",
+                                            1,
+                                        )
+                                        .await;
+                                    }
+                                    if is_instruction_pipe_timeout(&error) {
+                                        log::warn!(
+                                            "skipping timed out instruction slot={} instruction_index={} stack_height={}: {error:?}",
+                                            nested_instruction.metadata.transaction_metadata.slot,
+                                            nested_instruction.metadata.index,
+                                            nested_instruction.metadata.stack_height,
+                                        );
+                                        transaction_progress_stage(
+                                            &transaction_progress,
+                                            "instruction_pipe_timeout_skipped",
+                                        );
+                                        continue;
+                                    }
+                                    return Err(error);
+                                }
+                            }
+                            transaction_progress_stage(&transaction_progress, "instruction_pipe_loop");
+                        } else {
+                            if debug_stage_metrics {
+                                debug_inc(
+                                    &self.metrics,
+                                    "core.pipeline.debug.stage.instruction.filter_dropped",
+                                    1,
+                                )
+                                .await;
+                            }
+                            transaction_progress_stage(
+                                &transaction_progress,
+                                "instruction_filter_dropped",
+                            );
+                            self.metrics
+                                .update_gauge(
+                                    APPLY_INSTRUCTION_FILTERS_STAGE_EXIT,
+                                    nested_instruction.metadata.transaction_metadata.slot as f64,
+                                )
+                                .await?;
                         }
                     }
                 }
 
+                transaction_progress_stage(&transaction_progress, "transaction_pipe_loop");
                 for pipe in self.transaction_pipes.iter_mut() {
+                    if debug_stage_metrics {
+                        debug_inc(
+                            &self.metrics,
+                            "core.pipeline.debug.stage.transaction.pipe_filter_checks",
+                            1,
+                        )
+                        .await;
+                    }
                     if pipe.filters().iter().all(|filter| {
                         filter.filter_transaction(
                             &datasource_id,
@@ -572,26 +1172,109 @@ impl Pipeline {
                             &nested_instructions,
                         )
                     }) {
-                        pipe.run(
-                            transaction_metadata.clone(),
-                            &nested_instructions,
-                            self.metrics.clone(),
+                        if debug_stage_metrics {
+                            debug_inc(
+                                &self.metrics,
+                                "core.pipeline.debug.stage.transaction.pipe_filter_passed",
+                                1,
+                            )
+                            .await;
+                        }
+                        let transaction_pipe_start = Instant::now();
+                        let run_result = pipe
+                            .run(
+                                transaction_metadata.clone(),
+                                &nested_instructions,
+                                self.metrics.clone(),
+                            )
+                            .await;
+                        if debug_stage_metrics {
+                            debug_hist(
+                                &self.metrics,
+                                "core.pipeline.debug.latency.transaction.pipe_run_nanoseconds",
+                                transaction_pipe_start.elapsed().as_nanos() as f64,
+                            )
+                            .await;
+                        }
+                        match run_result {
+                            Ok(()) => {
+                                if debug_stage_metrics {
+                                    debug_inc(
+                                        &self.metrics,
+                                        "core.pipeline.debug.stage.transaction.pipe_run_success",
+                                        1,
+                                    )
+                                    .await;
+                                }
+                            }
+                            Err(error) => {
+                                if debug_stage_metrics {
+                                    debug_inc(
+                                        &self.metrics,
+                                        "core.pipeline.debug.stage.transaction.pipe_run_error",
+                                        1,
+                                    )
+                                    .await;
+                                }
+                                return Err(error);
+                            }
+                        }
+                    } else if debug_stage_metrics {
+                        debug_inc(
+                            &self.metrics,
+                            "core.pipeline.debug.stage.transaction.pipe_filter_dropped",
+                            1,
                         )
-                        .await?;
+                        .await;
                     }
                 }
 
+                transaction_progress_stage(&transaction_progress, "transaction_complete");
                 self.metrics
                     .increment_counter("transaction_updates_processed", 1)
                     .await?;
             }
             Update::AccountDeletion(account_deletion) => {
+                if debug_stage_metrics {
+                    debug_inc(
+                        &self.metrics,
+                        "core.pipeline.debug.stage.account_deletion.enter",
+                        1,
+                    )
+                    .await;
+                }
                 for pipe in self.account_deletion_pipes.iter_mut() {
                     if pipe.filters().iter().all(|filter| {
                         filter.filter_account_deletion(&datasource_id, &account_deletion)
                     }) {
-                        pipe.run(account_deletion.clone(), self.metrics.clone())
-                            .await?;
+                        if debug_stage_metrics {
+                            debug_inc(
+                                &self.metrics,
+                                "core.pipeline.debug.stage.account_deletion.pipe_filter_passed",
+                                1,
+                            )
+                            .await;
+                        }
+                        let stage_start = Instant::now();
+                        let run_result = pipe
+                            .run(account_deletion.clone(), self.metrics.clone())
+                            .await;
+                        if debug_stage_metrics {
+                            debug_hist(
+                                &self.metrics,
+                                "core.pipeline.debug.latency.account_deletion.pipe_run_nanoseconds",
+                                stage_start.elapsed().as_nanos() as f64,
+                            )
+                            .await;
+                        }
+                        run_result?;
+                    } else if debug_stage_metrics {
+                        debug_inc(
+                            &self.metrics,
+                            "core.pipeline.debug.stage.account_deletion.pipe_filter_dropped",
+                            1,
+                        )
+                        .await;
                     }
                 }
 
@@ -600,14 +1283,53 @@ impl Pipeline {
                     .await?;
             }
             Update::BlockDetails(block_details) => {
+                if debug_stage_metrics {
+                    debug_inc(
+                        &self.metrics,
+                        "core.pipeline.debug.stage.block_details.enter",
+                        1,
+                    )
+                    .await;
+                    debug_gauge(
+                        &self.metrics,
+                        "core.pipeline.debug.gauge.block_details.slot",
+                        block_details.slot as f64,
+                    )
+                    .await;
+                }
                 for pipe in self.block_details_pipes.iter_mut() {
                     if pipe
                         .filters()
                         .iter()
                         .all(|filter| filter.filter_block_details(&datasource_id, &block_details))
                     {
-                        pipe.run(block_details.clone(), self.metrics.clone())
-                            .await?;
+                        if debug_stage_metrics {
+                            debug_inc(
+                                &self.metrics,
+                                "core.pipeline.debug.stage.block_details.pipe_filter_passed",
+                                1,
+                            )
+                            .await;
+                        }
+                        let stage_start = Instant::now();
+                        let run_result =
+                            pipe.run(block_details.clone(), self.metrics.clone()).await;
+                        if debug_stage_metrics {
+                            debug_hist(
+                                &self.metrics,
+                                "core.pipeline.debug.latency.block_details.pipe_run_nanoseconds",
+                                stage_start.elapsed().as_nanos() as f64,
+                            )
+                            .await;
+                        }
+                        run_result?;
+                    } else if debug_stage_metrics {
+                        debug_inc(
+                            &self.metrics,
+                            "core.pipeline.debug.stage.block_details.pipe_filter_dropped",
+                            1,
+                        )
+                        .await;
                     }
                 }
 
