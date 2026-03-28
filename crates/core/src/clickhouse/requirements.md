@@ -258,6 +258,7 @@ Landing tables:
 Reason:
 - landing is append-only
 - correctness should not depend on background dedup in landing
+- landing should remain the simplest possible durable ingest surface
 
 Serving tables:
 - use `MergeTree` if the promotion job writes one canonical row per key
@@ -266,6 +267,7 @@ Serving tables:
 Reason:
 - the real serving rule is composite
 - `ReplacingMergeTree(version)` cannot express the full canonicalization rule by itself
+- serving correctness should be decided by promotion logic, not by uncertain merge timing
 
 ## Ordering Keys
 
@@ -327,6 +329,14 @@ Reason:
 - many Carbon datasource combinations naturally scatter rows across history
 - ClickHouse performs poorly when a workload creates many tiny parts across many partitions
 
+Async inserts:
+- may be enabled later as an optimization for small live batches or many concurrent writers
+- must not replace explicit client-side batching as the primary ingest strategy
+
+Reason:
+- Carbon already has enough context to batch intelligently by partition and mode
+- async inserts help operationally, but they should not become the main correctness or performance mechanism
+
 ## Replay And Retry Rules
 
 There are two duplication classes.
@@ -339,6 +349,7 @@ Required protection:
 - exact same batch contents
 - exact same row order
 - explicit batch identifier
+- `insert_deduplication_token` where supported and useful
 
 ### Replay And Backfill Duplication
 
@@ -408,6 +419,22 @@ Using `clickhouse-rs`, the sink must:
 - keep validation enabled by default
 - clear cached insert metadata after runtime schema changes
 - configure batching and timeouts explicitly
+- expose insert settings cleanly enough to support dedup tokens and later async insert tuning
+
+## Operational Monitoring
+
+The sink and deployment must monitor:
+- insert throughput
+- flush latency
+- batch size
+- landing-to-serving promotion lag
+- retry counts
+- parts created per table and partition
+- background merge pressure
+
+Reason:
+- excessive part creation is one of the main failure modes for ClickHouse write paths
+- Carbon backfills and mixed live traffic can create unstable write patterns if left unobserved
 
 ## Minimum Tests
 
