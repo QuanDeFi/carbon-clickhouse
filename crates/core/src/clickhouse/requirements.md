@@ -2,105 +2,152 @@
 
 ## Goal
 
-Build a direct Carbon -> ClickHouse sink for decoded Solana events that works for:
+Build a direct Carbon -> ClickHouse sink for decoded Solana data that works for:
 - live ingestion,
 - historical backfills,
 - snapshots,
-- repair and replay jobs,
+- replay and repair jobs,
 - arbitrary out-of-order inserts.
 
-ClickHouse is the primary analytics store. This sink is event-first, not OLTP-style state storage.
+ClickHouse is the primary analytics store. The sink is append-first and analytics-first. It must not assume OLTP semantics.
 
-## Decisions Already Locked
+## Codebase-Derived Scope
 
-These are already supported by the Carbon codebase and should be treated as fixed.
+This design is based on the current Carbon codebase:
+- `64` decoder crates
+- `14` datasource crates
+- `9` decoders with generated CPI/log event families
+- the rest are account and instruction decoders
 
-- Input is decoded, not raw. Carbon processors already receive typed decoded outputs.
-- Tables should be per event family, not one universal shared event table.
-- The storage layout should be `landing -> serving`.
-- The sink must support multiple ingestion modes:
+Important Carbon facts:
+- processor input is already decoded, not raw chain data
+- instruction metadata includes `signature`, `slot`, `index`, `stack_height`, and `absolute_path`
+- transaction metadata includes `slot` and `signature`, but `index`, `block_time`, and `block_hash` are optional
+- account updates include `pubkey` and `slot`, but transaction provenance is optional
+- datasources span live streams, bounded backfills, snapshots, and replay-on-reconnect behavior
+
+This means the sink must support mixed source quality, mixed ingest modes, and overlapping replays.
+
+## Locked Product Decisions
+
+These are fixed.
+
+- Input is decoded, not raw.
+- Tables are organized per decoded family, not one universal shared table.
+- The storage layout is `landing -> serving`.
+- Coverage tracking is required.
+- Ingestion modes are explicit:
   - `live`
   - `backfill`
   - `snapshot`
   - `repair`
-- Coverage tracking is required because Carbon does not centrally track completeness across mixed datasource types.
+- Serving correctness must not depend on insert order.
+- Dedup correctness must not depend only on ClickHouse retry dedup windows.
 
-## What Carbon Actually Provides
+## Family Model
 
-From the core metadata and datasource code:
+The sink must support three practical family types.
 
-- instruction-derived events have:
-  - `signature`
-  - `slot`
-  - optional `block_time`
-  - optional `block_hash`
-  - instruction `index`
-  - `stack_height`
-  - `absolute_path`
-- account updates have:
-  - `pubkey`
-  - `slot`
-  - optional `transaction_signature`
-- datasources already support:
-  - live streaming,
-  - bounded historical crawls,
-  - snapshots,
-  - backfill-then-tail patterns.
+### 1. Event Families
 
-This means the sink must be replay-safe and must not assume ordered inserts.
+Used for generated CPI/log event decoders such as:
+- Jupiter Swap
+- Jupiter Lend
+- Pumpfun
+- Pump Swap
+- Pump Fees
+- Meteora DAMM v2
+- Onchain Labs DEX v1/v2
+- dFlow Aggregator
 
-## Decision Matrix
-
-### Event Families
-
-Decision:
-- use one landing table and one serving table per decoded event family
-
-Reason:
-- decoder crates are already structured by program and event family
-- schemas differ materially across programs
-- per-family tables are easier to evolve and query
+Pattern:
+- one landing table per event family
+- one serving table per event family
 
 Examples:
 - `jupiter_swap_swap_event_landing`
 - `jupiter_swap_swap_event_serving`
-- `solayer_restaking_deposit_event_landing`
+- `pumpfun_trade_event_landing`
 
-### Event Identity
+### 2. Instruction Families
 
-Decision:
-- every row must have a deterministic `event_id`
+Used for decoders that expose typed instructions but no separate event module.
 
-Recommended identity inputs:
+Pattern:
+- one landing table per instruction family where the user wants instruction analytics
+- one serving table per instruction family if canonicalization is needed
+
+### 3. Account Families
+
+Used for decoded account state tables.
+
+Pattern:
+- one landing table per decoded account family
+- one serving table per decoded account family
+
+These behave like versioned state, not immutable events.
+
+## Event And Row Identity
+
+Every landing and serving row must have a deterministic key.
+
+### Event Families
+
+Required identity inputs:
 - `program_id`
 - `signature`
 - `absolute_path`
 - `event_type`
 - `event_seq`
 
-Reason:
-- Carbon provides `absolute_path`, which is stronger than only `instruction_index + stack_height` for CPI nesting
-- Carbon does not provide a universal built-in event sequence for multiple decoded events emitted by one instruction
-
-Required rule:
-- `event_seq` must be assigned as the ordinal position within the decoded event list for one instruction
-
-Recommended formula:
+Locked formula:
 - `event_id = hash(program_id, signature, absolute_path, event_type, event_seq)`
 
-### Landing Table Shape
+Reason:
+- `absolute_path` is the strongest Carbon-provided nested instruction locator
+- it is safer than only `instruction_index + stack_height`
 
-Decision:
-- landing tables should store decoded typed rows only
+### Instruction Families
 
-Required columns:
+Default identity:
 - `program_id`
-- `event_type`
-- `event_id`
-- `slot`
-- `block_time`
-- `block_hash`
 - `signature`
+- `absolute_path`
+- `instruction_type`
+
+### Account Families
+
+Default business key:
+- `pubkey`
+
+State versions are then ordered separately by slot and decode freshness.
+
+## `event_seq` Contract
+
+`event_seq` must be a shared sink-level contract, not a processor-specific convention.
+
+Required behavior:
+- current generated `CpiEvent` decoders use `event_seq = 0`
+- future custom processors using `InstructionMetadata::decode_log_events()` must assign `event_seq` from vector order
+
+Reason:
+- current autogenerated CPI event decoders decode one typed event per instruction
+- Carbon core still supports multi-event extraction through `decode_log_events()`
+
+This keeps today's decoders simple and still future-proofs the sink.
+
+## Landing Schema
+
+Landing tables are append-only ingest tables.
+
+They must store decoded typed rows only.
+
+Required metadata columns for event and instruction families:
+- `program_id`
+- `family_name`
+- `event_type` or `instruction_type`
+- `event_id` or instruction identity key
+- `slot`
 - `instruction_index`
 - `stack_height`
 - `absolute_path`
@@ -109,62 +156,163 @@ Required columns:
 - `mode`
 - `decoder_version`
 - `ingest_ts`
+- `chain_time`
+- `partition_time`
+- `block_hash`
+- `tx_index`
 - typed payload columns
 
+Required metadata columns for account families:
+- `program_id`
+- `family_name`
+- `pubkey`
+- `slot`
+- `source_name`
+- `mode`
+- `decoder_version`
+- `ingest_ts`
+- `chain_time`
+- `partition_time`
+- optional `transaction_signature`
+- typed payload columns
+
+Column rules:
+- `chain_time` is the real chain timestamp when available
+- `partition_time` is the storage partition timestamp
+- `tx_index` is nullable because many datasources do not provide it
+- `block_hash` is nullable because many datasources do not provide it
+
 Optional:
-- `payload_json` only if debug/replay ergonomics justify it
+- `payload_json` for debug or replay ergonomics
 
-### Serving Table Shape
+## Serving Schema
 
-Decision:
-- serving tables are canonical deduplicated event tables for reads
+Serving tables are canonical read tables.
 
-They should:
+They must:
 - preserve typed payload columns
 - resolve duplicates from replays and overlapping backfills
-- be query-facing
+- tolerate mixed source completeness
+- remain correct when rows arrive out of order
 
-Optional later:
-- add aggregate or rollup tables on top of serving tables
+Serving tables are the query surface. Aggregate or rollup tables may be added later on top of them.
 
-### Engine And Ordering
+## Version And Canonicalization Rule
 
-Decision:
-- use `ReplacingMergeTree(...)` for both landing and serving if serving dedup is ClickHouse-native
+Serving canonicalization must use a composite rule.
 
-Default starting point:
-- `ReplacingMergeTree(version_column)`
+Do not use:
+- only `slot`
+- only `ingest_ts`
+- only `decoder_version`
 
-`ORDER BY` must include the event identity key. Start with:
-- `(program_id, event_type, event_id, slot)`
+Use this precedence:
+1. highest `slot`
+2. highest `decoder_version`
+3. richest metadata row
+4. latest `ingest_ts`
+
+Richest metadata row means preferring rows that have more of:
+- `chain_time`
+- `block_hash`
+- `tx_index`
 
 Reason:
-- dedup in `ReplacingMergeTree` is based on the `ORDER BY` key
+- `slot` is the only ordering field consistently available across all Carbon update types
+- `slot` alone cannot distinguish same-slot replays or repair runs
+- `latest-ingestion-wins` alone is unsafe because a later lower-quality datasource can overwrite a richer earlier row
+- `decoder_version` must outrank ingest time so intentional re-decodes win predictably
 
-### Partitioning
+Practical consequence:
+- correctness lives in the landing -> serving promotion logic
+- not in a single naive ClickHouse version column
 
-Decision:
-- default to yearly partitions, not monthly
+## Time And Partitioning
 
-Default:
-- `PARTITION BY toYYYY(event_time)`
+Do not overload one `event_time` column with two meanings.
 
-Important constraint from Carbon:
-- `block_time` is not guaranteed on all update types
+Use:
+- `chain_time Nullable(DateTime64)` for real chain time
+- `partition_time DateTime64` for ClickHouse partitioning
 
-So the sink must define `event_time` explicitly:
-- use `block_time` when present
-- otherwise use a sink-defined fallback
+Required rule:
+- `partition_time = coalesce(chain_time, ingest_ts)`
 
-This fallback still needs explicit sign-off.
+Default partitioning:
+- `PARTITION BY toYYYY(partition_time)`
 
-### Insert Strategy
+Reason:
+- many transaction datasources omit `block_time`
+- account and snapshot datasources often have no meaningful chain timestamp
+- external slot-to-time derivation should not be required just to make the sink usable
 
-Decision:
-- buffer rows in memory by partition key
+This keeps partitioning universal while still preserving true chain time when it exists.
+
+Do not default to monthly partitions. The source mix is too fragmented for that to be a safe baseline.
+
+## Engine Choice
+
+Landing tables:
+- use plain `MergeTree`
+
+Reason:
+- landing is append-only
+- correctness should not depend on background dedup in landing
+
+Serving tables:
+- use `MergeTree` if the promotion job writes one canonical row per key
+- use `ReplacingMergeTree` only as secondary protection, not as the primary correctness mechanism
+
+Reason:
+- the real serving rule is composite
+- `ReplacingMergeTree(version)` cannot express the full canonicalization rule by itself
+
+## Ordering Keys
+
+Landing and serving `ORDER BY` keys must begin with the business identity.
+
+Recommended defaults:
+
+Event families:
+- `(program_id, family_name, event_id, slot)`
+
+Instruction families:
+- `(program_id, family_name, signature, absolute_path, slot)`
+
+Account families:
+- `(program_id, family_name, pubkey, slot)`
+
+These may be adjusted per family if later query workloads demand a different physical sort shape.
+
+## Materialization Strategy
+
+Landing -> serving must use a scheduled promotion job as the primary path.
+
+Do not make insert-time materialized views the main canonicalization path.
+
+Reason:
+- Carbon supports live, backfill, snapshot, and replay modes
+- source rows can arrive out of order
+- duplicate rows can differ in metadata completeness
+- decoder versions can change over time
+
+A scheduled promotion job can:
+- group by business key
+- apply the composite canonicalization rule
+- merge richer metadata into the winning row
+- rerun safely for repair jobs
+
+Materialized views are allowed later only for:
+- simple stable transforms
+- aggregates
+- rollups
+
+## Insert Strategy
+
+The sink must batch by partition key.
 
 Required behavior:
-- partition-grouped buffers
+- maintain partition-grouped buffers
 - flush by row count
 - flush by byte size
 - flush by timer
@@ -175,14 +323,55 @@ Practical shape:
 
 Backfill mode must use larger flush sizes than live mode.
 
-### Coverage Tracking
+Reason:
+- many Carbon datasource combinations naturally scatter rows across history
+- ClickHouse performs poorly when a workload creates many tiny parts across many partitions
 
-Decision:
-- add `ingestion_ranges`
+## Replay And Retry Rules
 
-Recommended columns:
+There are two duplication classes.
+
+### Retry Duplication
+
+Same batch retried after failure.
+
+Required protection:
+- exact same batch contents
+- exact same row order
+- explicit batch identifier
+
+### Replay And Backfill Duplication
+
+Historical ranges intentionally reprocessed.
+
+Required protection:
+- deterministic row identity
+- append-only landing
+- canonical serving promotion
+
+Do not rely only on ClickHouse retry deduplication windows. They are not a permanent semantic dedup layer.
+
+## Source Metadata Requirements
+
+Every landing row must retain source context.
+
+Required fields:
+- `source_name`
+- `mode`
+- `decoder_version`
+- `ingest_ts`
+
+Reason:
+- the same business event may arrive from multiple datasource types
+- the sink must be able to explain why one row won during canonicalization
+
+## Coverage Tracking
+
+Add a small metadata table named `ingestion_ranges`.
+
+Required columns:
 - `program_id`
-- `event_family`
+- `family_name`
 - `source_name`
 - `range_start_slot`
 - `range_end_slot`
@@ -193,48 +382,14 @@ Recommended columns:
 - `decoder_version`
 
 Reason:
-- Carbon supports mixed live, backfill, snapshot, and replay-style ingestion but does not track completeness centrally
-
-## Open Decisions That Still Need Sign-Off
-
-These could not be fully derived from Carbon code alone.
-
-### 1. Version Rule
-
-You need to choose what "latest row wins" means for serving-table dedup:
-
-- highest `slot` wins
-- latest `ingest_ts` wins
-- latest `decoder_version` wins
-- composite rule
-
-This is the main unresolved semantic choice.
-
-### 2. Event Time Fallback
-
-You need to choose what `event_time` becomes when `block_time` is missing:
-
-- derive externally from slot
-- use `ingest_ts`
-- keep `event_time` nullable and partition by another field
-
-### 3. Serving Materialization Method
-
-You need to choose how landing populates serving:
-
-- ClickHouse materialized views
-- scheduled promotion job
-- both
-
-My recommendation:
-- start with a scheduled promotion job
-- introduce materialized views only for simple stable transforms
+- Carbon does not centrally track completeness across mixed datasource combinations
+- replay, repair, and snapshot ingestion need explicit bookkeeping
 
 ## Carbon Integration Requirements
 
 Add a `clickhouse` feature in `crates/core`.
 
-Create ClickHouse processors that mirror Carbon's existing processor style:
+Create ClickHouse processors that mirror Carbon's processor style:
 - `ClickHouseAccountProcessor<T, W>`
 - `ClickHouseJsonAccountProcessor<T>`
 - `ClickHouseInstructionProcessor<T, W>`
@@ -244,6 +399,7 @@ The sink implementation must:
 - return `CarbonResult`
 - map storage failures to `Error::Custom`
 - emit metrics for insert success, insert failure, flush duration, and batch size
+- emit metrics for promotion success, promotion failure, and promotion lag
 
 ## Client Rules
 
@@ -258,28 +414,36 @@ Using `clickhouse-rs`, the sink must:
 1. Unit tests
 - `event_id` generation is stable
 - row mapping is stable
-- retry batches preserve exact row order
-- `event_seq` assignment is stable for multi-event instructions
+- `event_seq` assignment is stable
+- batch retries preserve exact row order
+- partition key assignment is stable
 
 2. Integration tests
 - live insert path works
 - backfill insert path works
 - snapshot ingest path works
-- replayed rows converge correctly
+- repair path works
+- out-of-order inserts converge correctly in serving
+- richer metadata beats poorer metadata for the same business key
+- higher decoder version beats older decoder version
 - graceful shutdown flushes buffered rows
 - coverage metadata is recorded correctly
 
 3. Performance checks
 - sustained live-like ingestion
 - fragmented historical backfill ingestion
-- flush latency and part creation remain acceptable
+- snapshot ingestion
+- promotion lag remains acceptable
+- part creation remains acceptable
 
 ## Implementation Order
 
-1. Confirm the three open decisions above.
-2. Add row models and deterministic `event_id` / `event_seq` rules.
-3. Add landing and serving DDL.
+1. Add row models for account, instruction, and event family landing rows.
+2. Add shared identity helpers, including the locked `event_seq` contract.
+3. Add landing DDL with `chain_time` and `partition_time`.
 4. Build the partition-aware writer and retry policy.
-5. Add coverage metadata tracking.
-6. Add Carbon processors and metrics.
-7. Test live, backfill, snapshot, and replay behavior.
+5. Add `ingestion_ranges`.
+6. Build the scheduled landing -> serving promotion job.
+7. Add serving DDL and canonicalization queries.
+8. Add Carbon processors and metrics.
+9. Test live, backfill, snapshot, repair, and replay behavior.
