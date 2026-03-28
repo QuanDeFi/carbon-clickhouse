@@ -44,8 +44,8 @@ fn env_usize(name: &str, default: usize) -> usize {
 }
 
 fn env_u64(name: &str) -> CarbonResult<u64> {
-    let value = env::var(name)
-        .map_err(|err| CarbonError::Custom(format!("{name} must be set ({err})")))?;
+    let value =
+        env::var(name).map_err(|err| CarbonError::Custom(format!("{name} must be set ({err})")))?;
 
     value
         .parse::<u64>()
