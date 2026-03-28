@@ -112,3 +112,4 @@ jspm_packages/
 ehthumbs.db
 Thumbs.db
 /.jupyter-swap-postgress-backup/
+examples/jupiter-swap-postgres/logs
