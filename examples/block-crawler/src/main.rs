@@ -35,7 +35,7 @@ pub async fn main() -> CarbonResult<()> {
 
     let rpc_block_ds = RpcBlockCrawler::new(
         env::var("RPC_URL").unwrap_or_default(),
-        Some(args.start_slot),
+        args.start_slot,
         Some(args.end_slot),
         None,
         RpcBlockConfig {

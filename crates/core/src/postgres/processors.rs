@@ -11,10 +11,6 @@ use crate::{
         rows::{AccountRow, InstructionRow},
     },
 };
-const BUILD_INSTRUCTION_ROW_WRAPPER_STAGE: &str = "stage.build_instruction_row_wrapper.slot";
-const UPSERT_INSTRUCTION_ROW_POSTGRES_STAGE: &str = "stage.upsert_instruction_row_postgres.slot";
-const UPSERT_INSTRUCTION_ROW_POSTGRES_STAGE_EXIT: &str =
-    "stage.upsert_instruction_row_postgres.exit.slot";
 
 pub struct PostgresAccountProcessor<T, W> {
     pool: sqlx::PgPool,
@@ -155,7 +151,6 @@ where
         metrics: Arc<MetricsCollection>,
     ) -> CarbonResult<()> {
         let (metadata, decoded_instruction, _nested_instructions, _raw) = input;
-        let slot = metadata.transaction_metadata.slot;
 
         let start = std::time::Instant::now();
 
@@ -164,16 +159,6 @@ where
             metadata,
             decoded_instruction.accounts,
         ));
-        metrics
-            .update_gauge(BUILD_INSTRUCTION_ROW_WRAPPER_STAGE, slot as f64)
-            .await?;
-        metrics
-            .increment_counter("postgres.instructions.row_wrapper.built", 1)
-            .await?;
-
-        metrics
-            .update_gauge(UPSERT_INSTRUCTION_ROW_POSTGRES_STAGE, slot as f64)
-            .await?;
 
         match wrapper.upsert(&self.pool).await {
             Ok(()) => {
@@ -186,17 +171,11 @@ where
                         start.elapsed().as_millis() as f64,
                     )
                     .await?;
-                metrics
-                    .update_gauge(UPSERT_INSTRUCTION_ROW_POSTGRES_STAGE_EXIT, slot as f64)
-                    .await?;
                 Ok(())
             }
             Err(e) => {
                 metrics
                     .increment_counter("postgres.instructions.upsert.failed", 1)
-                    .await?;
-                metrics
-                    .update_gauge(UPSERT_INSTRUCTION_ROW_POSTGRES_STAGE_EXIT, slot as f64)
                     .await?;
                 return Err(e);
             }
@@ -231,25 +210,14 @@ where
         metrics: Arc<MetricsCollection>,
     ) -> CarbonResult<()> {
         let (metadata, decoded_instruction, _nested_instructions, _raw) = input;
-        let slot = metadata.transaction_metadata.slot;
 
         let instruction_row = InstructionRow::from_parts(
             decoded_instruction.data,
             metadata,
             decoded_instruction.accounts,
         );
-        metrics
-            .update_gauge(BUILD_INSTRUCTION_ROW_WRAPPER_STAGE, slot as f64)
-            .await?;
-        metrics
-            .increment_counter("postgres.instructions.row_wrapper.built", 1)
-            .await?;
 
         let start = std::time::Instant::now();
-
-        metrics
-            .update_gauge(UPSERT_INSTRUCTION_ROW_POSTGRES_STAGE, slot as f64)
-            .await?;
 
         match instruction_row.upsert(&self.pool).await {
             Ok(()) => {
@@ -262,17 +230,11 @@ where
                         start.elapsed().as_millis() as f64,
                     )
                     .await?;
-                metrics
-                    .update_gauge(UPSERT_INSTRUCTION_ROW_POSTGRES_STAGE_EXIT, slot as f64)
-                    .await?;
                 Ok(())
             }
             Err(e) => {
                 metrics
                     .increment_counter("postgres.instructions.upsert.failed", 1)
-                    .await?;
-                metrics
-                    .update_gauge(UPSERT_INSTRUCTION_ROW_POSTGRES_STAGE_EXIT, slot as f64)
                     .await?;
                 return Err(e);
             }

@@ -57,10 +57,7 @@ use {
     async_trait::async_trait,
     solana_pubkey::Pubkey,
     solana_signature::Signature,
-    std::{
-        sync::{Arc, OnceLock},
-        time::Instant,
-    },
+    std::sync::Arc,
 };
 
 /// Holds metadata for an account update, including the slot and public key.
@@ -164,34 +161,6 @@ pub struct AccountPipe<T: Send> {
     pub filters: Vec<Box<dyn Filter + Send + Sync + 'static>>,
 }
 
-fn debug_processor_metrics_enabled() -> bool {
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| {
-        std::env::var("CARBON_DEBUG_STAGE_METRICS")
-            .map(|value| {
-                matches!(
-                    value.trim().to_ascii_lowercase().as_str(),
-                    "1" | "true" | "yes" | "on"
-                )
-            })
-            .unwrap_or(false)
-    })
-}
-
-async fn debug_inc(metrics: &MetricsCollection, name: &str) {
-    metrics
-        .increment_counter(name, 1)
-        .await
-        .unwrap_or_else(|error| log::error!("error recording debug counter {name}: {error:?}"));
-}
-
-async fn debug_hist(metrics: &MetricsCollection, name: &str, value: f64) {
-    metrics
-        .record_histogram(name, value)
-        .await
-        .unwrap_or_else(|error| log::error!("error recording debug histogram {name}: {error:?}"));
-}
-
 /// An async trait for processing account updates.
 ///
 /// The `AccountPipes` trait allows for processing of account updates.
@@ -221,22 +190,9 @@ impl<T: Send> AccountPipes for AccountPipe<T> {
         metrics: Arc<MetricsCollection>,
     ) -> CarbonResult<()> {
         log::trace!("AccountPipe::run(account_with_metadata: {account_with_metadata:?}, metrics)",);
-        let debug = debug_processor_metrics_enabled();
-        if debug {
-            debug_inc(&metrics, "core.pipeline.debug.processor.account.run_enter").await;
-        }
 
         if let Some(decoded_account) = self.decoder.decode_account(&account_with_metadata.1) {
-            if debug {
-                debug_inc(
-                    &metrics,
-                    "core.pipeline.debug.processor.account.decode_success",
-                )
-                .await;
-            }
-            let start = Instant::now();
-            let result = self
-                .processor
+            self.processor
                 .process(
                     (
                         account_with_metadata.0.clone(),
@@ -245,39 +201,7 @@ impl<T: Send> AccountPipes for AccountPipe<T> {
                     ),
                     metrics.clone(),
                 )
-                .await;
-            if debug {
-                debug_hist(
-                    &metrics,
-                    "core.pipeline.debug.processor.account.run_nanoseconds",
-                    start.elapsed().as_nanos() as f64,
-                )
-                .await;
-            }
-            match result {
-                Ok(()) => {
-                    if debug {
-                        debug_inc(
-                            &metrics,
-                            "core.pipeline.debug.processor.account.run_success",
-                        )
-                        .await;
-                    }
-                }
-                Err(error) => {
-                    if debug {
-                        debug_inc(&metrics, "core.pipeline.debug.processor.account.run_error")
-                            .await;
-                    }
-                    return Err(error);
-                }
-            }
-        } else if debug {
-            debug_inc(
-                &metrics,
-                "core.pipeline.debug.processor.account.decode_miss",
-            )
-            .await;
+                .await?;
         }
         Ok(())
     }

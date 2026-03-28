@@ -56,7 +56,6 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
-examples/jupiter-swap-postgres/logs
 
 # Runtime data
 pids
@@ -112,3 +111,4 @@ jspm_packages/
 .Trashes
 ehthumbs.db
 Thumbs.db
+/.jupyter-swap-postgress-backup/

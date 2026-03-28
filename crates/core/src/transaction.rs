@@ -47,10 +47,7 @@ use {
     serde::de::DeserializeOwned,
     solana_pubkey::Pubkey,
     solana_signature::Signature,
-    std::{
-        sync::{Arc, OnceLock},
-        time::Instant,
-    },
+    std::sync::Arc,
 };
 /// Contains metadata about a transaction, including its slot, signature, fee
 /// payer, transaction status metadata, the version transaction message and its
@@ -161,41 +158,6 @@ pub struct TransactionPipe<T: InstructionDecoderCollection, U> {
     schema: Option<TransactionSchema<T>>,
     processor: Box<dyn Processor<InputType = TransactionProcessorInputType<T, U>> + Send + Sync>,
     filters: Vec<Box<dyn Filter + Send + Sync + 'static>>,
-}
-
-fn debug_processor_metrics_enabled() -> bool {
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| {
-        std::env::var("CARBON_DEBUG_STAGE_METRICS")
-            .map(|value| {
-                matches!(
-                    value.trim().to_ascii_lowercase().as_str(),
-                    "1" | "true" | "yes" | "on"
-                )
-            })
-            .unwrap_or(false)
-    })
-}
-
-async fn debug_inc(metrics: &MetricsCollection, name: &str) {
-    metrics
-        .increment_counter(name, 1)
-        .await
-        .unwrap_or_else(|error| log::error!("error recording debug counter {name}: {error:?}"));
-}
-
-async fn debug_gauge(metrics: &MetricsCollection, name: &str, value: f64) {
-    metrics
-        .update_gauge(name, value)
-        .await
-        .unwrap_or_else(|error| log::error!("error recording debug gauge {name}: {error:?}"));
-}
-
-async fn debug_hist(metrics: &MetricsCollection, name: &str, value: f64) {
-    metrics
-        .record_histogram(name, value)
-        .await
-        .unwrap_or_else(|error| log::error!("error recording debug histogram {name}: {error:?}"));
 }
 
 /// Represents a parsed transaction, including its metadata and parsed
@@ -339,93 +301,23 @@ where
         metrics: Arc<MetricsCollection>,
     ) -> CarbonResult<()> {
         log::trace!("TransactionPipe::run(instructions: {instructions:?}, metrics)",);
-        let debug = debug_processor_metrics_enabled();
-        if debug {
-            debug_inc(
-                &metrics,
-                "core.pipeline.debug.processor.transaction.run_enter",
-            )
-            .await;
-        }
 
         let parsed_instructions = parse_instructions(instructions);
-        if debug {
-            debug_gauge(
-                &metrics,
-                "core.pipeline.debug.processor.transaction.parsed_instruction_count",
-                parsed_instructions.len() as f64,
-            )
-            .await;
-        }
 
         let matched_data = self.matches_schema(&parsed_instructions);
-        if debug {
-            if matched_data.is_some() {
-                debug_inc(
-                    &metrics,
-                    "core.pipeline.debug.processor.transaction.schema_match_hit",
-                )
-                .await;
-            } else {
-                debug_inc(
-                    &metrics,
-                    "core.pipeline.debug.processor.transaction.schema_match_miss",
-                )
-                .await;
-            }
-        }
 
         let unnested_instructions = transformers::unnest_parsed_instructions(
             transaction_metadata.clone(),
             parsed_instructions,
             0,
         );
-        if debug {
-            debug_gauge(
-                &metrics,
-                "core.pipeline.debug.processor.transaction.unnested_instruction_count",
-                unnested_instructions.len() as f64,
-            )
-            .await;
-        }
 
-        let start = Instant::now();
-        let result = self
-            .processor
+        self.processor
             .process(
                 (transaction_metadata, unnested_instructions, matched_data),
-                metrics.clone(),
+                metrics,
             )
-            .await;
-        if debug {
-            debug_hist(
-                &metrics,
-                "core.pipeline.debug.processor.transaction.run_nanoseconds",
-                start.elapsed().as_nanos() as f64,
-            )
-            .await;
-        }
-        match result {
-            Ok(()) => {
-                if debug {
-                    debug_inc(
-                        &metrics,
-                        "core.pipeline.debug.processor.transaction.run_success",
-                    )
-                    .await;
-                }
-            }
-            Err(error) => {
-                if debug {
-                    debug_inc(
-                        &metrics,
-                        "core.pipeline.debug.processor.transaction.run_error",
-                    )
-                    .await;
-                }
-                return Err(error);
-            }
-        }
+            .await?;
 
         Ok(())
     }
