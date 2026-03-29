@@ -184,6 +184,7 @@ pub struct InstructionPipe<T: Send, P> {
 #[async_trait]
 pub trait InstructionPipes<'a>: Send + Sync {
     async fn run(&mut self, nested_instruction: &NestedInstruction) -> CarbonResult<()>;
+    async fn finalize(&mut self) -> CarbonResult<()>;
     fn filters(&self) -> &Vec<Box<dyn Filter + Send + Sync + 'static>>;
 }
 
@@ -209,6 +210,10 @@ where
         }
 
         Ok(())
+    }
+
+    async fn finalize(&mut self) -> CarbonResult<()> {
+        self.processor.finalize().await
     }
 
     fn filters(&self) -> &Vec<Box<dyn Filter + Send + Sync + 'static>> {

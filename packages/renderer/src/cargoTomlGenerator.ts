@@ -25,6 +25,7 @@ export type DecoderCargoTomlOptions = {
     versionName?: string;
     withPostgres: boolean;
     withGraphQL: boolean;
+    withClickHouse?: boolean;
     withSerde: boolean;
     withBase58?: boolean;
     withSerdeBigArray?: boolean;
@@ -71,6 +72,7 @@ export function generateDecoderCargoToml(options: DecoderCargoTomlOptions): stri
         versionName,
         withPostgres,
         withGraphQL,
+        withClickHouse = false,
         withSerde,
         withBase58 = false,
         withSerdeBigArray = false,
@@ -174,13 +176,23 @@ export function generateDecoderCargoToml(options: DecoderCargoTomlOptions): stri
         useWorkspace,
     );
     const juniperDep = getCrateDependencyString('juniper', VERSIONS['juniper'], undefined, true, useWorkspace);
+    const chronoDep = getCrateDependencyString('chrono', VERSIONS['chrono'], ['serde'], true, useWorkspace);
 
     const features: string[] = ['default = []'];
 
-    if (withSerde || withPostgres || withGraphQL || withBase58) {
+    if (withSerde || withPostgres || withGraphQL || withClickHouse || withBase58) {
         features.push('');
         const serdeDeps = withSerdeBigArray ? 'serde = ["dep:serde", "dep:serde-big-array"]' : 'serde = ["dep:serde"]';
         features.push(serdeDeps);
+    }
+
+    if (withClickHouse) {
+        features.push('');
+        features.push('clickhouse = [');
+        features.push('    "carbon-core/clickhouse",');
+        features.push('    "serde",');
+        features.push('    "dep:chrono",');
+        features.push(']');
     }
 
     if (withPostgres || withGraphQL) {
@@ -217,12 +229,17 @@ export function generateDecoderCargoToml(options: DecoderCargoTomlOptions): stri
         serdeJsonDep,
     ];
 
-    if (withSerde || withPostgres || withGraphQL || withBase58) {
+    if (withSerde || withPostgres || withGraphQL || withClickHouse || withBase58) {
         dependencies.push('');
         dependencies.push(serdeDep);
         if (withSerdeBigArray) {
             dependencies.push(serdeBigArrayDep);
         }
+    }
+
+    if (withClickHouse) {
+        dependencies.push('');
+        dependencies.push(chronoDep);
     }
 
     if (withPostgres || withGraphQL) {

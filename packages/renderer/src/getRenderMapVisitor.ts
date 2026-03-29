@@ -43,6 +43,7 @@ export type GetRenderMapOptions = {
     postgresMode?: 'generic' | 'typed';
     withPostgres?: boolean;
     withGraphql?: boolean;
+    withClickHouse?: boolean;
     withSerde?: boolean;
     withBase58?: boolean;
     standalone?: boolean;
@@ -778,6 +779,9 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                         if (options.postgresMode !== 'generic' && options.withPostgres !== false) {
                             map.add('src/instructions/postgres/mod.rs', render('instructionsPostgresMod.njk', ctx));
                         }
+                        if (options.withClickHouse === true && (options.anchorEvents?.length ?? 0) > 0) {
+                            map.add('src/instructions/clickhouse/mod.rs', render('instructionsClickHouseMod.njk', ctx));
+                        }
                         if (options.withGraphql !== false) {
                             const instructionsGraphqlTemplate =
                                 options.postgresMode === 'generic' || options.withPostgres === false
@@ -817,6 +821,18 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                                 render('eventInstructionRowPage.njk', {
                                     ...ctx,
                                     imports: eventInstructionRowImports.toString(),
+                                }),
+                            );
+                        }
+                        if (options.withClickHouse === true) {
+                            const clickhouseEventImports = new ImportMap()
+                                .add('carbon_core::instruction::InstructionMetadata')
+                                .add('super::super::cpi_event::CpiEvent');
+                            map.add(
+                                'src/instructions/clickhouse/cpi_event_row.rs',
+                                render('eventInstructionClickHouseRowPage.njk', {
+                                    ...ctx,
+                                    imports: clickhouseEventImports.toString(),
                                 }),
                             );
                         }
@@ -911,6 +927,7 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                         versionName: options.versionName,
                         withPostgres: options.withPostgres !== false,
                         withGraphQL: options.withGraphql !== false,
+                        withClickHouse: options.withClickHouse === true,
                         withSerde: options.withSerde ?? false,
                         withBase58: options.withBase58 ?? false,
                         withSerdeBigArray: requiresSerdeBigArray,

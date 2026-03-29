@@ -29,6 +29,25 @@ pub struct CpiEventInstructionAccounts {
     pub remaining: Vec<solana_instruction::AccountMeta>,
 }
 
+impl CpiEventInstructionAccounts {
+    pub fn from_instruction_accounts(
+        program_id: solana_pubkey::Pubkey,
+        accounts: &[solana_instruction::AccountMeta],
+    ) -> Self {
+        let event_authority = accounts
+            .first()
+            .map(|account| account.pubkey)
+            .unwrap_or_default();
+        let remaining = accounts.iter().skip(1).cloned().collect();
+
+        Self {
+            program: program_id,
+            event_authority,
+            remaining,
+        }
+    }
+}
+
 impl CpiEvent {
     pub fn decode(data: &[u8]) -> Option<Self> {
         if data.len() < 8 {

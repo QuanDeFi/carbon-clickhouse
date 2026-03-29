@@ -1,6 +1,9 @@
 use std::time::Duration;
 
-use crate::error::{CarbonResult, Error};
+use crate::{
+    clickhouse::rows::ClickHouseRowContext,
+    error::{CarbonResult, Error},
+};
 
 #[derive(Debug, Clone)]
 pub struct ClickHouseConfig {
@@ -55,8 +58,9 @@ impl ClickHouseConfig {
         max_rows: usize,
         flush_interval: Duration,
     ) -> CarbonResult<Self> {
-        let parsed = url::Url::parse(database_url)
-            .map_err(|err| Error::Custom(format!("Invalid DATABASE_URL={database_url:?}: {err}")))?;
+        let parsed = url::Url::parse(database_url).map_err(|err| {
+            Error::Custom(format!("Invalid DATABASE_URL={database_url:?}: {err}"))
+        })?;
 
         let scheme = parsed.scheme();
         let host = parsed
@@ -86,5 +90,13 @@ impl ClickHouseConfig {
             max_rows,
             flush_interval,
         ))
+    }
+
+    pub fn row_context(&self) -> ClickHouseRowContext {
+        ClickHouseRowContext {
+            source_name: self.source_name.clone(),
+            mode: self.mode.clone(),
+            decoder_version: self.decoder_version.clone(),
+        }
     }
 }

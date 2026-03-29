@@ -143,6 +143,30 @@ fn flatten_nested_instructions<'a>(
 }
 
 impl Pipeline {
+    async fn finalize_pipes(&mut self) -> CarbonResult<()> {
+        for pipe in self.account_pipes.iter_mut() {
+            pipe.finalize().await?;
+        }
+
+        for pipe in self.account_deletion_pipes.iter_mut() {
+            pipe.finalize().await?;
+        }
+
+        for pipe in self.block_details_pipes.iter_mut() {
+            pipe.finalize().await?;
+        }
+
+        for pipe in self.instruction_pipes.iter_mut() {
+            pipe.finalize().await?;
+        }
+
+        for pipe in self.transaction_pipes.iter_mut() {
+            pipe.finalize().await?;
+        }
+
+        Ok(())
+    }
+
     fn export_metrics(&self) -> CarbonResult<()> {
         let snapshot = MetricsRegistry::global().snapshot();
         for exporter in &self.exporters {
@@ -209,6 +233,7 @@ impl Pipeline {
         loop {
             tokio::select! {
                 _ = datasource_cancellation_token.cancelled() => {
+                    self.finalize_pipes().await?;
                     self.export_metrics()?;
                     self.shutdown_exporters()?;
                     break;
@@ -218,6 +243,7 @@ impl Pipeline {
 
                     if self.shutdown_strategy == ShutdownStrategy::Immediate {
                         log::info!("shutting down the pipeline immediately.");
+                        self.finalize_pipes().await?;
                         self.export_metrics()?;
                         self.shutdown_exporters()?;
                         break;
@@ -253,6 +279,7 @@ impl Pipeline {
                         }
                         None => {
                             log::info!("update_receiver closed, shutting down.");
+                            self.finalize_pipes().await?;
                             self.export_metrics()?;
                             self.shutdown_exporters()?;
                             break;
@@ -415,7 +442,7 @@ impl Default for PipelineBuilder {
             datasource_cancellation_token: None,
             shutdown_strategy: ShutdownStrategy::default(),
             channel_buffer_size: DEFAULT_CHANNEL_BUFFER_SIZE,
-        }    
+        }
     }
 }
 

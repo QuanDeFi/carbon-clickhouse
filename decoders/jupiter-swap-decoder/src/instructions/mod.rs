@@ -7,6 +7,9 @@ pub mod postgres;
 #[cfg(feature = "graphql")]
 pub mod graphql;
 
+#[cfg(feature = "clickhouse")]
+pub mod clickhouse;
+
 pub mod claim;
 pub mod claim_token;
 pub mod close_token;
@@ -136,6 +139,17 @@ impl carbon_core::instruction::InstructionDecoder<'_> for JupiterSwapDecoder {
             return None;
         }
 
+        if let Some(data) = CpiEvent::decode(instruction.data.as_slice()) {
+            return Some(JupiterSwapInstruction::CpiEvent {
+                program_id: instruction.program_id,
+                data,
+                accounts: CpiEventInstructionAccounts::from_instruction_accounts(
+                    instruction.program_id,
+                    &instruction.accounts,
+                ),
+            });
+        }
+
         carbon_core::try_decode_instructions!(
             instruction,
             PROGRAM_ID,
@@ -155,7 +169,6 @@ impl carbon_core::instruction::InstructionDecoder<'_> for JupiterSwapDecoder {
             JupiterSwapInstruction::SharedAccountsRoute => SharedAccountsRoute,
             JupiterSwapInstruction::SharedAccountsRouteV2 => SharedAccountsRouteV2,
             JupiterSwapInstruction::SharedAccountsRouteWithTokenLedger => SharedAccountsRouteWithTokenLedger,
-            JupiterSwapInstruction::CpiEvent => CpiEvent,
         )
     }
 }

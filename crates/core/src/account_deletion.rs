@@ -13,6 +13,7 @@ pub struct AccountDeletionPipe<P> {
 #[async_trait]
 pub trait AccountDeletionPipes: Send + Sync {
     async fn run(&mut self, account_deletion: AccountDeletion) -> CarbonResult<()>;
+    async fn finalize(&mut self) -> CarbonResult<()>;
 
     fn filters(&self) -> &Vec<Box<dyn Filter + Send + Sync + 'static>>;
 }
@@ -26,6 +27,10 @@ where
         self.processor.process(&account_deletion).await?;
 
         Ok(())
+    }
+
+    async fn finalize(&mut self) -> CarbonResult<()> {
+        self.processor.finalize().await
     }
 
     fn filters(&self) -> &Vec<Box<dyn Filter + Send + Sync + 'static>> {

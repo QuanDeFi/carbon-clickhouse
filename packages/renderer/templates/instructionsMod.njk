@@ -13,6 +13,11 @@ pub mod postgres;
 pub mod graphql;
 {% endif %}
 
+{% if withClickHouse %}
+#[cfg(feature = "clickhouse")]
+pub mod clickhouse;
+{% endif %}
+
 {% for instruction in instructionsToExport | sort(false, false, 'name') %}
 pub mod {{ macros.escapeRustKeyword(instruction.name | snakeCase) }};
 {% endfor %}
@@ -57,15 +62,26 @@ impl carbon_core::instruction::InstructionDecoder<'_> for {{ program.name | pasc
             return None;
         }
 
+{% if hasAnchorEvents %}
+        if let Some(data) = CpiEvent::decode(instruction.data.as_slice()) {
+            return Some({{ program.name | pascalCase }}Instruction::CpiEvent {
+                program_id: instruction.program_id,
+                data,
+                accounts: CpiEventInstructionAccounts::from_instruction_accounts(
+                    instruction.program_id,
+                    &instruction.accounts,
+                ),
+            });
+        }
+
+{% endif %}
+
         carbon_core::try_decode_instructions!(
             instruction,
             PROGRAM_ID,
 {% for instruction in instructionsToExport | sort(false, false, 'name') %}
             {{ program.name | pascalCase }}Instruction::{{ instruction.name | pascalCase }} => {{ instruction.name | pascalCase }},
 {% endfor %}
-{% if hasAnchorEvents %}
-            {{ program.name | pascalCase }}Instruction::CpiEvent => CpiEvent,
-{% endif %}
         )
     }
 }

@@ -31,6 +31,12 @@ graphql = [
     "serde",
 ]
 
+clickhouse = [
+    "carbon-core/clickhouse",
+    "serde",
+    "dep:chrono",
+]
+
 [dependencies]
 carbon-core = { workspace = true, features = ["macros"] }
 borsh = { workspace = true, features = ["derive"] }
@@ -40,6 +46,7 @@ solana-instruction = { workspace = true }
 serde_json = { workspace = true }
 
 serde = { workspace = true, features = ["derive"], optional = true }
+chrono = { workspace = true, features = ["serde"], optional = true }
 
 sqlx = { workspace = true, features = ["postgres", "rust_decimal"], optional = true }
 async-trait = { workspace = true, optional = true }
@@ -50,3 +57,7 @@ juniper = { workspace = true, optional = true }
 
 [dev-dependencies]
 carbon-test-utils = { workspace = true }
+solana-hash = { workspace = true }
+solana-message = { workspace = true }
+solana-signature = { workspace = true }
+solana-transaction-status = { workspace = true }

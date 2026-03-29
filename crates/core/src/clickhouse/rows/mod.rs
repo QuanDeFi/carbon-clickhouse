@@ -1,4 +1,4 @@
-use crate::{clickhouse::ClickHouseConfig, error::CarbonResult};
+use crate::error::CarbonResult;
 use sha2::{Digest, Sha256};
 
 pub trait ClickHouseTable {
@@ -17,8 +17,15 @@ pub trait ClickHouseRow:
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClickHouseRowContext {
+    pub source_name: String,
+    pub mode: String,
+    pub decoder_version: String,
+}
+
 pub trait ClickHouseRows<R: ClickHouseRow>: Send + Sync + 'static {
-    fn clickhouse_rows(&self, config: &ClickHouseConfig) -> Vec<R>;
+    fn clickhouse_rows(&self, context: &ClickHouseRowContext) -> Vec<R>;
 }
 
 pub fn deterministic_event_id(

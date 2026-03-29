@@ -49,6 +49,7 @@ pub trait AccountPipes: Send + Sync {
         &mut self,
         account_with_metadata: (AccountMetadata, solana_account::Account),
     ) -> CarbonResult<()>;
+    async fn finalize(&mut self) -> CarbonResult<()>;
 
     fn filters(&self) -> &Vec<Box<dyn Filter + Send + Sync + 'static>>;
 }
@@ -75,6 +76,10 @@ where
             self.processor.process(&data).await?;
         }
         Ok(())
+    }
+
+    async fn finalize(&mut self) -> CarbonResult<()> {
+        self.processor.finalize().await
     }
 
     fn filters(&self) -> &Vec<Box<dyn Filter + Send + Sync + 'static>> {

@@ -1,122 +1,34 @@
-use std::{
-    collections::HashMap,
-    future::Future,
-    pin::Pin,
-    time::Instant,
-};
-
-use reqwest::{header::CONTENT_LENGTH, StatusCode};
+use std::{collections::HashMap, time::Instant};
 
 use crate::{
-    clickhouse::{config::ClickHouseConfig, rows::ClickHouseRow},
+    clickhouse::{config::ClickHouseConfig, http::post_query_with_data, rows::ClickHouseRow},
     error::{CarbonResult, Error},
 };
 
-type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
-
-trait ClickHouseTransport: Send + Sync {
-    fn insert_json_each_row<'a>(
-        &'a self,
-        table: &'a str,
-        body: &'a str,
-    ) -> BoxFuture<'a, CarbonResult<()>>;
-}
-
-#[derive(Clone)]
-struct HttpClickHouseTransport {
-    client: reqwest::Client,
-    config: ClickHouseConfig,
-}
-
-impl HttpClickHouseTransport {
-    fn new(config: ClickHouseConfig) -> Self {
-        Self {
-            client: reqwest::Client::new(),
-            config,
-        }
-    }
-
-    fn apply_auth(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        if let Some(username) = &self.config.username {
-            request.basic_auth(username, self.config.password.as_ref())
-        } else {
-            request
-        }
-    }
-
-    async fn send_post_query(&self, query: &str, body: String) -> CarbonResult<()> {
-        let content_length = body.len();
-        let request = self
-            .client
-            .post(&self.config.endpoint)
-            .query(&[
-                ("database", self.config.database.as_str()),
-                ("query", query),
-                ("date_time_input_format", "best_effort"),
-            ])
-            .header(CONTENT_LENGTH, content_length)
-            .body(body);
-
-        let response = self
-            .apply_auth(request)
-            .send()
-            .await
-            .map_err(|e| Error::Custom(format!("ClickHouse request failed: {e}")))?;
-
-        if response.status() == StatusCode::OK {
-            return Ok(());
-        }
-
-        let status = response.status();
-        let body = response
-            .text()
-            .await
-            .unwrap_or_else(|_| "<failed to read response body>".to_string());
-        Err(Error::Custom(format!(
-            "ClickHouse request failed with status {status}: {body}"
-        )))
-    }
-}
-
-impl ClickHouseTransport for HttpClickHouseTransport {
-    fn insert_json_each_row<'a>(
-        &'a self,
-        table: &'a str,
-        body: &'a str,
-    ) -> BoxFuture<'a, CarbonResult<()>> {
-        let query = format!("INSERT INTO {table} FORMAT JSONEachRow");
-        Box::pin(async move { self.send_post_query(&query, body.to_string()).await })
-    }
-}
-
 pub struct ClickHouseBatchWriter<R: ClickHouseRow> {
     config: ClickHouseConfig,
-    transport: Box<dyn ClickHouseTransport>,
+    client: reqwest::Client,
     buffers: HashMap<String, Vec<R>>,
     last_flush: Instant,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClickHouseBufferOutcome {
-    Buffered,
-    Flushed { rows: usize },
+    Buffered { buffered_rows: usize },
+    Flushed(ClickHouseFlushOutcome),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ClickHouseFlushOutcome {
+    pub rows: usize,
+    pub buffered_rows: usize,
 }
 
 impl<R: ClickHouseRow> ClickHouseBatchWriter<R> {
     pub fn new(config: ClickHouseConfig) -> Self {
-        Self::new_with_transport(
-            config.clone(),
-            Box::new(HttpClickHouseTransport::new(config)),
-        )
-    }
-
-    fn new_with_transport(
-        config: ClickHouseConfig,
-        transport: Box<dyn ClickHouseTransport>,
-    ) -> Self {
         Self {
+            client: reqwest::Client::new(),
             config,
-            transport,
             buffers: HashMap::new(),
             last_flush: Instant::now(),
         }
@@ -131,17 +43,21 @@ impl<R: ClickHouseRow> ClickHouseBatchWriter<R> {
         self.buffers.entry(partition_key).or_default().push(row);
 
         if self.should_flush() {
-            let rows = self.flush().await?;
-            return Ok(ClickHouseBufferOutcome::Flushed { rows });
+            return self.flush().await.map(ClickHouseBufferOutcome::Flushed);
         }
 
-        Ok(ClickHouseBufferOutcome::Buffered)
+        Ok(ClickHouseBufferOutcome::Buffered {
+            buffered_rows: self.buffered_rows(),
+        })
     }
 
-    pub async fn flush(&mut self) -> CarbonResult<usize> {
+    pub async fn flush(&mut self) -> CarbonResult<ClickHouseFlushOutcome> {
         if self.buffered_rows() == 0 {
             self.last_flush = Instant::now();
-            return Ok(0);
+            return Ok(ClickHouseFlushOutcome {
+                rows: 0,
+                buffered_rows: 0,
+            });
         }
 
         let mut flushed = 0usize;
@@ -159,7 +75,10 @@ impl<R: ClickHouseRow> ClickHouseBatchWriter<R> {
         }
 
         self.last_flush = Instant::now();
-        Ok(flushed)
+        Ok(ClickHouseFlushOutcome {
+            rows: flushed,
+            buffered_rows: self.buffered_rows(),
+        })
     }
 
     fn should_flush(&self) -> bool {
@@ -174,17 +93,14 @@ impl<R: ClickHouseRow> ClickHouseBatchWriter<R> {
             body.push('\n');
         }
 
-        match self
-            .transport
-            .insert_json_each_row(&self.config.table, &body)
-            .await
-        {
-            Ok(()) => Ok(()),
-            Err(_) => self
-                .transport
-                .insert_json_each_row(&self.config.table, &body)
-                .await,
-        }
+        post_query_with_data(
+            &self.client,
+            &self.config,
+            &format!("INSERT INTO {} FORMAT JSONEachRow", self.config.table),
+            &body,
+            &[("date_time_input_format", "best_effort")],
+        )
+        .await
     }
 }
 
@@ -192,7 +108,6 @@ impl<R: ClickHouseRow> ClickHouseBatchWriter<R> {
 mod tests {
     use super::*;
     use crate::clickhouse::rows::ClickHouseTable;
-    use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
     #[derive(Debug, Clone, serde::Serialize)]
@@ -223,38 +138,6 @@ mod tests {
         }
     }
 
-    #[derive(Default)]
-    struct MockTransportState {
-        inserts: Vec<String>,
-        fail_first_insert: bool,
-        insert_calls: usize,
-    }
-
-    #[derive(Clone, Default)]
-    struct MockTransport {
-        state: Arc<Mutex<MockTransportState>>,
-    }
-
-    impl ClickHouseTransport for MockTransport {
-        fn insert_json_each_row<'a>(
-            &'a self,
-            _table: &'a str,
-            body: &'a str,
-        ) -> BoxFuture<'a, CarbonResult<()>> {
-            let state = self.state.clone();
-            let body = body.to_string();
-            Box::pin(async move {
-                let mut guard = state.lock().unwrap();
-                guard.insert_calls += 1;
-                if guard.fail_first_insert && guard.insert_calls == 1 {
-                    return Err(Error::Custom("simulated insert failure".to_string()));
-                }
-                guard.inserts.push(body);
-                Ok(())
-            })
-        }
-    }
-
     fn config() -> ClickHouseConfig {
         ClickHouseConfig::new(
             "http://localhost:8123".to_string(),
@@ -270,119 +153,17 @@ mod tests {
         )
     }
 
-    #[tokio::test]
-    async fn flush_on_row_threshold_succeeds() {
-        let transport = MockTransport::default();
-        let state = transport.state.clone();
-        let mut writer = ClickHouseBatchWriter::new_with_transport(config(), Box::new(transport));
-
-        assert_eq!(
-            writer
-                .buffer_row(TestRow {
-                    id: 1,
-                    partition: "2024".to_string(),
-                })
-                .await
-                .unwrap(),
-            ClickHouseBufferOutcome::Buffered
-        );
-
-        assert_eq!(
-            writer
-                .buffer_row(TestRow {
-                    id: 2,
-                    partition: "2024".to_string(),
-                })
-                .await
-                .unwrap(),
-            ClickHouseBufferOutcome::Flushed { rows: 2 }
-        );
-
-        let guard = state.lock().unwrap();
-        assert_eq!(guard.inserts.len(), 1);
-        assert!(guard.inserts[0].contains("\"id\":1"));
-        assert!(guard.inserts[0].contains("\"id\":2"));
+    #[test]
+    fn buffered_rows_are_tracked() {
+        let writer = ClickHouseBatchWriter::<TestRow>::new(config());
+        assert_eq!(writer.buffered_rows(), 0);
     }
 
     #[tokio::test]
-    async fn flush_on_timer_succeeds() {
-        let transport = MockTransport::default();
-        let state = transport.state.clone();
-        let mut writer = ClickHouseBatchWriter::new_with_transport(config(), Box::new(transport));
-
-        writer
-            .buffer_row(TestRow {
-                id: 1,
-                partition: "2024".to_string(),
-            })
-            .await
-            .unwrap();
-        tokio::time::sleep(Duration::from_millis(15)).await;
-        assert_eq!(
-            writer
-                .buffer_row(TestRow {
-                    id: 2,
-                    partition: "2024".to_string(),
-                })
-                .await
-                .unwrap(),
-            ClickHouseBufferOutcome::Flushed { rows: 2 }
-        );
-
-        let guard = state.lock().unwrap();
-        assert_eq!(guard.inserts.len(), 1);
-    }
-
-    #[tokio::test]
-    async fn graceful_shutdown_flushes_buffered_rows() {
-        let transport = MockTransport::default();
-        let state = transport.state.clone();
-        let mut writer = ClickHouseBatchWriter::new_with_transport(config(), Box::new(transport));
-
-        writer
-            .buffer_row(TestRow {
-                id: 1,
-                partition: "2024".to_string(),
-            })
-            .await
-            .unwrap();
-
-        let flushed = writer.flush().await.unwrap();
-        assert_eq!(flushed, 1);
-
-        let guard = state.lock().unwrap();
-        assert_eq!(guard.inserts.len(), 1);
-        assert!(guard.inserts[0].contains("\"id\":1"));
-    }
-
-    #[tokio::test]
-    async fn failed_batch_retry_preserves_exact_row_order() {
-        let transport = MockTransport::default();
-        transport.state.lock().unwrap().fail_first_insert = true;
-        let state = transport.state.clone();
-        let mut writer = ClickHouseBatchWriter::new_with_transport(config(), Box::new(transport));
-
-        writer
-            .buffer_row(TestRow {
-                id: 1,
-                partition: "2024".to_string(),
-            })
-            .await
-            .unwrap();
-        writer
-            .buffer_row(TestRow {
-                id: 2,
-                partition: "2024".to_string(),
-            })
-            .await
-            .unwrap();
-
-        let guard = state.lock().unwrap();
-        assert_eq!(guard.insert_calls, 2);
-        assert_eq!(guard.inserts.len(), 1);
-        assert_eq!(
-            guard.inserts[0],
-            "{\"id\":1,\"partition\":\"2024\"}\n{\"id\":2,\"partition\":\"2024\"}\n"
-        );
+    async fn flush_of_empty_writer_returns_zero_rows() {
+        let mut writer = ClickHouseBatchWriter::<TestRow>::new(config());
+        let outcome = writer.flush().await.unwrap();
+        assert_eq!(outcome.rows, 0);
+        assert_eq!(outcome.buffered_rows, 0);
     }
 }

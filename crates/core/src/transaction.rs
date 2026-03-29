@@ -86,6 +86,7 @@ pub trait TransactionPipes<'a>: Send + Sync {
         transaction_metadata: Arc<TransactionMetadata>,
         instructions: &[(InstructionMetadata, Instruction)],
     ) -> CarbonResult<()>;
+    async fn finalize(&mut self) -> CarbonResult<()>;
 
     fn filters(&self) -> &Vec<Box<dyn Filter + Send + Sync + 'static>>;
 }
@@ -111,6 +112,10 @@ where
         self.processor.process(&data).await?;
 
         Ok(())
+    }
+
+    async fn finalize(&mut self) -> CarbonResult<()> {
+        self.processor.finalize().await
     }
 
     fn filters(&self) -> &Vec<Box<dyn Filter + Send + Sync + 'static>> {
