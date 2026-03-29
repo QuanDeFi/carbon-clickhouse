@@ -14,6 +14,8 @@ pub mod processor;
 pub mod transaction;
 pub mod transformers;
 
+#[cfg(feature = "clickhouse")]
+pub mod clickhouse;
 #[cfg(feature = "postgres")]
 pub mod postgres;
 #[cfg(feature = "graphql")]

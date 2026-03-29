@@ -17,6 +17,7 @@ default = ["macros"]
 macros = ["carbon-macros", "carbon-proc-macros"]
 postgres = ["sqlx", "num-traits", "sqlx_migrator", "bigdecimal"]
 graphql = ["juniper", "axum", "juniper_axum"]
+clickhouse = ["dep:reqwest", "dep:sha2", "dep:url"]
 
 [dependencies]
 solana-account = { workspace = true }
@@ -52,8 +53,11 @@ carbon-proc-macros = { workspace = true, optional = true }
 juniper = { workspace = true, optional = true }
 juniper_axum = { workspace = true, optional = true }
 num-traits = { workspace = true, features = ["i128"], optional = true }
+reqwest = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
 sqlx = { workspace = true, features = ["postgres", "rust_decimal", "bigdecimal"], optional = true }
 sqlx_migrator = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
 
 [dev-dependencies]
 carbon-test-utils = { workspace = true }

@@ -208,4 +208,5 @@ tokio-util = "0.7.17"
 tonic = { version = "0.13.1", features = ["tls-native-roots", "tls-webpki-roots"] }
 tonic-build = "0.13.1"
 unicode-xid = "0.2"
+url = "2.5.7"
 uuid = { version = "1.18.1", features = ["serde", "v7"] }
