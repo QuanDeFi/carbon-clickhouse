@@ -82,14 +82,14 @@ impl ClickHouseRows<JupiterSwapSwapEventLandingRow>
         let JupiterSwapInstructionWithClickHouseMetadata(instruction, metadata, _accounts) = self;
 
         match instruction {
-            JupiterSwapInstruction::CpiEvent { data, .. } => match data {
-                super::CpiEvent::SwapEvent(swap_event) => {
-                    vec![JupiterSwapSwapEventLandingRow::from_parts(
-                        metadata, swap_event, context,
-                    )]
-                }
-                _ => Vec::new(),
-            },
+            JupiterSwapInstruction::CpiEvent {
+                data: super::CpiEvent::SwapEvent(swap_event),
+                ..
+            } => {
+                vec![JupiterSwapSwapEventLandingRow::from_parts(
+                    metadata, swap_event, context,
+                )]
+            }
             _ => Vec::new(),
         }
     }

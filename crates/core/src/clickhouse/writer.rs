@@ -9,6 +9,7 @@ pub struct ClickHouseBatchWriter<R: ClickHouseRow> {
     config: ClickHouseConfig,
     client: reqwest::Client,
     buffers: HashMap<String, Vec<R>>,
+    buffered_rows: usize,
     last_flush: Instant,
 }
 
@@ -30,17 +31,19 @@ impl<R: ClickHouseRow> ClickHouseBatchWriter<R> {
             client: reqwest::Client::new(),
             config,
             buffers: HashMap::new(),
+            buffered_rows: 0,
             last_flush: Instant::now(),
         }
     }
 
     pub fn buffered_rows(&self) -> usize {
-        self.buffers.values().map(Vec::len).sum()
+        self.buffered_rows
     }
 
     pub async fn buffer_row(&mut self, row: R) -> CarbonResult<ClickHouseBufferOutcome> {
         let partition_key = row.partition_key();
         self.buffers.entry(partition_key).or_default().push(row);
+        self.buffered_rows += 1;
 
         if self.should_flush() {
             return self.flush().await.map(ClickHouseBufferOutcome::Flushed);
@@ -65,19 +68,22 @@ impl<R: ClickHouseRow> ClickHouseBatchWriter<R> {
         for key in keys {
             let rows = self
                 .buffers
-                .get(&key)
-                .cloned()
+                .remove(&key)
                 .ok_or_else(|| Error::Custom(format!("Missing buffer for partition {key}")))?;
 
-            self.insert_batch(&rows).await?;
+            if let Err(error) = self.insert_batch(&rows).await {
+                self.buffers.insert(key, rows);
+                return Err(error);
+            }
+
+            self.buffered_rows -= rows.len();
             flushed += rows.len();
-            self.buffers.remove(&key);
         }
 
         self.last_flush = Instant::now();
         Ok(ClickHouseFlushOutcome {
             rows: flushed,
-            buffered_rows: self.buffered_rows(),
+            buffered_rows: self.buffered_rows,
         })
     }
 
