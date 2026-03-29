@@ -11,6 +11,31 @@ Build a direct Carbon -> ClickHouse sink for decoded Solana data that works for:
 
 ClickHouse is the primary analytics store. The sink is append-first and analytics-first. It must not assume OLTP semantics.
 
+## Current Implementation Status
+
+The current codebase implements a narrow V1, not the full target architecture described in this document.
+
+Implemented today:
+- ClickHouse support in `carbon-core` behind the `clickhouse` feature
+- client-side batched landing-table writes
+- processor finalization and shutdown drain support in core
+- decoder-owned ClickHouse schema bootstrap for Jupiter Swap
+- decoder-owned ClickHouse wrapper dispatch for Jupiter Swap CPI swap events
+- one runnable example:
+  - `examples/jupiter-swap-clickhouse`
+
+Implemented V1 scope:
+- instruction / CPI-event path only
+- one family only:
+  - `jupiter_swap_swap_event_landing`
+- landing tables only
+- no serving tables
+- no promotion job
+- no coverage tracking table
+- no account-family ClickHouse sink yet
+
+This document still captures the broader target design so later phases can be implemented against a stable architecture.
+
 ## Codebase-Derived Scope
 
 This design is based on the current Carbon codebase:
@@ -44,9 +69,23 @@ These are fixed.
 - Serving correctness must not depend on insert order.
 - Dedup correctness must not depend only on ClickHouse retry dedup windows.
 
+For the current V1 implementation, only the following subset is active:
+- input is decoded
+- tables are organized per decoded family
+- event identity is deterministic
+- landing writes are append-only
+- batching is client-side
+- serving/canonicalization is deferred
+- coverage tracking is deferred
+
 ## Family Model
 
 The sink must support three practical family types.
+
+Current V1 implementation:
+- event families: partial support
+- instruction families: not yet implemented as separate typed landing families
+- account families: deferred
 
 ### 1. Event Families
 
@@ -69,6 +108,13 @@ Examples:
 - `jupiter_swap_swap_event_serving`
 - `pumpfun_trade_event_landing`
 
+Current V1:
+- implemented:
+  - `jupiter_swap_swap_event_landing`
+- deferred:
+  - serving table
+  - other event families
+
 ### 2. Instruction Families
 
 Used for decoders that expose typed instructions but no separate event module.
@@ -76,6 +122,9 @@ Used for decoders that expose typed instructions but no separate event module.
 Pattern:
 - one landing table per instruction family where the user wants instruction analytics
 - one serving table per instruction family if canonicalization is needed
+
+Current V1:
+- deferred
 
 ### 3. Account Families
 
@@ -86,6 +135,9 @@ Pattern:
 - one serving table per decoded account family
 
 These behave like versioned state, not immutable events.
+
+Current V1:
+- deferred
 
 ## Event And Row Identity
 
@@ -197,6 +249,10 @@ They must:
 
 Serving tables are the query surface. Aggregate or rollup tables may be added later on top of them.
 
+Current V1:
+- not implemented yet
+- current correctness target is stable landing ingestion only
+
 ## Version And Canonicalization Rule
 
 Serving canonicalization must use a composite rule.
@@ -227,6 +283,10 @@ Practical consequence:
 - correctness lives in the landing -> serving promotion logic
 - not in a single naive ClickHouse version column
 
+Current V1:
+- not implemented yet
+- duplicates across repeated runs or replays are currently expected in landing
+
 ## Time And Partitioning
 
 Do not overload one `event_time` column with two meanings.
@@ -250,6 +310,13 @@ This keeps partitioning universal while still preserving true chain time when it
 
 Do not default to monthly partitions. The source mix is too fragmented for that to be a safe baseline.
 
+Current V1:
+- implemented for Jupiter swap landing rows
+- uses:
+  - `chain_time`
+  - `partition_time = coalesce(chain_time, ingest_ts)`
+  - `PARTITION BY toYYYY(partition_time)` via `toYear(partition_time)`
+
 ## Engine Choice
 
 Landing tables:
@@ -258,6 +325,9 @@ Landing tables:
 Reason:
 - landing is append-only
 - correctness should not depend on background dedup in landing
+
+Current V1:
+- implemented exactly this way
 - landing should remain the simplest possible durable ingest surface
 
 Serving tables:

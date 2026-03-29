@@ -29,8 +29,20 @@ Datasource Layer
   |
   v
 +------------------------------+
-|          ClickHouse          |
-|             Sink             |
+| Decoder-owned ClickHouse     |
+| schema + row mapping         |
++------------------------------+
+  |
+  v
++------------------------------+
+| ClickHouse landing tables    |
+| buffered, append-only writes |
++------------------------------+
+  |
+  v
++------------------------------+
+| Pipeline finalization drains |
+| remaining buffered rows      |
 +------------------------------+
 
 ```
@@ -56,4 +68,14 @@ Datasource
 Datasource
   -> BlockDetails
      -> optional block analytics tables
+```
+
+Current V1 note:
+
+```text
+Implemented today:
+- decoded CPI/event path only
+- Jupiter swap `swap_event` landing table only
+- no serving table yet
+- no account ClickHouse sink yet
 ```

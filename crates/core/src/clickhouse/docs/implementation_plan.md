@@ -16,6 +16,31 @@ The implementation must still match the Carbon sink model in the important place
 - row-semantic metrics compatible with Postgres operational expectations
 - trait-driven wrapper dispatch from decoder crates into generic core processors
 
+## Status
+
+Implemented:
+- core processor finalization support
+- pipeline finalization before shutdown
+- client-side ClickHouse batching in `carbon-core`
+- decoder-owned ClickHouse schema bootstrap for Jupiter Swap
+- decoder-owned wrapper dispatch for Jupiter Swap ClickHouse writes
+- ClickHouse-native core traits:
+  - `ClickHouseTable`
+  - `ClickHouseRows<R>`
+  - `ClickHouseSchema`
+- thin example:
+  - `examples/jupiter-swap-clickhouse`
+- renderer support for generated instruction ClickHouse modules:
+  - `instructions/clickhouse/mod.rs`
+  - `instructions/clickhouse/cpi_event_row.rs`
+
+Deferred:
+- account-side ClickHouse sink support
+- serving tables and promotion jobs
+- coverage tracking tables
+- full multi-family generated ClickHouse parity with Postgres
+- async inserts as a primary write mode
+
 ## Goals
 
 V1 must prove all of the following:
@@ -31,6 +56,9 @@ V1 must prove all of the following:
 
 Add processor finalization to core.
 
+Status:
+- implemented
+
 Required changes:
 - extend `Processor` with an async `finalize(&mut self, metrics)` hook
 - default implementation is a no-op so existing processors do not change behavior
@@ -44,6 +72,9 @@ Rationale:
 ### 2. Decoder-owned schema bootstrap
 
 Move ClickHouse schema creation out of the generic writer.
+
+Status:
+- implemented for the current Jupiter V1 path
 
 Required changes:
 - remove lazy `CREATE TABLE IF NOT EXISTS` from `ClickHouseBatchWriter`
@@ -59,6 +90,10 @@ Rationale:
 ### 3. Trait-driven instruction sink dispatch
 
 Move ClickHouse instruction writes to the same generated wrapper style as Postgres.
+
+Status:
+- implemented for the current Jupiter V1 path
+- still narrower than Postgres because V1 targets one landing row family
 
 Required changes:
 - add a generic ClickHouse row-emission trait in core
@@ -77,6 +112,9 @@ Rationale:
 ### 4. Metrics semantics
 
 Make ClickHouse metrics row-semantic first, batch-semantic second.
+
+Status:
+- implemented
 
 Required row metrics:
 - `clickhouse.instructions.inserted`
@@ -102,6 +140,9 @@ Rationale:
 
 Keep the writer generic and narrow.
 
+Status:
+- implemented
+
 Writer responsibilities:
 - buffer rows by partition
 - flush on row threshold or flush interval
@@ -117,6 +158,9 @@ Writer must not own:
 ### 6. Example shape
 
 The example should remain as thin as the Postgres example.
+
+Status:
+- implemented
 
 The ClickHouse example should do only this:
 - read env and CLI args
@@ -153,6 +197,11 @@ Rationale:
 - it avoids scaling a handwritten sink pattern across decoders
 - it preserves the minimal V1 runtime while creating the correct long-term extension point
 
+Status:
+- partially implemented
+- instruction CPI-event generation path exists
+- broader per-instruction and account-family generation is still deferred
+
 ## Concrete V1 Targets
 
 ### Core
@@ -182,6 +231,9 @@ Under `decoders/jupiter-swap-decoder/src/instructions/clickhouse/` maintain:
 
 V1 support remains limited to:
 - `JupiterSwapInstruction::CpiEvent(Box<CpiEvent::SwapEvent(_)))`
+
+Status:
+- implemented exactly at this scope
 
 ### Example
 
