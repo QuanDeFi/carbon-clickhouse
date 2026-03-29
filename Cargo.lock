@@ -1501,8 +1501,10 @@ dependencies = [
  "juniper_axum",
  "log",
  "num-traits",
+ "reqwest 0.12.28",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "solana-account",
  "solana-account-decoder-client-types",
  "solana-clock",
@@ -1520,6 +1522,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tokio-util 0.7.17",
+ "url 2.5.7",
  "uuid",
 ]
 
