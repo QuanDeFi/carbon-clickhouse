@@ -98,6 +98,8 @@ pub trait AccountDeletionPipes: Send + Sync {
         metrics: Arc<MetricsCollection>,
     ) -> CarbonResult<()>;
 
+    async fn finalize(&mut self, metrics: Arc<MetricsCollection>) -> CarbonResult<()>;
+
     fn filters(&self) -> &Vec<Box<dyn Filter + Send + Sync + 'static>>;
 }
 
@@ -113,6 +115,10 @@ impl AccountDeletionPipes for AccountDeletionPipe {
         self.processor.process(account_deletion, metrics).await?;
 
         Ok(())
+    }
+
+    async fn finalize(&mut self, metrics: Arc<MetricsCollection>) -> CarbonResult<()> {
+        self.processor.finalize(metrics).await
     }
 
     fn filters(&self) -> &Vec<Box<dyn Filter + Send + Sync + 'static>> {

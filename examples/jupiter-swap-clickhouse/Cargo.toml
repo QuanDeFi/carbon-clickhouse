@@ -1,0 +1,17 @@
+[package]
+name = "jupiter-swap-clickhouse-carbon-example"
+version = "0.1.0"
+edition = { workspace = true }
+
+[dependencies]
+carbon-core = { workspace = true, features = ["clickhouse"] }
+carbon-jupiter-swap-decoder = { workspace = true, features = ["clickhouse"] }
+carbon-log-metrics = { workspace = true }
+carbon-rpc-block-crawler-datasource = { workspace = true }
+
+clap = { workspace = true, features = ["derive"] }
+dotenv = { workspace = true }
+env_logger = { workspace = true }
+log = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+solana-transaction-status = { workspace = true }

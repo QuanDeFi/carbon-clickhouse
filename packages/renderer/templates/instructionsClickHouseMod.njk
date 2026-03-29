@@ -1,0 +1,54 @@
+{% extends "layout.njk" %}
+
+{% block main %}
+{% if hasAnchorEvents %}
+pub mod cpi_event_row;
+
+pub use self::cpi_event_row::*;
+{% endif %}
+
+use super::{{ program.name | pascalCase }}Instruction;
+use carbon_core::clickhouse::rows::ClickHouseTable;
+
+pub struct {{ program.name | pascalCase }}InstructionWithClickHouseMetadata(
+    pub {{ program.name | pascalCase }}Instruction,
+    pub carbon_core::instruction::InstructionMetadata,
+    pub Vec<solana_instruction::AccountMeta>,
+);
+
+impl From<({{ program.name | pascalCase }}Instruction, carbon_core::instruction::InstructionMetadata, Vec<solana_instruction::AccountMeta>)> for {{ program.name | pascalCase }}InstructionWithClickHouseMetadata {
+    fn from(value: ({{ program.name | pascalCase }}Instruction, carbon_core::instruction::InstructionMetadata, Vec<solana_instruction::AccountMeta>)) -> Self {
+        {{ program.name | pascalCase }}InstructionWithClickHouseMetadata(value.0, value.1, value.2)
+    }
+}
+
+pub struct {{ program.name | pascalCase }}ClickHouseInstructionsMigration;
+
+impl carbon_core::clickhouse::ClickHouseSchema for {{ program.name | pascalCase }}ClickHouseInstructionsMigration {
+    fn operations(config: &carbon_core::clickhouse::ClickHouseConfig) -> Vec<String> {
+        let mut operations = Vec::new();
+{% if hasAnchorEvents %}
+        operations.push(CpiEventRow::create_table_sql(&config.table));
+{% endif %}
+        operations
+    }
+}
+
+impl {{ program.name | pascalCase }}ClickHouseInstructionsMigration {
+    pub async fn run(config: &carbon_core::clickhouse::ClickHouseConfig) -> carbon_core::error::CarbonResult<()> {
+        carbon_core::clickhouse::ClickHouseAdmin::new(config.clone()).execute_schema::<Self>().await
+    }
+}
+
+{% if hasAnchorEvents %}
+impl carbon_core::clickhouse::rows::ClickHouseRows<CpiEventRow> for {{ program.name | pascalCase }}InstructionWithClickHouseMetadata {
+    fn clickhouse_rows(&self, config: &carbon_core::clickhouse::ClickHouseConfig) -> Vec<CpiEventRow> {
+        let {{ program.name | pascalCase }}InstructionWithClickHouseMetadata(instruction, metadata, _accounts) = self;
+        match instruction {
+            {{ program.name | pascalCase }}Instruction::CpiEvent(instruction) => vec![CpiEventRow::from_parts((**instruction).clone(), metadata.clone(), config)],
+            _ => Vec::new(),
+        }
+    }
+}
+{% endif %}
+{% endblock %}

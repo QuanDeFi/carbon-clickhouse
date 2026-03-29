@@ -5,6 +5,9 @@ use crate::PROGRAM_ID;
 #[cfg(feature = "postgres")]
 pub mod postgres;
 
+#[cfg(feature = "clickhouse")]
+pub mod clickhouse;
+
 #[cfg(feature = "graphql")]
 pub mod graphql;
 

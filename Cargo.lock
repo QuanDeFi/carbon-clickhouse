@@ -1462,8 +1462,10 @@ dependencies = [
  "juniper_axum",
  "log",
  "num-traits",
+ "reqwest 0.12.28",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "solana-account",
  "solana-account-decoder-client-types",
  "solana-clock",
@@ -1481,6 +1483,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tokio-util 0.7.17",
+ "url 2.5.7",
  "uuid",
 ]
 
@@ -1758,12 +1761,17 @@ dependencies = [
  "borsh",
  "carbon-core",
  "carbon-test-utils",
+ "chrono",
  "juniper",
  "serde",
  "serde_json",
  "solana-account",
+ "solana-hash 3.1.0",
  "solana-instruction",
  "solana-pubkey 3.0.0",
+ "solana-signature",
+ "solana-transaction",
+ "solana-transaction-status",
  "sqlx",
  "sqlx_migrator",
 ]
@@ -5231,6 +5239,22 @@ dependencies = [
  "solana-instruction",
  "tokio",
  "yellowstone-grpc-proto",
+]
+
+[[package]]
+name = "jupiter-swap-clickhouse-carbon-example"
+version = "0.1.0"
+dependencies = [
+ "carbon-core",
+ "carbon-jupiter-swap-decoder",
+ "carbon-log-metrics",
+ "carbon-rpc-block-crawler-datasource",
+ "clap 4.5.53",
+ "dotenv",
+ "env_logger",
+ "log",
+ "solana-transaction-status",
+ "tokio",
 ]
 
 [[package]]

@@ -132,6 +132,8 @@ pub mod datasource;
 pub mod deserialize;
 pub mod error;
 pub mod filter;
+#[cfg(feature = "clickhouse")]
+pub mod clickhouse;
 #[cfg(feature = "graphql")]
 pub mod graphql;
 pub mod instruction;

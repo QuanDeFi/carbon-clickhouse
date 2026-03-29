@@ -285,6 +285,8 @@ pub trait TransactionPipes<'a>: Send + Sync {
         metrics: Arc<MetricsCollection>,
     ) -> CarbonResult<()>;
 
+    async fn finalize(&mut self, metrics: Arc<MetricsCollection>) -> CarbonResult<()>;
+
     fn filters(&self) -> &Vec<Box<dyn Filter + Send + Sync + 'static>>;
 }
 
@@ -320,6 +322,10 @@ where
             .await?;
 
         Ok(())
+    }
+
+    async fn finalize(&mut self, metrics: Arc<MetricsCollection>) -> CarbonResult<()> {
+        self.processor.finalize(metrics).await
     }
 
     fn filters(&self) -> &Vec<Box<dyn Filter + Send + Sync + 'static>> {

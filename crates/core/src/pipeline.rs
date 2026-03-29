@@ -379,6 +379,7 @@ impl Pipeline {
             tokio::select! {
                 _ = datasource_cancellation_token.cancelled() => {
                     log::trace!("datasource cancellation token cancelled, shutting down.");
+                    self.finalize_pipes().await?;
                     self.metrics.flush_metrics().await?;
                     self.metrics.shutdown_metrics().await?;
                     break;
@@ -389,6 +390,7 @@ impl Pipeline {
 
                     if self.shutdown_strategy == ShutdownStrategy::Immediate {
                         log::info!("shutting down the pipeline immediately.");
+                        self.finalize_pipes().await?;
                         self.metrics.flush_metrics().await?;
                         self.metrics.shutdown_metrics().await?;
                         break;
@@ -445,6 +447,7 @@ impl Pipeline {
                         }
                         None => {
                             log::info!("update_receiver closed, shutting down.");
+                            self.finalize_pipes().await?;
                             self.metrics.flush_metrics().await?;
                             self.metrics.shutdown_metrics().await?;
                             break;
@@ -455,6 +458,30 @@ impl Pipeline {
         }
 
         log::info!("pipeline shutdown complete.");
+
+        Ok(())
+    }
+
+    async fn finalize_pipes(&mut self) -> CarbonResult<()> {
+        for pipe in self.account_pipes.iter_mut() {
+            pipe.finalize(self.metrics.clone()).await?;
+        }
+
+        for pipe in self.account_deletion_pipes.iter_mut() {
+            pipe.finalize(self.metrics.clone()).await?;
+        }
+
+        for pipe in self.block_details_pipes.iter_mut() {
+            pipe.finalize(self.metrics.clone()).await?;
+        }
+
+        for pipe in self.instruction_pipes.iter_mut() {
+            pipe.finalize(self.metrics.clone()).await?;
+        }
+
+        for pipe in self.transaction_pipes.iter_mut() {
+            pipe.finalize(self.metrics.clone()).await?;
+        }
 
         Ok(())
     }

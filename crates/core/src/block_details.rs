@@ -44,6 +44,8 @@ pub trait BlockDetailsPipes: Send + Sync {
         metrics: Arc<MetricsCollection>,
     ) -> CarbonResult<()>;
 
+    async fn finalize(&mut self, metrics: Arc<MetricsCollection>) -> CarbonResult<()>;
+
     fn filters(&self) -> &Vec<Box<dyn Filter + Send + Sync + 'static>>;
 }
 
@@ -59,6 +61,10 @@ impl BlockDetailsPipes for BlockDetailsPipe {
         self.processor.process(block_details, metrics).await?;
 
         Ok(())
+    }
+
+    async fn finalize(&mut self, metrics: Arc<MetricsCollection>) -> CarbonResult<()> {
+        self.processor.finalize(metrics).await
     }
 
     fn filters(&self) -> &Vec<Box<dyn Filter + Send + Sync + 'static>> {

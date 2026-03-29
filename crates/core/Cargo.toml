@@ -14,6 +14,7 @@ default = ["macros"]
 macros = ["carbon-macros", "carbon-proc-macros"]
 postgres = ["sqlx", "num-traits", "sqlx_migrator", "bigdecimal"]
 graphql = ["juniper", "axum", "juniper_axum"]
+clickhouse = ["dep:reqwest", "dep:sha2", "dep:url"]
 
 [dependencies]
 solana-account = { workspace = true }
@@ -40,6 +41,9 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
+reqwest = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
 
 # Optional macro dependencies
 carbon-macros = { workspace = true, optional = true }

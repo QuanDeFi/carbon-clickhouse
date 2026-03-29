@@ -1,0 +1,142 @@
+{% extends "layout.njk" %}
+
+{% block main %}
+{{ imports }}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CpiEventRow {
+    pub program_id: String,
+    pub family_name: String,
+    pub event_type: String,
+    pub event_id: String,
+    pub slot: u64,
+    pub signature: String,
+    pub instruction_index: u32,
+    pub stack_height: u32,
+    pub absolute_path: Vec<u8>,
+    pub event_seq: u32,
+    pub source_name: String,
+    pub mode: String,
+    pub decoder_version: String,
+    pub ingest_ts: String,
+    pub chain_time: Option<String>,
+    pub partition_time: String,
+    pub block_hash: Option<String>,
+    pub tx_index: Option<u64>,
+    pub name: String,
+    pub data: serde_json::Value,
+}
+
+impl CpiEventRow {
+    pub const FAMILY_NAME: &'static str = "{{ program.name | snakeCase }}_cpi_event";
+    pub const DEFAULT_TABLE_NAME: &'static str = "{{ program.name | snakeCase }}_cpi_event_landing";
+
+    pub fn from_parts(source: CpiEvent, metadata: InstructionMetadata, config: &carbon_core::clickhouse::ClickHouseConfig) -> Self {
+        let ingest_ts = chrono::Utc::now();
+        let chain_time = metadata.transaction_metadata.block_time.and_then(chrono::DateTime::<chrono::Utc>::from_timestamp_secs);
+        let partition_time = chain_time.unwrap_or(ingest_ts);
+        let signature = metadata.transaction_metadata.signature.to_string();
+        let name = match &source {
+            {% for event in events %}
+            CpiEvent::{{ event.name | pascalCase }}(_) => "{{ event.name | snakeCase }}".to_string(),
+            {% endfor %}
+        };
+        let event_seq = 0u32;
+
+        Self {
+            program_id: crate::PROGRAM_ID.to_string(),
+            family_name: Self::FAMILY_NAME.to_string(),
+            event_type: name.clone(),
+            event_id: carbon_core::clickhouse::rows::deterministic_event_id(
+                crate::PROGRAM_ID.as_ref(),
+                &signature,
+                &metadata.absolute_path,
+                &name,
+                event_seq,
+            ),
+            slot: metadata.transaction_metadata.slot,
+            signature,
+            instruction_index: metadata.index,
+            stack_height: metadata.stack_height,
+            absolute_path: metadata.absolute_path,
+            event_seq,
+            source_name: config.source_name.clone(),
+            mode: config.mode.clone(),
+            decoder_version: config.decoder_version.clone(),
+            ingest_ts: ingest_ts.format("%Y-%m-%d %H:%M:%S%.3f").to_string(),
+            chain_time: chain_time.map(|value| value.format("%Y-%m-%d %H:%M:%S%.3f").to_string()),
+            partition_time: partition_time.format("%Y-%m-%d %H:%M:%S%.3f").to_string(),
+            block_hash: metadata.transaction_metadata.block_hash.map(|hash| hash.to_string()),
+            tx_index: metadata.transaction_metadata.index,
+            name,
+            data: serde_json::to_value(source).expect("serialize cpi event"),
+        }
+    }
+}
+
+impl carbon_core::clickhouse::rows::ClickHouseTable for CpiEventRow {
+    fn table() -> &'static str {
+        Self::DEFAULT_TABLE_NAME
+    }
+
+    fn columns() -> Vec<&'static str> {
+        vec![
+            "program_id",
+            "family_name",
+            "event_type",
+            "event_id",
+            "slot",
+            "signature",
+            "instruction_index",
+            "stack_height",
+            "absolute_path",
+            "event_seq",
+            "source_name",
+            "mode",
+            "decoder_version",
+            "ingest_ts",
+            "chain_time",
+            "partition_time",
+            "block_hash",
+            "tx_index",
+            "name",
+            "data",
+        ]
+    }
+
+    fn create_table_sql(table_name: &str) -> String {
+        format!(
+            "CREATE TABLE IF NOT EXISTS {table_name} (\
+            program_id String,\
+            family_name String,\
+            event_type String,\
+            event_id String,\
+            slot UInt64,\
+            signature String,\
+            instruction_index UInt32,\
+            stack_height UInt32,\
+            absolute_path Array(UInt8),\
+            event_seq UInt32,\
+            source_name String,\
+            mode String,\
+            decoder_version String,\
+            ingest_ts DateTime64(3, 'UTC'),\
+            chain_time Nullable(DateTime64(3, 'UTC')),\
+            partition_time DateTime64(3, 'UTC'),\
+            block_hash Nullable(String),\
+            tx_index Nullable(UInt64),\
+            name String,\
+            data JSON\
+        ) ENGINE = MergeTree \
+        PARTITION BY toYear(partition_time) \
+        ORDER BY (program_id, family_name, event_id, slot)"
+        )
+    }
+}
+
+impl carbon_core::clickhouse::rows::ClickHouseRow for CpiEventRow {
+    fn partition_key(&self) -> String {
+        self.partition_time[..4].to_string()
+    }
+}
+{% endblock %}

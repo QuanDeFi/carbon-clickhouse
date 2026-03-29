@@ -116,4 +116,8 @@ pub trait Processor {
         data: Self::InputType,
         metrics: Arc<MetricsCollection>,
     ) -> CarbonResult<()>;
+
+    async fn finalize(&mut self, _metrics: Arc<MetricsCollection>) -> CarbonResult<()> {
+        Ok(())
+    }
 }

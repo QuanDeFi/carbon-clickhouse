@@ -10,6 +10,7 @@ export type RenderOptions = GetRenderMapOptions & {
         discriminator: number[];
     }[];
     postgresMode?: 'generic' | 'typed';
+    withClickHouse?: boolean;
 };
 
 export function renderVisitor(path: string, options: RenderOptions = {}) {

@@ -16,6 +16,11 @@ crate-type = ["rlib"]
 default = []
 
 serde = ["dep:serde"]
+clickhouse = [
+    "carbon-core/clickhouse",
+    "dep:serde",
+    "dep:chrono",
+]
 
 postgres = [
     "carbon-core/postgres",
@@ -41,6 +46,7 @@ solana-instruction = { workspace = true, default-features = false }
 serde_json = { workspace = true }
 
 serde = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
 
 sqlx = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
@@ -50,3 +56,7 @@ juniper = { workspace = true, optional = true }
 
 [dev-dependencies]
 carbon-test-utils = { workspace = true }
+solana-hash = { workspace = true }
+solana-signature = { workspace = true }
+solana-transaction = { workspace = true }
+solana-transaction-status = { workspace = true }
