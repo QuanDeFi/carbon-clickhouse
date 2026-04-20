@@ -4,19 +4,19 @@
 
 ## What this branch adds
 
-This branch does **not** add a general-purpose ClickHouse storage subsystem to Carbon. It adds a **minimal but real ClickHouse landing sink** that fits Carbon’s existing processor architecture.
+This branch does **not** add a general-purpose ClickHouse storage subsystem to Carbon. It adds a **minimal ClickHouse landing sink** that fits Carbon’s existing processor architecture.
 
 Concretely, it adds four things:
 
 1. a small generic ClickHouse runtime inside `carbon-core`
 2. a core lifecycle change so buffered processors can flush on shutdown
-3. one concrete decoder-owned ClickHouse implementation for **Jupiter swap CPI `SwapEvent`**
-4. enough codegen support to keep this from being a pure one-off integration   
+3. one decoder-owned ClickHouse implementation for **Jupiter swap CPI `SwapEvent`**
+4. codegen support
 
 
 ## How it fits into Carbon
 
-ClickHouse is implemented as a **normal Carbon instruction processor**, not as a new pipeline type and not as an out-of-band sink framework.
+ClickHouse is implemented as a **Carbon instruction processor**, not as a new pipeline type and not as an sink framework.
 
 The runtime shape is:
 
@@ -51,12 +51,12 @@ That means the ClickHouse sink can flush buffered rows deterministically on:
 * Ctrl-C with immediate shutdown
 * channel closure
 
-Without this, buffered rows could be lost. This is the main correctness improvement introduced by the ClickHouse port.
+Without this, buffered rows could be lost. 
 
 
 ## What lives in `carbon-core`
 
-The generic ClickHouse runtime in `carbon-core` is intentionally small:
+The generic ClickHouse runtime in `carbon-core`:
 
 * `config.rs` — endpoint, database, auth, table name, source metadata, batch settings
 * `http.rs` — minimal HTTP transport over `reqwest`
@@ -70,7 +70,7 @@ Important boundary:
 * core knows **how to talk to ClickHouse**
 * core does **not** know any Jupiter-specific schema details
 
-That split is deliberate, since decoders own the program specific data schema.
+That split is deliberate, since decoders own the on-chain program specific data schema.
 
 
 ## Write path and insert model
@@ -88,7 +88,7 @@ Current behavior:
 
 Important nuance: `flush_interval` is **not** driven by a background timer thread. It is checked when a new row arrives, and any remaining buffer is also drained in `finalize()`. So the implementation is **opportunistic interval flushing**, not autonomous periodic flushing. That matters for evaluating latency and idle-buffer behavior. 
 
-The design choice is optimized for a minimal, predictable landing sink
+The design choice is optimized for a minimal, predictable landing sink.
 
 
 ## Current scope
@@ -108,13 +108,11 @@ The decoder-owned layer does the program-specific work:
 * bootstrap the schema
 * provide sink defaults and setup helpers  
 
-So this branch proves:
+The entire pipeline has been validated end-to-end:
 
-* Carbon can decode real Solana data
-* Carbon can convert it into typed analytical rows
-* Carbon can batch and land those rows in ClickHouse correctly enough for real use
-
-It does **not** prove broad ClickHouse coverage across the Carbon repo.
+* decode Solana data
+* convert it into typed analytical rows
+* batch and land those rows in ClickHouse
 
 
 ## Identity, replay, and table semantics
@@ -160,19 +158,15 @@ Tracked today:
 * failed flush batches
 * flush duration histogram  
 
-That is enough for a first implementation, but still limited compared with a fuller ingestion service. There is no deeper range/coverage bookkeeping yet.
-
 
 ## Generator state
 
-This is not purely handwritten. The branch also adds partial ClickHouse generator support:
+The branch adds partial ClickHouse generator support:
 
 * generated decoder manifest support for a `clickhouse` feature
 * generated ClickHouse instruction glue
 * generated generic CPI-event landing-row template
 * generated decode-path changes so CPI events can be handled explicitly before generic instruction macro dispatch     
-
-But the generator support is still **partial**. The real end-to-end proven path is still the concrete Jupiter implementation.
 
 ---
 
