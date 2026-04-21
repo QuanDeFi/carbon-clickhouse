@@ -49,7 +49,7 @@ impl TryFrom<crate::datasource::TransactionUpdate> for TransactionMetadata {
 #[derive(Debug)]
 pub struct TransactionProcessorInputType<'a, T> {
     pub metadata: &'a Arc<TransactionMetadata>,
-    pub instructions: &'a Vec<(InstructionMetadata, T)>,
+    pub instructions: &'a [(InstructionMetadata, T)],
 }
 
 pub struct TransactionPipe<T: InstructionDecoderCollection, P> {
@@ -87,8 +87,7 @@ pub trait TransactionPipes<'a>: Send + Sync {
         instructions: &[(InstructionMetadata, Instruction)],
     ) -> CarbonResult<()>;
     async fn finalize(&mut self) -> CarbonResult<()>;
-
-    fn filters(&self) -> &Vec<Box<dyn Filter + Send + Sync + 'static>>;
+    fn filters(&self) -> &[Box<dyn Filter + Send + Sync + 'static>];
 }
 
 #[async_trait]
@@ -118,7 +117,7 @@ where
         self.processor.finalize().await
     }
 
-    fn filters(&self) -> &Vec<Box<dyn Filter + Send + Sync + 'static>> {
+    fn filters(&self) -> &[Box<dyn Filter + Send + Sync + 'static>] {
         &self.filters
     }
 }
