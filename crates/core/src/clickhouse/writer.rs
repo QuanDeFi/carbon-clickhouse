@@ -126,6 +126,10 @@ mod tests {
     use super::*;
     use crate::clickhouse::rows::ClickHouseTable;
     use std::time::Duration;
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::TcpListener,
+    };
 
     #[derive(Debug, Clone, serde::Serialize)]
     struct TestRow {
@@ -161,8 +165,12 @@ mod tests {
     }
 
     fn config() -> ClickHouseConfig {
+        config_with_endpoint("http://localhost:8123".to_string())
+    }
+
+    fn config_with_endpoint(endpoint: String) -> ClickHouseConfig {
         ClickHouseConfig::new(
-            "http://localhost:8123".to_string(),
+            endpoint,
             "default".to_string(),
             None,
             None,
@@ -173,6 +181,31 @@ mod tests {
             100,
             Duration::from_secs(60),
         )
+    }
+
+    async fn start_clickhouse_server(
+        expected_requests: usize,
+    ) -> (String, tokio::task::JoinHandle<Vec<String>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let endpoint = format!("http://{}", listener.local_addr().unwrap());
+        let handle = tokio::spawn(async move {
+            let mut requests = Vec::new();
+
+            for _ in 0..expected_requests {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut buffer = vec![0u8; 8192];
+                let n = socket.read(&mut buffer).await.unwrap();
+                requests.push(String::from_utf8_lossy(&buffer[..n]).to_string());
+                socket
+                    .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+                    .await
+                    .unwrap();
+            }
+
+            requests
+        });
+
+        (endpoint, handle)
     }
 
     #[test]
@@ -220,5 +253,38 @@ mod tests {
         );
         assert_eq!(writer.buffered_rows(), 2);
         assert_eq!(writer.buffers.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn flush_inserts_rows_grouped_by_table_and_partition() {
+        let (endpoint, server) = start_clickhouse_server(2).await;
+        let mut writer = ClickHouseBatchWriter::<TestRow>::new(config_with_endpoint(endpoint));
+
+        writer
+            .buffer_row(TestRow {
+                id: 1,
+                table: "first_table",
+                partition: "2026".to_string(),
+            })
+            .await
+            .unwrap();
+        writer
+            .buffer_row(TestRow {
+                id: 2,
+                table: "second_table",
+                partition: "2027".to_string(),
+            })
+            .await
+            .unwrap();
+
+        let outcome = writer.flush().await.unwrap();
+        let requests = server.await.unwrap().join("\n");
+
+        assert_eq!(outcome.rows, 2);
+        assert_eq!(outcome.buffered_rows, 0);
+        assert!(requests.contains("first_table"));
+        assert!(requests.contains("second_table"));
+        assert!(requests.contains("\"partition\":\"2026\""));
+        assert!(requests.contains("\"partition\":\"2027\""));
     }
 }

@@ -321,9 +321,16 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::clickhouse::{rows::ClickHouseTable, ClickHouseConfig};
+    use crate::{
+        clickhouse::{rows::ClickHouseTable, ClickHouseConfig},
+        metrics::MetricsRegistry,
+    };
     use solana_pubkey::Pubkey;
     use std::time::Duration;
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::TcpListener,
+    };
 
     #[derive(Debug, Clone)]
     struct DummyInstruction;
@@ -410,8 +417,12 @@ mod tests {
     }
 
     fn config() -> ClickHouseConfig {
+        config_with_endpoint("http://localhost:8123".to_string())
+    }
+
+    fn config_with_endpoint(endpoint: String) -> ClickHouseConfig {
         ClickHouseConfig::new(
-            "http://localhost:8123".to_string(),
+            endpoint,
             "default".to_string(),
             None,
             None,
@@ -422,6 +433,53 @@ mod tests {
             100,
             Duration::from_secs(60),
         )
+    }
+
+    async fn start_clickhouse_server(
+        expected_requests: usize,
+    ) -> (String, tokio::task::JoinHandle<Vec<String>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let endpoint = format!("http://{}", listener.local_addr().unwrap());
+        let handle = tokio::spawn(async move {
+            let mut requests = Vec::new();
+
+            for _ in 0..expected_requests {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut buffer = vec![0u8; 8192];
+                let n = socket.read(&mut buffer).await.unwrap();
+                requests.push(String::from_utf8_lossy(&buffer[..n]).to_string());
+                socket
+                    .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+                    .await
+                    .unwrap();
+            }
+
+            requests
+        });
+
+        (endpoint, handle)
+    }
+
+    fn counter_value(name: &str) -> u64 {
+        MetricsRegistry::global()
+            .snapshot()
+            .counters
+            .into_iter()
+            .filter(|(metric_name, _, _)| *metric_name == name)
+            .map(|(_, _, value)| value)
+            .next()
+            .unwrap_or_default()
+    }
+
+    fn gauge_value(name: &str) -> f64 {
+        MetricsRegistry::global()
+            .snapshot()
+            .gauges
+            .into_iter()
+            .filter(|(metric_name, _, _)| *metric_name == name)
+            .map(|(_, _, value)| value)
+            .next()
+            .unwrap_or_default()
     }
 
     fn account_metadata() -> AccountMetadata {
@@ -479,5 +537,32 @@ mod tests {
 
         processor.finalize().await.unwrap();
         assert_eq!(processor.writer.buffered_rows(), 0);
+    }
+
+    #[tokio::test]
+    async fn account_processor_finalize_flushes_buffered_rows_and_records_metrics() {
+        let (endpoint, server) = start_clickhouse_server(1).await;
+        let before_inserted = counter_value("clickhouse.accounts.inserted");
+        let mut processor =
+            ClickHouseAccountProcessor::<DummyAccount, AccountWrapper, DummyRow>::new(
+                config_with_endpoint(endpoint),
+            );
+        let metadata = account_metadata();
+        let decoded_account = decoded_account();
+        let raw_account = solana_account::Account::default();
+        let input = AccountProcessorInputType {
+            metadata: &metadata,
+            decoded_account: &decoded_account,
+            raw_account: &raw_account,
+        };
+
+        processor.process(&input).await.unwrap();
+        processor.finalize().await.unwrap();
+
+        let requests = server.await.unwrap().join("\n");
+        assert_eq!(processor.writer.buffered_rows(), 0);
+        assert!(requests.contains("dummy_accounts"));
+        assert!(counter_value("clickhouse.accounts.inserted") > before_inserted);
+        assert_eq!(gauge_value("clickhouse.accounts.buffered_rows"), 0.0);
     }
 }
