@@ -10,6 +10,7 @@ pub trait ClickHouseTable {
 pub trait ClickHouseRow:
     serde::Serialize + Clone + Send + Sync + std::fmt::Debug + 'static
 {
+    fn table_name(&self) -> &'static str;
     fn partition_key(&self) -> String;
 
     fn to_json_line(&self) -> CarbonResult<String> {
@@ -41,8 +42,39 @@ pub fn deterministic_event_id(
     hasher.update(absolute_path);
     hasher.update(event_type.as_bytes());
     hasher.update(event_seq.to_le_bytes());
-    let digest = hasher.finalize();
-    let mut output = String::with_capacity(digest.len() * 2);
+    hex_digest(hasher.finalize())
+}
+
+pub fn deterministic_instruction_id(
+    program_id: &[u8],
+    signature: &str,
+    absolute_path: &[u8],
+    instruction_type: &str,
+) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(program_id);
+    hasher.update(signature.as_bytes());
+    hasher.update(absolute_path);
+    hasher.update(instruction_type.as_bytes());
+    hex_digest(hasher.finalize())
+}
+
+pub fn deterministic_account_id(
+    program_id: &[u8],
+    pubkey: &[u8],
+    slot: u64,
+    account_type: &str,
+) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(program_id);
+    hasher.update(pubkey);
+    hasher.update(slot.to_le_bytes());
+    hasher.update(account_type.as_bytes());
+    hex_digest(hasher.finalize())
+}
+
+fn hex_digest(digest: impl IntoIterator<Item = u8>) -> String {
+    let mut output = String::with_capacity(64);
     for byte in digest {
         use std::fmt::Write;
         let _ = write!(&mut output, "{byte:02x}");
@@ -52,12 +84,26 @@ pub fn deterministic_event_id(
 
 #[cfg(test)]
 mod tests {
-    use super::deterministic_event_id;
+    use super::{deterministic_account_id, deterministic_event_id, deterministic_instruction_id};
 
     #[test]
     fn deterministic_event_id_is_stable() {
         let first = deterministic_event_id(b"program", "sig", &[1, 2, 3], "swap_event", 0);
         let second = deterministic_event_id(b"program", "sig", &[1, 2, 3], "swap_event", 0);
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn deterministic_instruction_id_is_stable() {
+        let first = deterministic_instruction_id(b"program", "sig", &[1, 2, 3], "swap");
+        let second = deterministic_instruction_id(b"program", "sig", &[1, 2, 3], "swap");
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn deterministic_account_id_is_stable() {
+        let first = deterministic_account_id(b"program", b"pubkey", 42, "mint");
+        let second = deterministic_account_id(b"program", b"pubkey", 42, "mint");
         assert_eq!(first, second);
     }
 }

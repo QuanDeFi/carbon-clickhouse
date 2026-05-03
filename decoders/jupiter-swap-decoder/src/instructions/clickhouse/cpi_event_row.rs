@@ -166,6 +166,10 @@ impl ClickHouseTable for JupiterSwapSwapEventLandingRow {
 }
 
 impl ClickHouseRow for JupiterSwapSwapEventLandingRow {
+    fn table_name(&self) -> &'static str {
+        Self::table()
+    }
+
     fn partition_key(&self) -> String {
         self.partition_time[..4].to_string()
     }

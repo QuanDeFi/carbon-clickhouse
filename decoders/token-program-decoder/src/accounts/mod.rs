@@ -7,6 +7,9 @@ pub mod postgres;
 #[cfg(feature = "graphql")]
 pub mod graphql;
 
+#[cfg(feature = "clickhouse")]
+pub mod clickhouse;
+
 pub mod mint;
 pub mod multisig;
 pub mod token;

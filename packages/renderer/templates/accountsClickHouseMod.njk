@@ -1,0 +1,152 @@
+{% extends "layout.njk" %}
+{% import "macros.njk" as macros %}
+
+{% block main %}
+{% for account in accountsToExport | sort(false, false, 'name') %}
+pub mod {{ macros.escapeRustKeyword(account.name | snakeCase) }}_row;
+{% endfor %}
+
+{% for account in accountsToExport | sort(false, false, 'name') %}
+pub use self::{{ macros.escapeRustKeyword(account.name | snakeCase) }}_row::*;
+{% endfor %}
+
+use std::time::Duration;
+
+use carbon_core::{
+    account::{AccountMetadata, DecodedAccount},
+    clickhouse::{
+        rows::{ClickHouseRow, ClickHouseRowContext, ClickHouseRows, ClickHouseTable},
+        ClickHouseAccountProcessor, ClickHouseAdmin, ClickHouseConfig, ClickHouseSchema,
+    },
+    error::CarbonResult,
+};
+
+use super::{{ program.name | pascalCase }}Account;
+
+pub const DEFAULT_DATABASE: &str = "default";
+pub const DEFAULT_SOURCE_NAME: &str = "block_crawler";
+pub const DEFAULT_MODE: &str = "backfill";
+pub const DEFAULT_DECODER_VERSION: &str = "v1";
+pub const DEFAULT_MAX_ROWS: usize = 500;
+pub const DEFAULT_FLUSH_INTERVAL_MS: u64 = 1_000;
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(untagged)]
+pub enum {{ program.name | pascalCase }}ClickHouseAccountRow {
+{% for account in accountsToExport | sort(false, false, 'name') %}
+    {{ account.name | pascalCase }}({{ macros.escapeRustKeyword(account.name | snakeCase) }}_row::{{ account.name | pascalCase }}AccountClickHouseRow),
+{% endfor %}
+}
+
+impl ClickHouseRow for {{ program.name | pascalCase }}ClickHouseAccountRow {
+    fn table_name(&self) -> &'static str {
+        match self {
+{% for account in accountsToExport | sort(false, false, 'name') %}
+            Self::{{ account.name | pascalCase }}(row) => row.table_name(),
+{% endfor %}
+        }
+    }
+
+    fn partition_key(&self) -> String {
+        match self {
+{% for account in accountsToExport | sort(false, false, 'name') %}
+            Self::{{ account.name | pascalCase }}(row) => row.partition_key(),
+{% endfor %}
+        }
+    }
+}
+
+pub type {{ program.name | pascalCase }}ClickHouseAccountProcessor = ClickHouseAccountProcessor<
+    {{ program.name | pascalCase }}Account,
+    {{ program.name | pascalCase }}AccountWithClickHouseMetadata,
+    {{ program.name | pascalCase }}ClickHouseAccountRow,
+>;
+
+pub struct {{ program.name | pascalCase }}ClickHouseAccountsMigration;
+
+impl ClickHouseSchema for {{ program.name | pascalCase }}ClickHouseAccountsMigration {
+    fn operations(_config: &ClickHouseConfig) -> Vec<String> {
+        let mut operations = Vec::new();
+{% for account in accountsToExport | sort(false, false, 'name') %}
+        operations.push({{ macros.escapeRustKeyword(account.name | snakeCase) }}_row::{{ account.name | pascalCase }}AccountClickHouseRow::create_table_sql({{ macros.escapeRustKeyword(account.name | snakeCase) }}_row::{{ account.name | pascalCase }}AccountClickHouseRow::DEFAULT_TABLE_NAME));
+{% endfor %}
+        operations
+    }
+}
+
+impl {{ program.name | pascalCase }}ClickHouseAccountsMigration {
+    pub async fn run(config: &ClickHouseConfig) -> CarbonResult<()> {
+        ClickHouseAdmin::new(config.clone())
+            .execute_schema::<Self>()
+            .await
+    }
+}
+
+pub struct {{ program.name | pascalCase }}AccountWithClickHouseMetadata(
+    pub DecodedAccount<{{ program.name | pascalCase }}Account>,
+    pub AccountMetadata,
+);
+
+impl From<(DecodedAccount<{{ program.name | pascalCase }}Account>, AccountMetadata)>
+    for {{ program.name | pascalCase }}AccountWithClickHouseMetadata
+{
+    fn from(value: (DecodedAccount<{{ program.name | pascalCase }}Account>, AccountMetadata)) -> Self {
+        Self(value.0, value.1)
+    }
+}
+
+impl ClickHouseRows<{{ program.name | pascalCase }}ClickHouseAccountRow>
+    for {{ program.name | pascalCase }}AccountWithClickHouseMetadata
+{
+    fn clickhouse_rows(&self, context: &ClickHouseRowContext) -> Vec<{{ program.name | pascalCase }}ClickHouseAccountRow> {
+        let {{ program.name | pascalCase }}AccountWithClickHouseMetadata(decoded_account, metadata) = self;
+
+        match &decoded_account.data {
+{% for account in accountsToExport | sort(false, false, 'name') %}
+            {{ program.name | pascalCase }}Account::{{ account.name | pascalCase }}(account) => {
+                vec![{{ program.name | pascalCase }}ClickHouseAccountRow::{{ account.name | pascalCase }}(
+                    {{ macros.escapeRustKeyword(account.name | snakeCase) }}_row::{{ account.name | pascalCase }}AccountClickHouseRow::from_parts(
+                        *account.clone(),
+                        decoded_account,
+                        metadata,
+                        context,
+                    ),
+                )]
+            }
+{% endfor %}
+        }
+    }
+}
+
+pub fn clickhouse_config_from_database_url(database_url: &str) -> CarbonResult<ClickHouseConfig> {
+    ClickHouseConfig::from_database_url(
+        database_url,
+        DEFAULT_DATABASE.to_string(),
+{% for account in accountsToExport | sort(false, false, 'name') %}
+{% if loop.first %}
+        {{ macros.escapeRustKeyword(account.name | snakeCase) }}_row::{{ account.name | pascalCase }}AccountClickHouseRow::DEFAULT_TABLE_NAME.to_string(),
+{% endif %}
+{% endfor %}
+        DEFAULT_SOURCE_NAME.to_string(),
+        DEFAULT_MODE.to_string(),
+        DEFAULT_DECODER_VERSION.to_string(),
+        DEFAULT_MAX_ROWS,
+        Duration::from_millis(DEFAULT_FLUSH_INTERVAL_MS),
+    )
+}
+
+pub async fn bootstrap_clickhouse_from_database_url(database_url: &str) -> CarbonResult<ClickHouseConfig> {
+    let config = clickhouse_config_from_database_url(database_url)?;
+    {{ program.name | pascalCase }}ClickHouseAccountsMigration::run(&config).await?;
+    Ok(config)
+}
+
+pub fn clickhouse_processor(config: ClickHouseConfig) -> {{ program.name | pascalCase }}ClickHouseAccountProcessor {
+    ClickHouseAccountProcessor::new(config)
+}
+
+pub async fn setup_clickhouse(database_url: &str) -> CarbonResult<{{ program.name | pascalCase }}ClickHouseAccountProcessor> {
+    let config = bootstrap_clickhouse_from_database_url(database_url).await?;
+    Ok(clickhouse_processor(config))
+}
+{% endblock %}

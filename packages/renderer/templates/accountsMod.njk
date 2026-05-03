@@ -14,6 +14,11 @@ pub mod postgres;
 pub mod graphql;
 {% endif %}
 
+{% if withClickHouse %}
+#[cfg(feature = "clickhouse")]
+pub mod clickhouse;
+{% endif %}
+
 {% for account in accountsToExport | sort(false, false, 'name') %}
 pub mod {{ macros.escapeRustKeyword(account.name | snakeCase) }};
 {% endfor %}

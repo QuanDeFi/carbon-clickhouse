@@ -33,6 +33,7 @@ import {
 import { formatDocComments } from './utils/render';
 import { PostgresRowMapper, type FlattenedField } from './postgresRowMapper';
 import { checkRequiresBigArray } from './utils/postgresHelpers';
+import { ClickHouseRowMapper } from './clickhouseRowMapper';
 
 export type GetRenderMapOptions = {
     renderParentInstructions?: boolean;
@@ -70,8 +71,13 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
         newtypeWrapperTypes,
         getDefinedTypesMap: () => definedTypesMap,
     });
+    const clickhouseRowMapper = new ClickHouseRowMapper({
+        getDefinedTypesMap: () => definedTypesMap,
+    });
 
     let currentProgram: ProgramNode | null = null;
+    const currentRenderProgram = () =>
+        currentProgram ? { ...currentProgram, name: options.packageName || currentProgram.name } : currentProgram;
     // Track which instructions have GraphQL schemas generated
     const instructionsWithGraphQLSchemas = new Set<string>();
 
@@ -196,6 +202,20 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                                 imports: postgresImports.toString(),
                                 flatFields,
                                 isAccount: true,
+                            }),
+                        );
+                    }
+
+                    if (options.withClickHouse === true) {
+                        const clickhouseFlatFields = clickhouseRowMapper.flattenType(newNode.data, [], [], new Set());
+                        renderMap.add(
+                            `src/accounts/clickhouse/${snakeCase(node.name)}_row.rs`,
+                            render('clickhouseRowPage.njk', {
+                                entityDocs: node.docs,
+                                entityName: node.name,
+                                flatFields: clickhouseFlatFields,
+                                isAccount: true,
+                                program: currentRenderProgram(),
                             }),
                         );
                     }
@@ -355,6 +375,18 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                                     discriminatorManifest,
                                 }),
                             );
+
+                            if (options.withClickHouse === true) {
+                                const clickhouseFlatFields = clickhouseRowMapper.flattenType(node.type, [], [], new Set());
+                                renderMap.add(
+                                    `src/instructions/clickhouse/${snakeCase(node.name)}_event_row.rs`,
+                                    render('eventInstructionClickHouseRowPage.njk', {
+                                        event: node,
+                                        flatFields: clickhouseFlatFields,
+                                        program: currentRenderProgram(),
+                                    }),
+                                );
+                            }
                         }
                     }
 
@@ -576,6 +608,32 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                         );
                     }
 
+                    if (options.withClickHouse === true) {
+                        const clickhouseFlatFields = clickhouseRowMapper.flattenType(
+                            structTypeNode(
+                                newNode.arguments.map(a =>
+                                    structFieldTypeNode({
+                                        type: a.type,
+                                        name: a.name,
+                                    }),
+                                ),
+                            ),
+                            [],
+                            [],
+                            new Set(),
+                        );
+                        renderMap.add(
+                            `src/instructions/clickhouse/${snakeCase(node.name)}_row.rs`,
+                            render('clickhouseRowPage.njk', {
+                                entityDocs: node.docs,
+                                entityName: node.name,
+                                flatFields: clickhouseFlatFields,
+                                isAccount: false,
+                                program: currentRenderProgram(),
+                            }),
+                        );
+                    }
+
                     // GraphQL generation - only if withGraphql is enabled
                     if (options.withGraphql !== false) {
                         const graphqlFields = flattenTypeForGraphQL(
@@ -703,6 +761,7 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                         postgresMode: options.postgresMode || 'typed',
                         withPostgres: options.withPostgres !== false,
                         withGraphQL: options.withGraphql !== false,
+                        withClickHouse: options.withClickHouse === true,
                         withSerde: options.withSerde ?? false,
                         withBase58: options.withBase58 ?? false,
                     };
@@ -728,6 +787,9 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                     if (options.postgresMode !== 'generic' && options.withPostgres !== false) {
                         map.add('src/accounts/postgres/mod.rs', render('accountsPostgresMod.njk', ctx));
                     }
+                    if (options.withClickHouse === true && accountsToExport.length > 0) {
+                        map.add('src/accounts/clickhouse/mod.rs', render('accountsClickHouseMod.njk', ctx));
+                    }
                     if (options.withGraphql !== false) {
                         const accountsGraphqlTemplate =
                             options.postgresMode === 'generic' || options.withPostgres === false
@@ -739,7 +801,7 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                             render(accountsGraphqlTemplate, { ...ctx, imports: accountsGraphqlImports.toString() }),
                         );
                     }
-                    if (instructionsToExport.length > 0) {
+                    if (instructionsToExport.length > 0 || hasAnchorEvents) {
                         const instructionsModImports = new ImportMap()
                             .add('crate::PROGRAM_ID')
                             .add(`crate::${pascalCase(programName)}Decoder`);
@@ -750,7 +812,10 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                         if (options.postgresMode !== 'generic' && options.withPostgres !== false) {
                             map.add('src/instructions/postgres/mod.rs', render('instructionsPostgresMod.njk', ctx));
                         }
-                        if (options.withClickHouse === true && (options.anchorEvents?.length ?? 0) > 0) {
+                        if (
+                            options.withClickHouse === true &&
+                            (instructionsToExport.length > 0 || (options.anchorEvents?.length ?? 0) > 0)
+                        ) {
                             map.add('src/instructions/clickhouse/mod.rs', render('instructionsClickHouseMod.njk', ctx));
                         }
                         if (options.withGraphql !== false) {
@@ -792,18 +857,6 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                                 render('eventInstructionRowPage.njk', {
                                     ...ctx,
                                     imports: eventInstructionRowImports.toString(),
-                                }),
-                            );
-                        }
-                        if (options.withClickHouse === true) {
-                            const clickhouseEventImports = new ImportMap()
-                                .add('carbon_core::instruction::InstructionMetadata')
-                                .add('super::super::cpi_event::CpiEvent');
-                            map.add(
-                                'src/instructions/clickhouse/cpi_event_row.rs',
-                                render('eventInstructionClickHouseRowPage.njk', {
-                                    ...ctx,
-                                    imports: clickhouseEventImports.toString(),
                                 }),
                             );
                         }

@@ -1,0 +1,266 @@
+{% extends "layout.njk" %}
+{% import "macros.njk" as macros %}
+
+{% block main %}
+use carbon_core::clickhouse::rows::{
+    {% if isAccount %}deterministic_account_id{% else %}deterministic_instruction_id{% endif %},
+    ClickHouseRow,
+    ClickHouseRowContext,
+    ClickHouseTable,
+};
+{% if isAccount %}
+use carbon_core::account::{AccountMetadata, DecodedAccount};
+{% else %}
+use carbon_core::instruction::InstructionMetadata;
+{% endif %}
+use chrono::{DateTime, Utc};
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct {{ entityName | pascalCase }}{% if isAccount %}Account{% else %}Instruction{% endif %}ClickHouseRow {
+    pub program_id: String,
+    pub family_name: String,
+{% if isAccount %}
+    pub account_type: String,
+    pub account_id: String,
+    pub slot: u64,
+    pub pubkey: String,
+    pub transaction_signature: Option<String>,
+    pub lamports: u64,
+    pub owner: String,
+    pub executable: bool,
+    pub rent_epoch: u64,
+{% else %}
+    pub instruction_type: String,
+    pub instruction_id: String,
+    pub slot: u64,
+    pub signature: String,
+    pub instruction_index: u32,
+    pub stack_height: u32,
+    pub absolute_path: Vec<u8>,
+{% endif %}
+    pub source_name: String,
+    pub mode: String,
+    pub decoder_version: String,
+    pub ingest_ts: String,
+{% if isAccount %}
+    pub partition_slot: u64,
+{% else %}
+    pub chain_time: Option<String>,
+    pub partition_time: String,
+    pub block_hash: Option<String>,
+    pub tx_index: Option<u64>,
+{% endif %}
+{% for field in flatFields %}
+    pub {{ field.column }}: {{ field.rowType }},
+{% endfor %}
+}
+
+impl {{ entityName | pascalCase }}{% if isAccount %}Account{% else %}Instruction{% endif %}ClickHouseRow {
+    pub const FAMILY_NAME: &'static str = "{{ program.name | snakeCase }}_{{ entityName | snakeCase }}_{% if isAccount %}account{% else %}instruction{% endif %}";
+{% if isAccount %}
+    pub const ACCOUNT_TYPE: &'static str = "{{ entityName | snakeCase }}";
+    pub const DEFAULT_TABLE_NAME: &'static str = "{{ program.name | snakeCase }}_{{ entityName | snakeCase }}_account_landing";
+{% else %}
+    pub const INSTRUCTION_TYPE: &'static str = "{{ entityName | snakeCase }}";
+    pub const DEFAULT_TABLE_NAME: &'static str = "{{ program.name | snakeCase }}_{{ entityName | snakeCase }}_instruction_landing";
+{% endif %}
+
+{% if isAccount %}
+    pub fn from_parts(
+        source: crate::accounts::{{ macros.escapeRustKeyword(entityName | snakeCase) }}::{{ entityName | pascalCase }},
+        decoded_account: &DecodedAccount<crate::accounts::{{ program.name | pascalCase }}Account>,
+        metadata: &AccountMetadata,
+        context: &ClickHouseRowContext,
+    ) -> Self {
+        let _ = &source;
+        let ingest_ts = Utc::now();
+        let partition_slot = metadata.slot / 1_000_000;
+
+        Self {
+            program_id: crate::PROGRAM_ID.to_string(),
+            family_name: Self::FAMILY_NAME.to_string(),
+            account_type: Self::ACCOUNT_TYPE.to_string(),
+            account_id: deterministic_account_id(
+                crate::PROGRAM_ID.as_ref(),
+                metadata.pubkey.as_ref(),
+                metadata.slot,
+                Self::ACCOUNT_TYPE,
+            ),
+            slot: metadata.slot,
+            pubkey: metadata.pubkey.to_string(),
+            transaction_signature: metadata.transaction_signature.as_ref().map(|signature| signature.to_string()),
+            lamports: decoded_account.lamports,
+            owner: decoded_account.owner.to_string(),
+            executable: decoded_account.executable,
+            rent_epoch: decoded_account.rent_epoch,
+            source_name: context.source_name.clone(),
+            mode: context.mode.clone(),
+            decoder_version: context.decoder_version.clone(),
+            ingest_ts: format_datetime(ingest_ts),
+            partition_slot,
+{% for field in flatFields %}
+            {{ field.column }}: {{ field.expr }},
+{% endfor %}
+        }
+    }
+{% else %}
+    pub fn from_parts(
+        source: crate::instructions::{{ macros.escapeRustKeyword(entityName | snakeCase) }}::{{ entityName | pascalCase }},
+        metadata: &InstructionMetadata,
+        context: &ClickHouseRowContext,
+    ) -> Self {
+        let _ = &source;
+        let ingest_ts = Utc::now();
+        let chain_time = metadata
+            .transaction_metadata
+            .block_time
+            .and_then(DateTime::<Utc>::from_timestamp_secs);
+        let partition_time = chain_time.unwrap_or(ingest_ts);
+        let signature = metadata.transaction_metadata.signature.to_string();
+
+        Self {
+            program_id: crate::PROGRAM_ID.to_string(),
+            family_name: Self::FAMILY_NAME.to_string(),
+            instruction_type: Self::INSTRUCTION_TYPE.to_string(),
+            instruction_id: deterministic_instruction_id(
+                crate::PROGRAM_ID.as_ref(),
+                &signature,
+                &metadata.absolute_path,
+                Self::INSTRUCTION_TYPE,
+            ),
+            slot: metadata.transaction_metadata.slot,
+            signature,
+            instruction_index: metadata.index,
+            stack_height: metadata.stack_height,
+            absolute_path: metadata.absolute_path.clone(),
+            source_name: context.source_name.clone(),
+            mode: context.mode.clone(),
+            decoder_version: context.decoder_version.clone(),
+            ingest_ts: format_datetime(ingest_ts),
+            chain_time: chain_time.map(format_datetime),
+            partition_time: format_datetime(partition_time),
+            block_hash: metadata.transaction_metadata.block_hash.map(|hash| hash.to_string()),
+            tx_index: metadata.transaction_metadata.index,
+{% for field in flatFields %}
+            {{ field.column }}: {{ field.expr }},
+{% endfor %}
+        }
+    }
+{% endif %}
+}
+
+impl ClickHouseTable for {{ entityName | pascalCase }}{% if isAccount %}Account{% else %}Instruction{% endif %}ClickHouseRow {
+    fn table() -> &'static str {
+        Self::DEFAULT_TABLE_NAME
+    }
+
+    fn columns() -> Vec<&'static str> {
+        vec![
+            "program_id",
+            "family_name",
+{% if isAccount %}
+            "account_type",
+            "account_id",
+            "slot",
+            "pubkey",
+            "transaction_signature",
+            "lamports",
+            "owner",
+            "executable",
+            "rent_epoch",
+{% else %}
+            "instruction_type",
+            "instruction_id",
+            "slot",
+            "signature",
+            "instruction_index",
+            "stack_height",
+            "absolute_path",
+{% endif %}
+            "source_name",
+            "mode",
+            "decoder_version",
+            "ingest_ts",
+{% if isAccount %}
+            "partition_slot",
+{% else %}
+            "chain_time",
+            "partition_time",
+            "block_hash",
+            "tx_index",
+{% endif %}
+{% for field in flatFields %}
+            "{{ field.column }}",
+{% endfor %}
+        ]
+    }
+
+    fn create_table_sql(table_name: &str) -> String {
+        format!(
+            "CREATE TABLE IF NOT EXISTS {table_name} (\
+            program_id String,\
+            family_name String,\
+{% if isAccount %}
+            account_type String,\
+            account_id String,\
+            slot UInt64,\
+            pubkey String,\
+            transaction_signature Nullable(String),\
+            lamports UInt64,\
+            owner String,\
+            executable Bool,\
+            rent_epoch UInt64,\
+{% else %}
+            instruction_type String,\
+            instruction_id String,\
+            slot UInt64,\
+            signature String,\
+            instruction_index UInt32,\
+            stack_height UInt32,\
+            absolute_path Array(UInt8),\
+{% endif %}
+            source_name String,\
+            mode String,\
+            decoder_version String,\
+            ingest_ts DateTime64(3, 'UTC'),\
+{% if isAccount %}
+            partition_slot UInt64{% if flatFields.length > 0 %},{% endif %}\
+{% else %}
+            chain_time Nullable(DateTime64(3, 'UTC')),\
+            partition_time DateTime64(3, 'UTC'),\
+            block_hash Nullable(String),\
+            tx_index Nullable(UInt64){% if flatFields.length > 0 %},{% endif %}\
+{% endif %}
+{% for field in flatFields %}
+            {{ field.column }} {{ field.clickHouseColumnType }}{% if not loop.last %},{% endif %}\
+{% endfor %}
+        ) ENGINE = MergeTree \
+{% if isAccount %}
+        PARTITION BY partition_slot \
+        ORDER BY (program_id, family_name, account_id, slot)"
+{% else %}
+        PARTITION BY toYear(partition_time) \
+        ORDER BY (program_id, family_name, instruction_id, slot)"
+{% endif %}
+        )
+    }
+}
+
+impl ClickHouseRow for {{ entityName | pascalCase }}{% if isAccount %}Account{% else %}Instruction{% endif %}ClickHouseRow {
+    fn table_name(&self) -> &'static str {
+        Self::table()
+    }
+
+    fn partition_key(&self) -> String {
+{% if isAccount %}
+        self.partition_slot.to_string()
+{% else %}
+        self.partition_time[..4].to_string()
+{% endif %}
+    }
+}
+
+fn format_datetime(value: DateTime<Utc>) -> String {
+    value.format("%Y-%m-%d %H:%M:%S%.3f").to_string()
+}
+{% endblock %}

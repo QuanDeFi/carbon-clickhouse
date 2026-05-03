@@ -7,5 +7,7 @@ pub mod writer;
 
 pub use admin::{ClickHouseAdmin, ClickHouseSchema};
 pub use config::ClickHouseConfig;
-pub use processors::{register_clickhouse_metrics, ClickHouseInstructionProcessor};
+pub use processors::{
+    register_clickhouse_metrics, ClickHouseAccountProcessor, ClickHouseInstructionProcessor,
+};
 pub use writer::{ClickHouseBatchWriter, ClickHouseBufferOutcome};

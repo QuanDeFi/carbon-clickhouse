@@ -8,9 +8,15 @@ use crate::{
 pub struct ClickHouseBatchWriter<R: ClickHouseRow> {
     config: ClickHouseConfig,
     client: reqwest::Client,
-    buffers: HashMap<String, Vec<R>>,
+    buffers: HashMap<ClickHouseBufferKey, Vec<R>>,
     buffered_rows: usize,
     last_flush: Instant,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct ClickHouseBufferKey {
+    table: &'static str,
+    partition: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,8 +47,11 @@ impl<R: ClickHouseRow> ClickHouseBatchWriter<R> {
     }
 
     pub async fn buffer_row(&mut self, row: R) -> CarbonResult<ClickHouseBufferOutcome> {
-        let partition_key = row.partition_key();
-        self.buffers.entry(partition_key).or_default().push(row);
+        let key = ClickHouseBufferKey {
+            table: row.table_name(),
+            partition: row.partition_key(),
+        };
+        self.buffers.entry(key).or_default().push(row);
         self.buffered_rows += 1;
 
         if self.should_flush() {
@@ -64,14 +73,16 @@ impl<R: ClickHouseRow> ClickHouseBatchWriter<R> {
         }
 
         let mut flushed = 0usize;
-        let keys: Vec<String> = self.buffers.keys().cloned().collect();
+        let keys: Vec<ClickHouseBufferKey> = self.buffers.keys().cloned().collect();
         for key in keys {
-            let rows = self
-                .buffers
-                .remove(&key)
-                .ok_or_else(|| Error::Custom(format!("Missing buffer for partition {key}")))?;
+            let rows = self.buffers.remove(&key).ok_or_else(|| {
+                Error::Custom(format!(
+                    "Missing buffer for table {} partition {}",
+                    key.table, key.partition
+                ))
+            })?;
 
-            if let Err(error) = self.insert_batch(&rows).await {
+            if let Err(error) = self.insert_batch(key.table, &rows).await {
                 self.buffers.insert(key, rows);
                 return Err(error);
             }
@@ -92,7 +103,7 @@ impl<R: ClickHouseRow> ClickHouseBatchWriter<R> {
             || self.last_flush.elapsed() >= self.config.flush_interval
     }
 
-    async fn insert_batch(&self, rows: &[R]) -> CarbonResult<()> {
+    async fn insert_batch(&self, table: &str, rows: &[R]) -> CarbonResult<()> {
         let mut body = String::new();
         for row in rows {
             body.push_str(&row.to_json_line()?);
@@ -102,7 +113,7 @@ impl<R: ClickHouseRow> ClickHouseBatchWriter<R> {
         post_query_with_data(
             &self.client,
             &self.config,
-            &format!("INSERT INTO {} FORMAT JSONEachRow", self.config.table),
+            &format!("INSERT INTO {table} FORMAT JSONEachRow"),
             &body,
             &[("date_time_input_format", "best_effort")],
         )
@@ -119,6 +130,7 @@ mod tests {
     #[derive(Debug, Clone, serde::Serialize)]
     struct TestRow {
         id: u64,
+        table: &'static str,
         partition: String,
     }
 
@@ -139,6 +151,10 @@ mod tests {
     }
 
     impl ClickHouseRow for TestRow {
+        fn table_name(&self) -> &'static str {
+            self.table
+        }
+
         fn partition_key(&self) -> String {
             self.partition.clone()
         }
@@ -154,8 +170,8 @@ mod tests {
             "source".to_string(),
             "live".to_string(),
             "v1".to_string(),
-            2,
-            Duration::from_millis(10),
+            100,
+            Duration::from_secs(60),
         )
     }
 
@@ -171,5 +187,38 @@ mod tests {
         let outcome = writer.flush().await.unwrap();
         assert_eq!(outcome.rows, 0);
         assert_eq!(outcome.buffered_rows, 0);
+    }
+
+    #[tokio::test]
+    async fn buffers_are_partitioned_by_table_and_partition() {
+        let mut writer = ClickHouseBatchWriter::<TestRow>::new(config());
+
+        let first = writer
+            .buffer_row(TestRow {
+                id: 1,
+                table: "first_table",
+                partition: "2026".to_string(),
+            })
+            .await
+            .unwrap();
+        let second = writer
+            .buffer_row(TestRow {
+                id: 2,
+                table: "second_table",
+                partition: "2026".to_string(),
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(
+            first,
+            ClickHouseBufferOutcome::Buffered { buffered_rows: 1 }
+        );
+        assert_eq!(
+            second,
+            ClickHouseBufferOutcome::Buffered { buffered_rows: 2 }
+        );
+        assert_eq!(writer.buffered_rows(), 2);
+        assert_eq!(writer.buffers.len(), 2);
     }
 }

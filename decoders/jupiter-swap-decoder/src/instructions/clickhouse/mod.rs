@@ -33,9 +33,9 @@ pub type JupiterSwapClickHouseInstructionProcessor = ClickHouseInstructionProces
 pub struct JupiterSwapClickHouseInstructionsMigration;
 
 impl ClickHouseSchema for JupiterSwapClickHouseInstructionsMigration {
-    fn operations(config: &ClickHouseConfig) -> Vec<String> {
+    fn operations(_config: &ClickHouseConfig) -> Vec<String> {
         vec![JupiterSwapSwapEventLandingRow::create_table_sql(
-            &config.table,
+            JupiterSwapSwapEventLandingRow::DEFAULT_TABLE_NAME,
         )]
     }
 }
