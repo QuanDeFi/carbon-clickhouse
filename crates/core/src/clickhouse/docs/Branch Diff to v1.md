@@ -1,221 +1,255 @@
-## Branch diff upstream-v1-sync → clickhouse-upstream-v1
+## Branch diff: `upstream-v1-sync` to `clickhouse-upstream-v1`
 
+This document summarizes the current ClickHouse branch relative to
+`upstream-v1-sync`.
 
 ## Overall shape
 
-* Branch relation:
+Branch relation before this documentation refresh:
 
-  * `clickhouse-upstream-v1` is **ahead by 4 commits**
-  * `behind by 0`
-  * merge base is exactly `upstream-v1-sync`
-* File counts:
+- `clickhouse-upstream-v1` is ahead of `upstream-v1-sync` by 12 commits.
+- `clickhouse-upstream-v1` is behind `upstream-v1-sync` by 0 commits.
+- `upstream-v1-sync` is an ancestor of `clickhouse-upstream-v1`.
 
-  * Added files: **13**
-  * Modified files: **20**
-  * Removed files: **0**
+File counts from `git diff --name-status upstream-v1-sync...HEAD`:
+
+- Added files: 26
+- Modified files: 23
+- Removed files: 0
+- Total changed files: 49
+
+Patch size from `git diff --stat upstream-v1-sync...HEAD` before this refresh:
+
+- 6,639 insertions
+- 16 deletions
 
 Core meaning of the branch:
 
-* it adds a **new ClickHouse backend path** in `carbon-core`
-* it adds **processor finalization + pipeline shutdown flushing**
-* it adds a **Jupiter swap CPI-event → ClickHouse landing-table** implementation
-* it adds a **working example**
-* it adds **renderer/codegen support** so this is not just a one-off hand patch
+- Adds a ClickHouse landing-table backend in `carbon-core`.
+- Adds processor finalization so buffered sinks can drain on shutdown.
+- Adds generated typed landing rows for instruction, CPI-event, and account families.
+- Adds Jupiter swap instruction and CPI-event ClickHouse canary coverage.
+- Adds Token Program account ClickHouse canary coverage.
+- Adds a bounded Jupiter swap ClickHouse example for real RPC-to-ClickHouse testing.
+- Hardens the writer for production-style multi-writer ingestion with per-buffer flushing and optional async-wait inserts.
+- Documents the current landing-table architecture and near-term production boundaries.
 
 ## Touched path tree
 
 ```text
-[M] Cargo.lock                        — lockfile / pinned dependency state
-[M] Cargo.toml                        — workspace manifest
+[M] .gitignore                         - local ClickHouse/env cleanup
+[M] Cargo.lock                         - lockfile dependency state
+[M] Cargo.toml                         - workspace dependency additions
 
 crates/
 ├── core/
-│   ├── [M] Cargo.toml                — core crate features + optional deps
+│   ├── [M] Cargo.toml                 - clickhouse feature and optional deps
 │   └── src/
-│       ├── [M] account.rs            — account pipe wrapper
-│       ├── [M] account_deletion.rs   — account-deletion pipe wrapper
-│       ├── [M] block_details.rs      — block-level pipe trait + wrapper
-│       ├── [M] instruction.rs        — instruction metadata, log decoding, nested CPI tree, instruction pipe trait
-│       ├── [M] lib.rs                — carbon-core public module exports
-│       ├── [M] pipeline.rs           — pipeline runtime + shutdown orchestration
-│       ├── [M] processor.rs          — generic processor trait
-│       ├── [M] transaction.rs        — transaction metadata + transaction pipe wrapper
+│       ├── [M] account.rs             - account pipe finalization
+│       ├── [M] account_deletion.rs    - account-deletion pipe finalization
+│       ├── [M] block_details.rs       - block pipe finalization
+│       ├── [M] instruction.rs         - instruction pipe finalization
+│       ├── [M] lib.rs                 - clickhouse module export
+│       ├── [M] pipeline.rs            - shutdown finalization calls
+│       ├── [M] processor.rs           - Processor::finalize()
+│       ├── [M] transaction.rs         - transaction pipe finalization
 │       └── clickhouse/
-│           ├── [A] admin.rs          — schema/admin query executor
-│           ├── [A] config.rs         — ClickHouse sink configuration
-│           ├── [A] http.rs           — low-level HTTP transport helpers
-│           ├── [A] mod.rs            — ClickHouse module barrel + public re-exports
-│           ├── [A] processors.rs     — instruction-to-ClickHouse sink processor
-│           ├── [A] writer.rs         — buffered batch writer for ClickHouse inserts
+│           ├── [A] admin.rs           - schema/admin query executor
+│           ├── [A] config.rs          - sink config and insert settings
+│           ├── [A] http.rs            - HTTP transport helpers
+│           ├── [A] metrics.rs         - shared instruction/account metrics
+│           ├── [A] mod.rs             - module barrel and public exports
+│           ├── [A] processors.rs      - instruction/account processors
+│           ├── [A] writer.rs          - per-buffer batch writer and worker
 │           ├── docs/
-│           │   └── [A] architecture.md — ClickHouse sink design document
+│           │   ├── [A] architecture.md
+│           │   ├── [A] Branch Diff to v1.md
+│           │   └── [A] Carbon Sink Implementation.md
 │           └── rows/
-│               └── [A] mod.rs        — row/table traits + deterministic event IDs
-└── proc-macros/
-    └── src/
-        └── [M] lib.rs                — decoder-collection proc macros
+│               └── [A] mod.rs         - row/table traits and stable IDs
 
 decoders/
-└── jupiter-swap-decoder/
-    ├── [M] Cargo.toml                — decoder crate manifest
-    └── src/
-        └── instructions/
-            ├── [M] cpi_event.rs      — CPI-event type + account arrangement
-            ├── [M] mod.rs            — Jupiter instruction entrypoint/decoder
-            └── clickhouse/
-                ├── [A] cpi_event_row.rs — typed ClickHouse landing row
-                └── [A] mod.rs        — Jupiter ClickHouse glue + bootstrap
+├── jupiter-swap-decoder/
+│   ├── [M] Cargo.toml
+│   └── src/instructions/
+│       ├── [M] cpi_event.rs
+│       ├── [M] mod.rs
+│       └── clickhouse/
+│           ├── [A] cpi_event_row.rs
+│           ├── [A] instruction_rows.rs
+│           └── [A] mod.rs
+└── token-program-decoder/
+    ├── [M] Cargo.toml
+    └── src/accounts/
+        ├── [M] mod.rs
+        └── clickhouse/
+            ├── [A] mint_row.rs
+            ├── [A] mod.rs
+            ├── [A] multisig_row.rs
+            └── [A] token_row.rs
 
 examples/
 └── jupiter-swap-clickhouse/
-    ├── [A] Cargo.toml                — example crate manifest
+    ├── [A] Cargo.toml
     └── src/
-        └── [A] main.rs               — end-to-end ClickHouse example
+        └── [A] main.rs
 
 packages/
 └── renderer/
+    ├── [M] package.json
     ├── src/
-    │   ├── [M] cargoTomlGenerator.ts — gen Cargo.toml feature/dependency builder
-    │   └── [M] getRenderMapVisitor.ts — main decoder/codegen render orchestrator
-    └── templates/
-        ├── [A] eventInstructionClickHouseRowPage.njk — gen ClickHouse CPI-event row templ
-        ├── [M] eventInstructionPage.njk — gen CPI-event decoder templ
-        ├── [A] instructionsClickHouseMod.njk — gen ClickHouse instruction glue templ
-        └── [M] instructionsMod.njk — gen instruction module/decoder templ
+    │   ├── [M] cargoTomlGenerator.ts
+    │   ├── [A] clickhouseRowMapper.ts
+    │   └── [M] getRenderMapVisitor.ts
+    ├── templates/
+    │   ├── [A] accountsClickHouseMod.njk
+    │   ├── [M] accountsMod.njk
+    │   ├── [A] clickhouseRowPage.njk
+    │   ├── [A] eventInstructionClickHouseRowPage.njk
+    │   ├── [M] eventInstructionPage.njk
+    │   ├── [A] instructionsClickHouseMod.njk
+    │   └── [M] instructionsMod.njk
+    └── test/
+        └── [A] clickhouse-renderer.test.cjs
 ```
 
 Legend:
 
-[A] added
-[M] modified
+- `[A]` added
+- `[M]` modified
 
 ## Consolidated file-by-file summary
 
-### Workspace and top-level files
+### Workspace and manifests
 
-| File                     | Patch size | What it is                                 | Diff vs `upstream-v1-sync`                                                                                                                                                                      |
-| ------------------------ | ---------: | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Cargo.lock`             | `+24 / -0` | Generated Rust lockfile for the workspace. | Generated dependency update only. It pins the dependency graph implied by the new ClickHouse-related manifest changes. No meaningful hand-written logic.                                        |
-| `Cargo.toml`             |  `+1 / -0` | Top-level workspace manifest.              | Small diff: adds `reqwest` at workspace level so the new core ClickHouse backend can use HTTP transport.                                                                                        |
-| `crates/core/Cargo.toml` |  `+4 / -0` | Manifest for `carbon-core`.                | Adds a new `clickhouse` feature and wires it to optional deps `reqwest`, `sha2`, and `url`, making ClickHouse a first-class optional backend alongside existing ones like Postgres and GraphQL. |
+| File | Patch size | Summary |
+| --- | ---: | --- |
+| `.gitignore` | `+3 / -1` | Ignores local ClickHouse/runtime artifacts used during local testing. |
+| `Cargo.lock` | `+25 / -0` | Pins the dependency graph implied by the ClickHouse feature and HTTP transport. |
+| `Cargo.toml` | `+1 / -0` | Adds workspace-level `reqwest` for ClickHouse HTTP transport. |
+| `crates/core/Cargo.toml` | `+4 / -0` | Adds the `clickhouse` feature and optional dependencies. |
+| `decoders/jupiter-swap-decoder/Cargo.toml` | `+11 / -0` | Adds generated ClickHouse feature/dependencies for Jupiter. |
+| `decoders/token-program-decoder/Cargo.toml` | `+7 / -0` | Adds generated ClickHouse feature/dependencies for Token Program accounts. |
+| `examples/jupiter-swap-clickhouse/Cargo.toml` | `+18 / -0` | Adds the example crate manifest. |
+| `packages/renderer/package.json` | `+2 / -1` | Adds/updates renderer test wiring for ClickHouse generation tests. |
 
-### Core pipe wrappers and exports
+### Core lifecycle changes
 
-| File                                  | Patch size | What it is                                                                                                                                                                    | Diff vs `upstream-v1-sync`                                                                                                                                                                                                   |
-| ------------------------------------- | ---------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `crates/core/src/account.rs`          |  `+5 / -0` | Account decoding/processing abstractions: decoder, pipe wrapper, pipe trait, processor input wrapper.                                                                         | Lifecycle-only change: adds `finalize()` to `AccountPipes` and forwards it to the underlying processor. No account decoding semantics changed.                                                                               |
-| `crates/core/src/account_deletion.rs` |  `+5 / -0` | Account-deletion processing wrapper and trait.                                                                                                                                | Same pattern: adds `finalize()` to `AccountDeletionPipes` and forwards it. No deletion logic changed.                                                                                                                        |
-| `crates/core/src/block_details.rs`    |  `+5 / -0` | Block-details pipe wrapper and trait for block-level processors.                                                                                                              | Exact diff is just lifecycle propagation: trait gains `finalize()`, impl calls `self.processor.finalize().await`. `run()` is unchanged.                                                                                      |
-| `crates/core/src/instruction.rs`      |  `+5 / -0` | Main instruction-processing module: instruction metadata, log event extraction, precompile handling, nested CPI reconstruction, decoder traits, processor input types, tests. | Only the instruction pipe lifecycle changed: `InstructionPipes<'a>` gains `finalize()`, and `InstructionPipe<T, P>` forwards it. Log parsing, nested instruction logic, event extraction, and tests are otherwise unchanged. |
-| `crates/core/src/lib.rs`              |  `+4 / -2` | Public export surface of `carbon-core`.                                                                                                                                       | Adds `#[cfg(feature = "clickhouse")] pub mod clickhouse;`, exposing the new backend module. Existing `postgres`/`graphql` exports remain. This is a tiny public-surface change.                                              |
+| File | Patch size | Summary |
+| --- | ---: | --- |
+| `crates/core/src/processor.rs` | `+4 / -0` | Adds default `Processor::finalize()`, preserving compatibility for existing processors. |
+| `crates/core/src/pipeline.rs` | `+27 / -0` | Calls pipe finalization on shutdown paths before exporter shutdown. |
+| `crates/core/src/account.rs` | `+6 / -1` | Forwards finalization to account processors. |
+| `crates/core/src/account_deletion.rs` | `+6 / -1` | Forwards finalization to account-deletion processors. |
+| `crates/core/src/block_details.rs` | `+6 / -1` | Forwards finalization to block-details processors. |
+| `crates/core/src/instruction.rs` | `+5 / -0` | Forwards finalization to instruction processors. |
+| `crates/core/src/transaction.rs` | `+6 / -1` | Forwards finalization to transaction processors. |
+| `crates/core/src/lib.rs` | `+2 / -0` | Exposes `carbon_core::clickhouse` behind the `clickhouse` feature. |
 
-### Core runtime and lifecycle
+The lifecycle changes are intentionally small. They exist because ClickHouse is buffered: once a processor accepts a row, the pipeline needs a finalization hook to drain in-memory buffers before process exit.
 
-| File                             | Patch size | What it is                                                                                                                                         | Diff vs `upstream-v1-sync`                                                                                                                                                                                                                                                                                                         |
-| -------------------------------- | ---------: | -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `crates/core/src/pipeline.rs`    | `+28 / -1` | Main Carbon runtime: owns datasources and pipes, runs the event loop, applies filters, builds nested instructions, handles shutdown and exporters. | Biggest core runtime change. Adds `finalize_pipes(&mut self)` and calls it on all shutdown paths: datasource cancellation, Ctrl-C with `Immediate`, and receiver close. In upstream, shutdown only exported metrics and shut down exporters. This is the key change that makes buffered sinks flush deterministically before exit. |
-| `crates/core/src/processor.rs`   |  `+4 / -0` | Base trait every Carbon processor implements.                                                                                                      | Adds default `finalize()` returning `Ok(())`. Existing processors stay compatible; buffered processors can override it. This is the root lifecycle hook that enables the shutdown change.                                                                                                                                          |
-| `crates/core/src/transaction.rs` |  `+5 / -0` | Transaction metadata, conversion from datasource updates, flat instruction parsing, transaction pipe wrapper/trait.                                | Same lifecycle pattern as other pipe wrappers: trait gains `finalize()`, impl forwards it. Transaction parsing and metadata logic are otherwise unchanged.                                                                                                                                                                         |
+### Core ClickHouse runtime
 
-### New core ClickHouse backend
+| File | Patch size | Summary |
+| --- | ---: | --- |
+| `crates/core/src/clickhouse/admin.rs` | `+50 / -0` | Adds `ClickHouseSchema` and `ClickHouseAdmin` for explicit schema/bootstrap execution. |
+| `crates/core/src/clickhouse/config.rs` | `+245 / -0` | Adds endpoint/database/auth/batching config, row context, URL parsing, and typed insert settings. |
+| `crates/core/src/clickhouse/http.rs` | `+78 / -0` | Adds HTTP query and insert helpers with shared ClickHouse query settings. |
+| `crates/core/src/clickhouse/metrics.rs` | `+163 / -0` | Adds shared metrics for instruction and account ClickHouse families. |
+| `crates/core/src/clickhouse/mod.rs` | `+13 / -0` | Re-exports the ClickHouse runtime API. |
+| `crates/core/src/clickhouse/processors.rs` | `+400 / -0` | Adds `ClickHouseInstructionProcessor` and `ClickHouseAccountProcessor`, including shutdown drain behavior. |
+| `crates/core/src/clickhouse/rows/mod.rs` | `+109 / -0` | Adds row/table traits, row context, multi-row contract, and deterministic instruction/event/account IDs. |
+| `crates/core/src/clickhouse/writer.rs` | `+841 / -0` | Adds the buffered writer, keyed per `(table, partition)`, with per-buffer flushes, background stale-buffer flushing, all-buffer drain, shutdown, reinsertion on failed batches, and metric reporting. |
 
-| File                                              |  Patch size | What it is                                                                                                                           | Diff vs `upstream-v1-sync`                                                                                                                                                                                                                                                                           |
-| ------------------------------------------------- | ----------: | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `crates/core/src/clickhouse/admin.rs`             |  `+47 / -0` | Schema/bootstrap executor. Defines `ClickHouseSchema` and `ClickHouseAdmin`, which can execute one query, many queries, or a schema. | New file. Introduces a dedicated ClickHouse admin/bootstrap abstraction. Uses `post_query(...)` and always passes `date_time_input_format=best_effort`.                                                                                                                                              |
-| `crates/core/src/clickhouse/config.rs`            | `+102 / -0` | Central sink config object. Stores endpoint, DB, auth, table, source/mode/version metadata, and batching controls.                   | New file. Adds `from_database_url(...)` for parsing a DB URL into config and `row_context()` for exposing just the row-generation metadata.                                                                                                                                                          |
-| `crates/core/src/clickhouse/http.rs`              |  `+78 / -0` | Low-level HTTP transport helpers.                                                                                                    | New file. Adds `apply_auth(...)`, `post_query(...)`, and `post_query_with_data(...)`. Splits “execute SQL” from “execute SQL + data payload” and centralizes error handling.                                                                                                                         |
-| `crates/core/src/clickhouse/mod.rs`               |  `+11 / -0` | ClickHouse module barrel and public re-exports.                                                                                      | New file. Exposes `admin`, `config`, `http`, `processors`, `rows`, `writer`, plus the main public API.                                                                                                                                                                                               |
-| `crates/core/src/clickhouse/processors.rs`        | `+175 / -0` | Core bridge from Carbon instruction/account processing into ClickHouse writes.                                                       | New file. Defines ClickHouse metrics, registers them once, implements `ClickHouseInstructionProcessor<T, W, R>` and `ClickHouseAccountProcessor<T, W, R>`, converts decoded inputs into row wrappers, buffers rows, records flush metrics, and overrides `finalize()` to flush on shutdown. This is one of the key new behavioral files. |
-| `crates/core/src/clickhouse/writer.rs`            | `+175 / -0` | Buffered batch writer for ClickHouse inserts.                                                                                        | New file. Implements `ClickHouseBatchWriter<R>` with in-memory buffers grouped by table and partition key, size/time-based flushing, JSONEachRow serialization, and batch reinsertion on failed flush. This is the actual batching engine behind the sink.                                                     |
-| `crates/core/src/clickhouse/docs/architecture.md` | `+480 / -0` | Design document for the ClickHouse sink.                                                                                             | New file. Explains the architecture and intended scope: processor-driven sink, client-side batching, landing-only tables, deterministic event IDs, decoder-owned schema, and finalize-on-shutdown as the main core change.                                                                           |
-| `crates/core/src/clickhouse/rows/mod.rs`          |  `+63 / -0` | Row/table contracts and deterministic event ID support.                                                                              | New file. Defines `ClickHouseTable`, `ClickHouseRow`, `ClickHouseRowContext`, `ClickHouseRows<R>`, and `deterministic_event_id(...)` using SHA-256 over program/signature/path/type/seq.                                                                                                             |
+Important writer behavior now implemented:
 
-### Proc macros
+- Rows are buffered by `(table, partition_key())`.
+- A hot buffer reaching `max_rows` flushes only that buffer.
+- The background worker flushes only buffers whose own `last_flush` exceeds `flush_interval`.
+- `flush()` drains all buffers.
+- `shutdown()` drains all buffers and stops the background worker.
+- Failed flushes reinsert rows into the same buffer and surface errors on later operations or shutdown.
+- Sync inserts are the default.
+- Optional async mode always emits `async_insert=1` and `wait_for_async_insert=1`; no public fire-and-forget mode is exposed.
 
-| File                            | Patch size | What it is                                                                  | Diff vs `upstream-v1-sync`                                                                                                                                                                                                                                                                                                        |
-| ------------------------------- | ---------: | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `crates/proc-macros/src/lib.rs` |  `+1 / -2` | Proc macros for instruction decoder collections and instruction-type enums. | Tiny modified file. Git shows a real diff, so it is **not literally identical**. But from the fetched content, there is **no obvious semantic change**: same 3-part/4-part syntax support, same dispatch generation, same derive macro. Best wording is: **tiny textual diff, no clear behavioral delta from inspected content**. |
+### Decoder canaries
 
-### Jupiter decoder and ClickHouse-specific decoder wiring
+| File | Patch size | Summary |
+| --- | ---: | --- |
+| `decoders/jupiter-swap-decoder/src/instructions/cpi_event.rs` | `+19 / -0` | Adds CPI-event account construction needed by generated event ClickHouse mapping. |
+| `decoders/jupiter-swap-decoder/src/instructions/mod.rs` | `+15 / -1` | Exposes the ClickHouse module and decodes CPI events through the explicit pre-check path. |
+| `decoders/jupiter-swap-decoder/src/instructions/clickhouse/cpi_event_row.rs` | `+521 / -0` | Adds typed Jupiter CPI-event landing rows and DDL for all generated event variants. |
+| `decoders/jupiter-swap-decoder/src/instructions/clickhouse/instruction_rows.rs` | `+570 / -0` | Adds typed Jupiter instruction landing rows and DDL for all generated instruction variants. |
+| `decoders/jupiter-swap-decoder/src/instructions/clickhouse/mod.rs` | `+536 / -0` | Adds Jupiter ClickHouse row enum, migrations, setup helpers, and dispatch across instruction and event row families. |
+| `decoders/token-program-decoder/src/accounts/mod.rs` | `+3 / -0` | Exposes the generated account ClickHouse module behind the feature flag. |
+| `decoders/token-program-decoder/src/accounts/clickhouse/mint_row.rs` | `+156 / -0` | Adds typed Token Program mint account landing row and DDL. |
+| `decoders/token-program-decoder/src/accounts/clickhouse/multisig_row.rs` | `+156 / -0` | Adds typed Token Program multisig account landing row and DDL. |
+| `decoders/token-program-decoder/src/accounts/clickhouse/token_row.rs` | `+168 / -0` | Adds typed Token Program token account landing row and DDL. |
+| `decoders/token-program-decoder/src/accounts/clickhouse/mod.rs` | `+172 / -0` | Adds Token Program account row enum, migrations, setup helpers, and account processor wiring. |
 
-| File                                                                         |  Patch size | What it is                                                                                                                        | Diff vs `upstream-v1-sync`                                                                                                                                                                                                                                                                                                                                        |
-| ---------------------------------------------------------------------------- | ----------: | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `decoders/jupiter-swap-decoder/Cargo.toml`                                   |  `+11 / -0` | Decoder crate manifest.                                                                                                           | Adds decoder-side ClickHouse feature/dependencies.                                                                                                                                                                                                                                                                                                                |
-| `decoders/jupiter-swap-decoder/src/instructions/cpi_event.rs`                |  `+19 / -0` | Autogenerated Jupiter CPI-event decoder. Defines `CpiEvent`, `CpiEventInstructionAccounts`, `decode(...)`, and `ArrangeAccounts`. | Adds `CpiEventInstructionAccounts::from_instruction_accounts(program_id, accounts)`, which allows direct construction outside the `ArrangeAccounts` path. The actual event decode logic is otherwise the same.                                                                                                                                                    |
-| `decoders/jupiter-swap-decoder/src/instructions/mod.rs`                      |  `+14 / -1` | Main Jupiter instruction entrypoint/decoder. Defines instruction enum and `InstructionDecoder` impl.                              | Two real changes. First, adds `#[cfg(feature = "clickhouse")] pub mod clickhouse;`. Second, moves CPI-event handling to an explicit pre-check: it calls `CpiEvent::decode(...)` before `try_decode_instructions!`, and builds `JupiterSwapInstruction::CpiEvent` via `from_instruction_accounts(...)`. In upstream, `CpiEvent` was decoded through the macro arm. |
-| `decoders/jupiter-swap-decoder/src/instructions/clickhouse/cpi_event_row.rs` | `+280 / -0` | Jupiter-specific typed ClickHouse CPI-event landing rows.                                                                         | New file. Defines typed Jupiter event landing rows, including the compatibility `JupiterSwapSwapEventLandingRow`, maps `InstructionMetadata + event + ClickHouseRowContext` into rows, computes deterministic `event_id`, chooses `partition_time`, defines MergeTree DDL, and includes stability tests.                                                                                                              |
-| `decoders/jupiter-swap-decoder/src/instructions/clickhouse/instruction_rows.rs` | `+0 / -0` | Jupiter-specific typed ClickHouse instruction landing rows.                                                                       | Added after the initial diff document. Defines one typed landing row per Jupiter swap instruction variant with common instruction metadata, deterministic `instruction_id`, typed payload columns, table DDL, and tests. |
-| `decoders/jupiter-swap-decoder/src/instructions/clickhouse/mod.rs`           | `+128 / -0` | Jupiter-specific ClickHouse glue and bootstrap layer.                                                                             | New file. Exports the row types, defines defaults, defines migration/bootstrap helpers, wraps decoded instruction + metadata + accounts, implements `ClickHouseRows<JupiterSwapClickHouseInstructionRow>`, dispatches all generated Jupiter instruction and CPI-event row families, and exposes setup helpers. |
-| `decoders/token-program-decoder/src/accounts/clickhouse/*`                  | `+0 / -0` | Token Program ClickHouse account canary.                                                                                          | Added after the initial diff document. Defines typed account landing rows for mint, token, and multisig accounts plus account migration/bootstrap and `ClickHouseAccountProcessor` wiring. |
+The canary coverage is now broader than the initial handwritten Jupiter CPI-event path:
+
+- Jupiter instruction rows cover all generated Jupiter instruction variants.
+- Jupiter CPI-event rows cover all generated Jupiter event variants.
+- Token Program account rows cover mint, token, and multisig account variants.
 
 ### Example
 
-| File                                           | Patch size | What it is              | Diff vs `upstream-v1-sync`                                                                                                                                                                                                                                                                                                              |
-| ---------------------------------------------- | ---------: | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `examples/jupiter-swap-clickhouse/Cargo.toml`  | `+18 / -0` | Example crate manifest. | New example manifest.                                                                                                                                                                                                                                                                                                                   |
-| `examples/jupiter-swap-clickhouse/src/main.rs` | `+97 / -0` | End-to-end example.     | New file. Loads env/config, requires `DATABASE_URL`, sets up ClickHouse, creates an `RpcBlockCrawler`, attaches `JupiterSwapDecoder` with the ClickHouse processor, adds log metrics, and runs the pipeline with `ShutdownStrategy::Immediate`. It proves the bounded backfill path from RPC blocks to ClickHouse landing-table writes. |
+| File | Patch size | Summary |
+| --- | ---: | --- |
+| `examples/jupiter-swap-clickhouse/src/main.rs` | `+97 / -0` | Adds an end-to-end bounded backfill pipeline from RPC blocks into Jupiter ClickHouse landing tables. |
 
-### Renderer / generator
+The example validates the real path:
 
-| File                                                                |  Patch size | What it is                                                           | Diff vs `upstream-v1-sync`                                                                                                                                                                                                                                                               |
-| ------------------------------------------------------------------- | ----------: | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/renderer/src/cargoTomlGenerator.ts`                       |  `+19 / -2` | Generates decoder `Cargo.toml` files.                                | Adds `withClickHouse?: boolean`, emits a `clickhouse` feature, includes `carbon-core/clickhouse`, `serde`, and `chrono`, and adds `chrono` dependency when ClickHouse generation is enabled. This is the manifest-generation part of ClickHouse support.                                 |
-| `packages/renderer/src/clickhouseRowMapper.ts`                      |  `+0 / -0`  | ClickHouse typed field mapper.                                       | Added after the initial diff document. Maps Codama field types into Rust row fields, ClickHouse column types, expressions, and imports for generated typed landing rows. |
-| `packages/renderer/src/getRenderMapVisitor.ts`                      |  `+17 / -0` | Main generator orchestrator for decoder code.                        | Adds `withClickHouse?: boolean` and conditional generation of account row modules, instruction row modules, CPI-event row modules, `src/accounts/clickhouse/mod.rs`, and `src/instructions/clickhouse/mod.rs`. Also passes `withClickHouse` into Cargo generation. This turns ClickHouse into a real generator target, not a one-off hand patch. |
-| `packages/renderer/templates/clickhouseRowPage.njk`                 |  `+0 / -0`  | Template for generating typed account/instruction ClickHouse rows.   | Added after the initial diff document. Generates typed landing rows with common metadata, typed payload columns, deterministic IDs, MergeTree DDL, and ClickHouse row/table trait impls. |
-| `packages/renderer/templates/accountsClickHouseMod.njk`             |  `+0 / -0`  | Template for generated account ClickHouse module glue.               | Added after the initial diff document. Generates account row enum dispatch, migrations, setup helpers, and `ClickHouseAccountProcessor` wiring. |
-| `packages/renderer/templates/eventInstructionClickHouseRowPage.njk` | `+142 / -0` | Template for generating typed per-event ClickHouse CPI-event landing rows.  | New file. Generates event-specific rows with common chain/sink metadata, deterministic identity, typed event payload columns, MergeTree DDL, and year-based partitioning. |
-| `packages/renderer/templates/eventInstructionPage.njk`              |  `+17 / -1` | Template for generating CPI-event decoder modules.                   | Modified to add `CpiEventInstructionAccounts::from_instruction_accounts(program_id, accounts)`. The rest of the CPI-event decoding structure remains the same.                                                                                                                           |
-| `packages/renderer/templates/instructionsClickHouseMod.njk`         |  `+54 / -0` | Template for generating decoder-side ClickHouse instruction glue.    | New file. Generates wrapper type, migration type, and `ClickHouseRows<CpiEventRow>` impl for decoder instruction modules.                                                                                                                                                                |
-| `packages/renderer/templates/instructionsMod.njk`                   |  `+20 / -4` | Template for generating `src/instructions/mod.rs` in decoder crates. | Two important changes: it conditionally emits `#[cfg(feature = "clickhouse")] pub mod clickhouse;`, and it changes CPI-event decoding to an explicit pre-check before the generic instruction macro. In upstream, CPI events were handled inside the macro dispatch.                     |
+1. Load `RPC_URL` and `DATABASE_URL`.
+2. Run generated Jupiter ClickHouse schema bootstrap.
+3. Crawl a bounded slot range with `RpcBlockCrawler`.
+4. Decode Jupiter instructions and CPI events.
+5. Write generated typed rows to ClickHouse through `ClickHouseInstructionProcessor`.
+6. Drain buffered rows during pipeline shutdown.
 
-## What the direct compare clarifies
+It does not validate account rows or async insert mode by itself. Token Program account coverage is validated separately by compile/tests and needs an account-focused pipeline for a real-world data test.
 
-| Area                | Updated interpretation                                                                                                                                                                                                             |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Core pipe wrappers  | These are confirmed to be very small lifecycle propagations: mostly **`+5` lines each** in `account.rs`, `account_deletion.rs`, `block_details.rs`, `instruction.rs`, and `transaction.rs`.                                        |
-| `pipeline.rs`       | Still the most important core runtime modification, and the compare confirms it is compact but real: **`+28 / -1`**.                                                                                                               |
-| `processor.rs`      | The lifecycle hook itself is very small and surgical: **`+4 / -0`**.                                                                                                                                                               |
-| `lib.rs`            | The ClickHouse module exposure is tiny: **`+4 / -2`**.                                                                                                                                                                             |
-| ClickHouse backend  | The real implementation mass is concentrated in the new backend files, especially `processors.rs` and `writer.rs` at **175 lines each**, plus `config.rs` at **102 lines**.                                                        |
-| Jupiter integration | The decoder-specific implementation is substantial: `cpi_event_row.rs` is **280 lines** and `clickhouse/mod.rs` is **128 lines**.                                                                                                  |
-| Renderer support    | The generator changes are conceptually important but patch-light in existing files: `cargoTomlGenerator.ts` is **`+19 / -2`**, `getRenderMapVisitor.ts` is **`+17 / -0`**. Most new behavior is pushed into the **new templates**. |
-| Proc macros         | This should be described as a **tiny modified file with no clear semantic change**, not “identical.”                                                                                                                               |
+### Renderer and generator
 
-## Interpretation
+| File | Patch size | Summary |
+| --- | ---: | --- |
+| `packages/renderer/src/cargoTomlGenerator.ts` | `+21 / -2` | Adds `withClickHouse` manifest feature generation and required ClickHouse dependencies. |
+| `packages/renderer/src/clickhouseRowMapper.ts` | `+246 / -0` | Adds ClickHouse field mapping for Rust fields, ClickHouse column types, expressions, and imports. |
+| `packages/renderer/src/getRenderMapVisitor.ts` | `+72 / -1` | Adds conditional generation for account, instruction, and event ClickHouse modules. |
+| `packages/renderer/templates/accountsMod.njk` | `+7 / -1` | Emits the account ClickHouse module behind `#[cfg(feature = "clickhouse")]`. |
+| `packages/renderer/templates/accountsClickHouseMod.njk` | `+152 / -0` | Generates account row enum dispatch, migrations, setup helpers, and account processor wiring. |
+| `packages/renderer/templates/clickhouseRowPage.njk` | `+266 / -0` | Generates typed account/instruction landing rows with stable IDs and DDL. |
+| `packages/renderer/templates/eventInstructionClickHouseRowPage.njk` | `+163 / -0` | Generates typed per-event CPI landing rows with stable event IDs and DDL. |
+| `packages/renderer/templates/eventInstructionPage.njk` | `+18 / -1` | Adds generated CPI-event account construction support. |
+| `packages/renderer/templates/instructionsClickHouseMod.njk` | `+206 / -0` | Generates instruction/event row enum dispatch, migrations, setup helpers, and processor wiring. |
+| `packages/renderer/templates/instructionsMod.njk` | `+24 / -4` | Emits the instruction ClickHouse module and explicit CPI-event pre-check path. |
+| `packages/renderer/test/clickhouse-renderer.test.cjs` | `+132 / -0` | Adds renderer tests for ClickHouse modules, row generation, migrations, and dependencies. |
 
-This branch is best understood as:
+This turns ClickHouse from a handwritten Jupiter-only sink into a generator-backed target. The repository is still canary-limited; it has not regenerated every decoder with ClickHouse output.
 
-* **core lifecycle extension**
+## Current interpretation
 
-  * `Processor::finalize()`
-  * pipe wrappers propagate it
-  * `Pipeline` calls it during shutdown
+This branch is best understood as four layers:
 
-* **new core ClickHouse runtime**
+1. Core lifecycle support: `Processor::finalize()`, pipe forwarding, and pipeline shutdown calls.
+2. Core ClickHouse runtime: config, HTTP, schema execution, row contracts, metrics, processors, and buffered writer.
+3. Generated canary decoders: Jupiter instructions/events and Token Program accounts.
+4. Renderer support: feature-gated generator templates for future decoder-wide ClickHouse rollout.
 
-  * config
-  * HTTP transport
-  * schema executor
-  * row contracts
-  * buffered writer
-  * ClickHouse instruction and account processors
+The branch intentionally remains landing-table-only. It does not implement serving/canonicalization tables, coverage/range tracking, online row deduplication, durable retry queues, or replicated/distributed DDL generation.
 
-* **canary decoder implementations**
+## Validation performed during this implementation
 
-  * Jupiter swap typed instruction rows
-  * Jupiter swap typed CPI-event rows
-  * Token Program typed account rows
-  * schema/bootstrap helpers for the canary modules
+The following checks were run successfully after the latest implementation work:
 
-* **generator support**
+```bash
+cargo test -p carbon-core --features clickhouse clickhouse --lib
+cargo check -p carbon-jupiter-swap-decoder --features clickhouse
+cargo check -p carbon-token-program-decoder --features clickhouse
+cargo check -p jupiter-swap-clickhouse-carbon-example
+git diff --check
+cargo fmt --all
+```
 
-  * ClickHouse features in generated decoder manifests
-  * generated ClickHouse account, instruction, and event row modules
-  * generated CPI-event decode path adjusted to support that cleanly
-
-* **one proof example**
-
-  * bounded block crawler
-  * Jupiter decoder
-  * ClickHouse landing-table writes
+`cargo fmt --all` completed with pre-existing rustfmt warnings about unstable formatting options.
