@@ -1,5 +1,5 @@
 use crate::{
-    clickhouse::{http::post_query, ClickHouseConfig},
+    clickhouse::{config::ClickHouseQuerySetting, http::post_query, ClickHouseConfig},
     error::CarbonResult,
 };
 
@@ -25,7 +25,10 @@ impl ClickHouseAdmin {
             &self.client,
             &self.config,
             query,
-            &[("date_time_input_format", "best_effort")],
+            &[ClickHouseQuerySetting::new(
+                "date_time_input_format",
+                "best_effort",
+            )],
         )
         .await
     }

@@ -4,22 +4,23 @@
 
 This document explains the ClickHouse sink architecture currently implemented on the upstream-v1 port of Carbon, why it is designed this way, and where it intentionally differs from other Carbon sink integrations.
 
-The current implementation is a minimal but real end-to-end ClickHouse path. It is intentionally narrower than the long-term target architecture.
+The current implementation is a generator-backed typed landing-table foundation. It is still landing-only, but it now covers the first canary slice across instruction, CPI-event, and account row families.
 
 Current implemented scope:
-- instruction/CPI-event ingestion only
-- one concrete decoder path: Jupiter swap `CpiEvent::SwapEvent`
-- one landing table family: `jupiter_swap_swap_event_landing`
+- instruction, CPI-event, and account ingestion
+- Jupiter swap instruction and CPI-event ClickHouse canary coverage
+- Token Program account ClickHouse canary coverage
+- one typed landing table per generated row family
 - append-only writes into ClickHouse
 - client-side batching
+- multi-table row dispatch from decoder-owned wrappers
 - buffered-write drain on pipeline shutdown
 
 Deferred scope:
-- account-family ClickHouse support
-- broader per-decoder ClickHouse coverage
 - serving/canonicalization tables
 - coverage/range tracking
 - async inserts as a primary ingest model
+- production cluster DDL generation for replicated/distributed ClickHouse deployments
 
 ## Design Goals
 
@@ -66,6 +67,7 @@ This layer owns generic ClickHouse behavior only:
 - row/table traits
 - batched buffered writing
 - instruction processor integration
+- account processor integration
 - ClickHouse metrics registration
 
 This layer does not know Jupiter-specific schema details.
@@ -75,11 +77,14 @@ This layer does not know Jupiter-specific schema details.
 Implemented in:
 - `decoders/jupiter-swap-decoder/src/instructions/clickhouse/mod.rs`
 - `decoders/jupiter-swap-decoder/src/instructions/clickhouse/cpi_event_row.rs`
+- `decoders/jupiter-swap-decoder/src/instructions/clickhouse/instruction_rows.rs`
+- `decoders/token-program-decoder/src/accounts/clickhouse/mod.rs`
+- `decoders/token-program-decoder/src/accounts/clickhouse/*_row.rs`
 
 This layer owns program-specific sink logic:
 - the decoder wrapper type used by the generic processor
 - row mapping from decoded instruction/event data to ClickHouse rows
-- table DDL for the family
+- table DDL for each typed landing family
 - decoder-specific bootstrap helpers
 - default ClickHouse runtime settings for that decoder family
 
@@ -88,14 +93,17 @@ This matches how Postgres integration is structured in Carbon: generic backend b
 ### 3. Code Generation Support
 
 Implemented in:
+- `packages/renderer/src/clickhouseRowMapper.ts`
 - `packages/renderer/templates/instructionsClickHouseMod.njk`
+- `packages/renderer/templates/accountsClickHouseMod.njk`
+- `packages/renderer/templates/clickhouseRowPage.njk`
 - `packages/renderer/templates/eventInstructionClickHouseRowPage.njk`
 - `packages/renderer/src/getRenderMapVisitor.ts`
 - `packages/renderer/src/cargoTomlGenerator.ts`
 
 This layer exists so ClickHouse support can scale through Carbon's generator system rather than becoming a handwritten per-decoder integration forever.
 
-The current generator support is intentionally partial. It covers the minimal instruction/CPI-event pattern needed for this v1 path.
+The current generator support covers typed row generation for account, instruction, and CPI-event landing families. The first checked-in canaries are Jupiter swap for instruction/CPI-event rows and Token Program for account rows.
 
 ### 4. Thin Example Layer
 
@@ -143,7 +151,8 @@ That difference is not cosmetic. It exists because ClickHouse performs best with
 
 So the ClickHouse sink deliberately differs in these ways:
 - it buffers rows client-side
-- it flushes on size or time thresholds
+- it flushes each `(table, partition)` buffer independently on size or time thresholds
+- it runs a background timer so idle buffers do not wait for another row before flushing
 - it needs explicit shutdown draining
 - it treats landing-table inserts as append-only
 
@@ -154,9 +163,10 @@ The goal was not to copy Postgres mechanically. The goal was to preserve Carbon'
 The current implementation uses client-side batching in `ClickHouseBatchWriter`.
 
 Implemented behavior:
-- rows are grouped by partition key in memory
-- the writer flushes when `max_rows` is reached
-- the writer also flushes when `flush_interval` is reached
+- rows are grouped by table and partition key in memory
+- the writer flushes only the touched buffer when that buffer reaches `max_rows`
+- the writer has a background timer that flushes only stale buffers whose own `flush_interval` has elapsed
+- `finalize()`/shutdown drains all remaining buffers
 - flush sends `JSONEachRow` batches over HTTP
 
 Reasons this was chosen:
@@ -166,7 +176,7 @@ Reasons this was chosen:
 - it makes landing-table ingestion predictable and easy to reason about
 - it fits replay-heavy ingestion better than relying purely on server-side async buffering
 
-We intentionally did not make `async_insert` the primary runtime model.
+We intentionally did not make `async_insert` the default runtime model.
 
 Why not:
 - it shifts batching behavior to the server
@@ -174,7 +184,7 @@ Why not:
 - it is less attractive for a pipeline that already has a natural buffered boundary at the processor/writer layer
 - it does not remove the need to think about orderly shutdown and delivery guarantees
 
-Async inserts may still be a later optimization. They are not the primary model of this sink.
+Async inserts are available through explicit `ClickHouseConfig` insert settings for live production deployments with many Carbon writers. The sink only exposes async inserts with `wait_for_async_insert=1`; fire-and-forget `wait_for_async_insert=0` is intentionally unsupported.
 
 ## Why We Added Processor Finalization
 
@@ -233,9 +243,10 @@ We intentionally did not choose a more complex binary protocol or native format 
 
 Schema ownership for concrete tables is decoder-owned, not writer-owned.
 
-Implemented in the Jupiter path:
+Implemented in the current canary paths:
 - `JupiterSwapClickHouseInstructionsMigration`
-- `JupiterSwapSwapEventLandingRow::create_table_sql(...)`
+- `TokenProgramClickHouseAccountsMigration`
+- generated `*ClickHouseRow::create_table_sql(...)` row families
 
 Reasons:
 - the decoder crate knows the semantic shape of the family best
@@ -315,31 +326,31 @@ So the current sink proves:
 
 It does not yet try to solve the entire analytics warehouse problem.
 
-## Current Jupiter Landing Table Design
+## Current Typed Landing Table Design
 
-Implemented row:
-- `JupiterSwapSwapEventLandingRow`
+The current standard is one typed landing table per generated row family.
 
-Table:
-- `jupiter_swap_swap_event_landing`
+Canary coverage:
+- Jupiter swap instruction rows: one table per generated instruction variant
+- Jupiter swap CPI-event rows: one table per generated event variant
+- Token Program account rows: one table each for mint, token, and multisig accounts
 
 Stored fields include:
-- identity fields
+- deterministic row identity
 - chain metadata
 - sink metadata
-- typed payload columns for the swap event
+- typed payload columns generated from the decoder schema
 
-Important columns:
+Common instruction columns include:
 - `program_id`
 - `family_name`
-- `event_type`
-- `event_id`
+- `instruction_type`
+- `instruction_id`
 - `slot`
 - `signature`
 - `instruction_index`
 - `stack_height`
 - `absolute_path`
-- `event_seq`
 - `source_name`
 - `mode`
 - `decoder_version`
@@ -348,46 +359,82 @@ Important columns:
 - `partition_time`
 - `block_hash`
 - `tx_index`
-- typed Jupiter swap payload fields
+
+Common CPI-event columns include the instruction metadata above plus:
+- `event_type`
+- `event_id`
+- `event_seq`
+
+Common account columns include:
+- `program_id`
+- `family_name`
+- `account_type`
+- `account_id`
+- `slot`
+- `pubkey`
+- `transaction_signature`
+- `lamports`
+- `owner`
+- `executable`
+- `rent_epoch`
+- `source_name`
+- `mode`
+- `decoder_version`
+- `ingest_ts`
+- `partition_slot`
 
 Engine choice:
 - `MergeTree`
 
-Partitioning:
-- `PARTITION BY toYear(partition_time)`
-
-Ordering:
-- `ORDER BY (program_id, family_name, event_id, slot)`
+Current canary partitioning:
+- instruction and event rows: `PARTITION BY toYear(partition_time)`
+- account rows: `PARTITION BY partition_slot`
 
 Why this shape:
 - keeps landing writes append-only
 - stores enough metadata for later canonicalization work
-- partitions by a durable time key without requiring chain time to always exist
-- keeps the table family-specific and typed rather than forcing a generic universal event blob
+- partitions by durable keys without requiring chain time to always exist
+- keeps tables family-specific and typed rather than forcing a generic universal event blob
+
+Production partition and sort keys should be revisited per high-volume family once the production ClickHouse topology is finalized.
 
 ## Identity and Replay Model
 
-The current row identity uses deterministic event IDs.
+The current row identity uses deterministic IDs.
 
-Implemented helper:
+Implemented helpers:
+- `deterministic_instruction_id(...)`
 - `deterministic_event_id(...)`
+- `deterministic_account_id(...)`
 
-Inputs used by the Jupiter row:
+Instruction identity inputs:
+- program id
+- transaction signature
+- instruction absolute path
+- instruction type
+
+Event identity inputs:
 - program id
 - transaction signature
 - instruction absolute path
 - event type
 - event sequence
 
-For the current generated Jupiter CPI event path:
-- `event_seq = 0`
+Account identity inputs:
+- program id
+- account pubkey
+- slot
+- account type
+
+For generated CPI-event rows:
+- `event_seq = 0` when the decoded instruction event maps to one emitted row
 
 Why:
-- the current generated CPI event mapping emits one row for this event family per decoded instruction event
-- the event identifier must remain stable across reprocessing
-- a deterministic identity field is required if later serving or dedup logic is introduced
+- row identifiers must remain stable across reprocessing
+- stable landing identity is required for later serving or dedup logic
+- ClickHouse primary keys do not enforce uniqueness
 
-This is a landing-table contract, not yet a serving-table dedup policy.
+This is a landing-table contract, not a serving-table dedup policy.
 
 ## Metrics Design
 
@@ -435,23 +482,23 @@ Reasons for early generator support:
 - it makes the decoder-owned design reproducible for other programs
 - it preserves architectural consistency with Postgres and GraphQL integrations
 
-The current generation support is intentionally minimal. That is a scope choice, not an architectural rejection of broader generation.
+The current generation support is intentionally canary-limited. That is a rollout choice, not an architectural rejection of broader generation.
 
 ## Known Tradeoffs and Non-Goals
 
 ### Tradeoffs we accepted
 - adding processor finalization required touching core lifecycle code
 - landing-only scope means the warehouse story is intentionally incomplete for now
-- the sink currently supports a narrow decoder surface rather than the whole repository
+- the sink currently validates a canary decoder surface rather than regenerating the whole repository
 - HTTP + `JSONEachRow` is simpler than more optimized formats, but not the ultimate performance ceiling
 
 ### Non-goals of the current implementation
 - full ClickHouse parity with the Postgres sink surface
-- account-family ClickHouse support
 - serving-table canonicalization
 - online dedup logic in the sink itself
 - generic universal event tables
 - replacing client batching with server-side async inserts
+- production cluster DDL generation
 
 ## Why This Design Was Chosen
 
@@ -471,10 +518,9 @@ Given those constraints, this design was chosen because it provides:
 ## Future Direction
 
 The most likely next steps are:
-- extend ClickHouse generation to broader instruction families
-- add account-family ClickHouse support
-- introduce additional decoder families beyond Jupiter swap
+- regenerate broader decoder families beyond the Jupiter and Token Program canaries
 - add serving/canonicalization layers on top of landing tables
-- evaluate later optimizations such as dedup tokens, query identifiers, or async insert tuning where justified
+- add production ClickHouse DDL modes for replicated and distributed deployments
+- evaluate later optimizations such as dedup tokens, query identifiers, compression, or native-format inserts where justified
 
 The current implementation should be viewed as the minimal correct ClickHouse foundation, not the final state.

@@ -1,149 +1,119 @@
 ## Carbon ClickHouse Sink
 
-`clickhouse-upstream-v1` a minimal ClickHouse sink implementation
+`clickhouse-upstream-v1` adds a ClickHouse landing-table sink that fits Carbon's existing processor architecture.
 
 ## What this branch adds
 
-This branch does **not** add a general-purpose ClickHouse storage subsystem to Carbon. It adds a **minimal ClickHouse landing sink** that fits Carbon’s existing processor architecture.
-
-Concretely, it adds four things:
+This branch does **not** add a full ClickHouse warehouse subsystem. It adds the landing-table foundation:
 
 1. a small generic ClickHouse runtime inside `carbon-core`
-2. a core lifecycle change so buffered processors can flush on shutdown
-3. one decoder-owned ClickHouse implementation for **Jupiter swap CPI `SwapEvent`**
-4. codegen support
-
+2. a core lifecycle hook so buffered processors can flush on shutdown
+3. typed instruction and CPI-event ClickHouse canary coverage for `jupiter-swap-decoder`
+4. typed account ClickHouse canary coverage for `token-program-decoder`
+5. renderer support for generated typed account, instruction, and CPI-event landing rows
 
 ## How it fits into Carbon
 
-ClickHouse is implemented as a **Carbon instruction processor**, not as a new pipeline type and not as an sink framework.
+ClickHouse is implemented as normal Carbon processors, not as a new pipeline type.
 
 The runtime shape is:
 
-1. a datasource emits Solana transaction updates
-2. Carbon builds decoded instruction inputs
-3. a ClickHouse-backed instruction processor receives those decoded inputs
-4. decoder-owned code maps them into ClickHouse row types
-5. a generic ClickHouse batch writer serializes and inserts them into ClickHouse over HTTP  
+1. one or more datasources emit Carbon updates
+2. Carbon builds decoded account, instruction, transaction, or block inputs
+3. a ClickHouse-backed processor receives decoded inputs
+4. decoder-owned code maps those inputs into typed ClickHouse row families
+5. the generic ClickHouse batch writer groups rows by table and partition
+6. batches are inserted into ClickHouse over HTTP with `JSONEachRow`
 
-That choice keeps the ClickHouse path aligned with Carbon’s existing model:
+That choice keeps the ClickHouse path aligned with Carbon's existing model:
 
 * pipelines route data
 * processors own side effects
 * decoder crates own schema and storage-specific row mapping
 
-So this is **Carbon-native**, not a sidecar design.
-
-
 ## The core architectural change: processor finalization
 
-The most important Carbon-core change is **not** the HTTP client or the table DDL. It is the addition of **processor finalization**.
+The most important Carbon-core change is processor finalization.
 
-Because ClickHouse writes are buffered, accepted rows may still be sitting in memory when the pipeline shuts down. Upstream Carbon did not previously have a formal processor shutdown hook. This branch adds one:
+Because ClickHouse writes are buffered, accepted rows may still be in memory when the pipeline shuts down. This branch adds:
 
 * `Processor::finalize()`
-* pipe wrappers forward `finalize()`
-* `Pipeline` calls `finalize_pipes()` on shutdown paths before exporter shutdown  
+* pipe wrappers forwarding `finalize()`
+* `Pipeline` calling `finalize_pipes()` on shutdown paths before exporter shutdown
 
-That means the ClickHouse sink can flush buffered rows deterministically on:
-
-* datasource cancellation
-* Ctrl-C with immediate shutdown
-* channel closure
-
-Without this, buffered rows could be lost. 
-
+That lets ClickHouse processors flush buffered rows deterministically on datasource cancellation, Ctrl-C shutdown, and channel closure. Without this hook, buffered rows could be lost.
 
 ## What lives in `carbon-core`
 
 The generic ClickHouse runtime in `carbon-core`:
 
-* `config.rs` — endpoint, database, auth, table name, source metadata, batch settings
-* `http.rs` — minimal HTTP transport over `reqwest`
-* `admin.rs` — explicit schema/bootstrap execution
-* `rows/mod.rs` — row/table traits and deterministic event ID helper
-* `writer.rs` — buffered batch writer
-* `processors.rs` — ClickHouse instruction processor and sink metrics       
+* `config.rs` - endpoint, database, auth, source metadata, and batch settings
+* `http.rs` - minimal HTTP transport over `reqwest`
+* `admin.rs` - explicit schema/bootstrap execution
+* `rows/mod.rs` - row/table traits and deterministic row ID helpers
+* `writer.rs` - buffered batch writer
+* `processors.rs` - ClickHouse instruction/account processors and sink metrics
 
 Important boundary:
 
-* core knows **how to talk to ClickHouse**
-* core does **not** know any Jupiter-specific schema details
-
-That split is deliberate, since decoders own the on-chain program specific data schema.
-
+* core knows how to talk to ClickHouse
+* core knows how to buffer and flush rows
+* core does not know any decoder-specific schema details
 
 ## Write path and insert model
 
-The sink uses **client-side batching** and **HTTP `JSONEachRow` inserts**.
+The sink uses client-side batching and HTTP `JSONEachRow` inserts.
 
 Current behavior:
 
 * rows are buffered in memory
-* buffers are grouped by `partition_key()`
-* flush happens when `max_rows` is reached
-* flush also happens when `flush_interval` has elapsed
+* buffers are grouped by `(table, partition_key())`
+* size-based flush happens per buffer, not globally across all buffered rows
+* a background timer flushes stale buffers whose own `flush_interval` has elapsed
+* remaining buffers are drained in `finalize()`
 * rows are serialized with `serde::Serialize`
-* inserts go through ClickHouse HTTP, not the native protocol   
+* inserts go through ClickHouse HTTP, not the native protocol
 
-Important nuance: `flush_interval` is **not** driven by a background timer thread. It is checked when a new row arrives, and any remaining buffer is also drained in `finalize()`. So the implementation is **opportunistic interval flushing**, not autonomous periodic flushing. That matters for evaluating latency and idle-buffer behavior. 
-
-The design choice is optimized for a minimal, predictable landing sink.
-
+Synchronous inserts remain the default because they are predictable for backfills and deterministic ingestion. Server-side async inserts can be enabled explicitly through `ClickHouseConfig::with_insert_settings(...)` for live production ingestion with many Carbon writers. The sink always uses `wait_for_async_insert=1` in async mode and does not expose fire-and-forget inserts.
 
 ## Current scope
 
-The current implemented scope is narrow:
+The current implemented scope is canary-limited but no longer single-event-only:
 
-* **instruction / CPI-event ingestion only**
-* **one decoder family**: Jupiter swap
-* **one concrete event path**: `CpiEvent::SwapEvent`
-* **one landing table family**: `jupiter_swap_swap_event_landing`   
+* Jupiter swap typed instruction landing rows
+* Jupiter swap typed CPI-event landing rows
+* Token Program typed account landing rows for mint, token, and multisig
+* renderer templates for typed account, instruction, and CPI-event ClickHouse generation
+* `withClickHouse` feature-gated generated modules
 
-The decoder-owned layer does the program-specific work:
+The canary path has been validated with:
 
-* define the typed row
-* define table DDL
-* map decoded event data into rows
-* bootstrap the schema
-* provide sink defaults and setup helpers  
-
-The entire pipeline has been validated end-to-end:
-
-* decode Solana data
-* convert it into typed analytical rows
-* batch and land those rows in ClickHouse
-
+* `cargo check -p carbon-jupiter-swap-decoder --features clickhouse`
+* `cargo check -p carbon-token-program-decoder --features clickhouse`
+* `cargo check -p jupiter-swap-clickhouse-carbon-example`
+* renderer tests for ClickHouse module and row generation
 
 ## Identity, replay, and table semantics
 
-The current sink is **landing-only** and **append-only**.
+The current sink is landing-only and append-only.
 
-It uses a deterministic event identifier built from:
+Generated rows use deterministic IDs:
 
-* program id
-* transaction signature
-* instruction absolute path
-* event type
-* event sequence  
+* instruction rows use `deterministic_instruction_id(...)`
+* CPI-event rows use `deterministic_event_id(...)`
+* account rows use `deterministic_account_id(...)`
 
-That gives stable row identity across reprocessing, which is useful for future canonicalization or dedup logic.
+That gives stable row identity across reprocessing, which is required for future canonicalization or dedup logic.
 
-But the sink does **not** currently do:
+But the sink does not currently do:
 
-* online deduplication
+* online row-level deduplication
 * serving-table resolution
 * replay convergence
 * coverage/range tracking
 * durable retry state
 
-So the present contract is:
-
-* **stable landing identity**
-* **not full canonical warehouse semantics**
-
-This is an important limitation and should be read as intentional, not accidental.
-
+So the present contract is stable landing identity, not full canonical warehouse semantics.
 
 ## Metrics and observability
 
@@ -156,17 +126,27 @@ Tracked today:
 * current buffered row count
 * successful flush batches
 * failed flush batches
-* flush duration histogram  
+* flush duration histogram
 
+Metrics are separated by processor family:
+
+* `clickhouse.instructions.*`
+* `clickhouse.accounts.*`
 
 ## Generator state
 
-The branch adds partial ClickHouse generator support:
+The renderer now has ClickHouse support for:
 
-* generated decoder manifest support for a `clickhouse` feature
-* generated ClickHouse instruction glue
-* generated generic CPI-event landing-row template
-* generated decode-path changes so CPI events can be handled explicitly before generic instruction macro dispatch     
+* decoder manifest support for a `clickhouse` feature
+* typed account landing row templates
+* typed instruction landing row templates
+* typed per-event CPI landing row templates
+* generated account `clickhouse/mod.rs`
+* generated instruction `clickhouse/mod.rs`
+* generated Cargo dependencies for ClickHouse, `serde`, and `chrono`
 
----
+The rollout is still canary-limited. The implementation is generator-backed, but the repository has not regenerated every decoder with ClickHouse output.
 
+## Production design notes
+
+The production target is one typed landing table per generated row family. For multi-process Carbon deployments, each process owns local per-buffer batching and writes to the same ClickHouse table family. Replicated/distributed ClickHouse DDL and serving/canonicalization tables remain outside this landing-sink milestone.

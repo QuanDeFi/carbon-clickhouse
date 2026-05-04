@@ -1,5 +1,5 @@
 use crate::{
-    clickhouse::ClickHouseConfig,
+    clickhouse::{config::ClickHouseQuerySetting, ClickHouseConfig},
     error::{CarbonResult, Error},
 };
 
@@ -18,13 +18,13 @@ pub(crate) async fn post_query(
     client: &reqwest::Client,
     config: &ClickHouseConfig,
     query: &str,
-    settings: &[(&str, &str)],
+    settings: &[ClickHouseQuerySetting],
 ) -> CarbonResult<()> {
     let request = client
         .post(&config.endpoint)
         .query(&[("database", config.database.as_str())]);
-    let request = settings.iter().fold(request, |request, (key, value)| {
-        request.query(&[(*key, *value)])
+    let request = settings.iter().fold(request, |request, setting| {
+        request.query(&[(setting.name, setting.value.as_str())])
     });
     let response = apply_auth(config, request.body(query.to_owned()))
         .send()
@@ -50,13 +50,13 @@ pub(crate) async fn post_query_with_data(
     config: &ClickHouseConfig,
     query: &str,
     data: &str,
-    settings: &[(&str, &str)],
+    settings: &[ClickHouseQuerySetting],
 ) -> CarbonResult<()> {
     let request = client
         .post(&config.endpoint)
         .query(&[("database", config.database.as_str()), ("query", query)]);
-    let request = settings.iter().fold(request, |request, (key, value)| {
-        request.query(&[(*key, *value)])
+    let request = settings.iter().fold(request, |request, setting| {
+        request.query(&[(setting.name, setting.value.as_str())])
     });
     let response = apply_auth(config, request.body(data.to_owned()))
         .send()
