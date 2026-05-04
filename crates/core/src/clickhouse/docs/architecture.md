@@ -519,8 +519,7 @@ Given those constraints, this design was chosen because it provides:
 
 The most likely next steps are:
 - regenerate broader decoder families beyond the Jupiter and Token Program canaries
-- add serving/canonicalization layers on top of landing tables
 - add production ClickHouse DDL modes for replicated and distributed deployments
-- evaluate later optimizations such as dedup tokens, query identifiers, compression, or native-format inserts where justified
+- add explicit insert deduplication token support if retry idempotency needs to be stronger than deterministic landing IDs
 
 The current implementation should be viewed as the minimal correct ClickHouse foundation, not the final state.

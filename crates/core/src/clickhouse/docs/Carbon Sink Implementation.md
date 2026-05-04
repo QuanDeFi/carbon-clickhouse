@@ -147,6 +147,11 @@ The renderer now has ClickHouse support for:
 
 The rollout is still canary-limited. The implementation is generator-backed, but the repository has not regenerated every decoder with ClickHouse output.
 
-## Production design notes
+## Production notes
 
-The production target is one typed landing table per generated row family. For multi-process Carbon deployments, each process owns local per-buffer batching and writes to the same ClickHouse table family. Replicated/distributed ClickHouse DDL and serving/canonicalization tables remain outside this landing-sink milestone.
+The production target is one typed landing table per generated row family. For multi-process Carbon deployments, each process owns local per-buffer batching and writes to the same ClickHouse table family.
+
+Near-term production follow-ups:
+
+* add renderer-controlled replicated/distributed DDL modes
+* add explicit insert deduplication token support if retry idempotency needs to be stronger than deterministic landing IDs
