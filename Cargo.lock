@@ -12702,6 +12702,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
+name = "token-program-clickhouse-carbon-example"
+version = "0.12.0"
+dependencies = [
+ "carbon-core",
+ "carbon-helius-gpa-v2-datasource",
+ "carbon-log-metrics",
+ "carbon-rpc-gpa-datasource",
+ "carbon-token-program-decoder",
+ "clap 4.5.53",
+ "dotenv",
+ "env_logger",
+ "log",
+ "solana-account-decoder",
+ "solana-client",
+ "solana-commitment-config",
+ "solana-pubkey 3.0.0",
+ "tokio",
+]
+
+[[package]]
 name = "tokio"
 version = "1.48.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

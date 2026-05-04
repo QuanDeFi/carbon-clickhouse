@@ -263,4 +263,62 @@ impl ClickHouseRow for {{ entityName | pascalCase }}{% if isAccount %}Account{% 
 fn format_datetime(value: DateTime<Utc>) -> String {
     value.format("%Y-%m-%d %H:%M:%S%.3f").to_string()
 }
+
+#[allow(dead_code)]
+fn clickhouse_enum_variant<T>(value: &T) -> String
+where
+    T: serde::Serialize + std::fmt::Debug + ?Sized,
+{
+    match serde_json::to_value(value) {
+        Ok(serde_json::Value::String(variant)) => variant,
+        Ok(serde_json::Value::Object(object)) if object.len() == 1 => {
+            object.into_iter().next().map(|(variant, _)| variant).unwrap_or_default()
+        }
+        _ => clickhouse_debug_variant(value),
+    }
+}
+
+#[allow(dead_code)]
+fn clickhouse_enum_json<T>(value: &T) -> serde_json::Value
+where
+    T: serde::Serialize + std::fmt::Debug + ?Sized,
+{
+    match serde_json::to_value(value) {
+        Ok(serde_json::Value::String(variant)) => serde_json::json!({ "variant": variant }),
+        Ok(serde_json::Value::Object(object)) if object.len() == 1 => {
+            let (variant, payload) = object.into_iter().next().expect("enum object has one variant");
+            match payload {
+                serde_json::Value::Object(mut fields) => {
+                    fields.insert("variant".to_string(), serde_json::Value::String(variant));
+                    serde_json::Value::Object(fields)
+                }
+                serde_json::Value::Array(values) => {
+                    let mut fields = serde_json::Map::new();
+                    fields.insert("variant".to_string(), serde_json::Value::String(variant));
+                    for (index, item) in values.into_iter().enumerate() {
+                        fields.insert(format!("value_{index}"), item);
+                    }
+                    serde_json::Value::Object(fields)
+                }
+                serde_json::Value::Null => serde_json::json!({ "variant": variant }),
+                value => serde_json::json!({ "variant": variant, "value": value }),
+            }
+        }
+        Ok(value) => serde_json::json!({ "variant": clickhouse_debug_variant(value), "value": value }),
+        Err(_) => serde_json::json!({ "variant": clickhouse_debug_variant(value), "debug": format!("{value:?}") }),
+    }
+}
+
+#[allow(dead_code)]
+fn clickhouse_debug_variant<T>(value: &T) -> String
+where
+    T: std::fmt::Debug + ?Sized,
+{
+    let debug = format!("{value:?}");
+    debug
+        .split(|ch: char| ch == '(' || ch == '{' || ch.is_whitespace())
+        .next()
+        .unwrap_or_default()
+        .to_string()
+}
 {% endblock %}

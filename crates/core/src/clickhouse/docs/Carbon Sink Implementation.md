@@ -154,6 +154,22 @@ It does not validate:
 
 Use a bounded slot range when testing the example against production RPC.
 
+## Token Program example
+
+`examples/token-program-clickhouse` is a real-world smoke test for the account-family path.
+
+It validates:
+
+- filtered RPC `getProgramAccounts` or Helius gPA v2
+- generated Token Program ClickHouse account table bootstrap
+- Token Program account decoding from real mainnet account data
+- generated token account landing rows
+- `ClickHouseAccountProcessor`
+- account-family metrics
+- per-buffer writer flushing and shutdown drain
+
+The example requires a token-account owner and/or mint filter so it does not accidentally fetch the entire Token Program account set. By default it is focused on token accounts because those can be bounded safely. The generated mint and multisig account rows remain covered by compile/tests and schema generation, but they are not the default real-world query path.
+
 ## Identity, replay, and table semantics
 
 The current sink is landing-only and append-only.

@@ -235,6 +235,59 @@ fn create_event_table_sql(table_name: &str, payload_columns: &[&str]) -> String 
     )
 }
 
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
+pub struct ClickHouseSwapEventV2 {
+    pub input_mint: String,
+    pub input_amount: u64,
+    pub output_mint: String,
+    pub output_amount: u64,
+}
+
+impl From<&crate::types::SwapEventV2> for ClickHouseSwapEventV2 {
+    fn from(value: &crate::types::SwapEventV2) -> Self {
+        Self {
+            input_mint: value.input_mint.to_string(),
+            input_amount: value.input_amount,
+            output_mint: value.output_mint.to_string(),
+            output_amount: value.output_amount,
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
+pub struct ClickHouseCandidateSwapResult {
+    pub variant: String,
+    pub value: u64,
+}
+
+impl From<&crate::types::CandidateSwapResult> for ClickHouseCandidateSwapResult {
+    fn from(value: &crate::types::CandidateSwapResult) -> Self {
+        match value {
+            crate::types::CandidateSwapResult::OutAmount(value) => Self {
+                variant: "OutAmount".to_string(),
+                value: *value,
+            },
+            crate::types::CandidateSwapResult::ProgramError(value) => Self {
+                variant: "ProgramError".to_string(),
+                value: *value,
+            },
+        }
+    }
+}
+
+fn clickhouse_swap_events(value: &[crate::types::SwapEventV2]) -> Vec<ClickHouseSwapEventV2> {
+    value.iter().map(ClickHouseSwapEventV2::from).collect()
+}
+
+fn clickhouse_candidate_swap_results(
+    value: &[crate::types::CandidateSwapResult],
+) -> Vec<ClickHouseCandidateSwapResult> {
+    value
+        .iter()
+        .map(ClickHouseCandidateSwapResult::from)
+        .collect()
+}
+
 macro_rules! define_event_row {
     (
         $row:ident,
@@ -375,7 +428,7 @@ define_event_row!(
     "jupiter_swap_swaps_event",
     "swaps_event",
     "jupiter_swap_swaps_event_landing",
-    [(swap_events: serde_json::Value = |source: &crate::events::swaps_event::SwapsEventEvent| serde_json::to_value(&source.swap_events).expect("serialize clickhouse field"), "JSON")]
+    [(swap_events: Vec<ClickHouseSwapEventV2> = |source: &crate::events::swaps_event::SwapsEventEvent| clickhouse_swap_events(&source.swap_events), "Array(Tuple(input_mint String, input_amount UInt64, output_mint String, output_amount UInt64))")]
 );
 
 define_event_row!(
@@ -384,7 +437,7 @@ define_event_row!(
     "jupiter_swap_candidate_swap_results_event",
     "candidate_swap_results",
     "jupiter_swap_candidate_swap_results_event_landing",
-    [(results: serde_json::Value = |source: &crate::events::candidate_swap_results::CandidateSwapResultsEvent| serde_json::to_value(&source.results).expect("serialize clickhouse field"), "JSON")]
+    [(results: Vec<ClickHouseCandidateSwapResult> = |source: &crate::events::candidate_swap_results::CandidateSwapResultsEvent| clickhouse_candidate_swap_results(&source.results), "Array(Tuple(variant LowCardinality(String), value UInt64))")]
 );
 
 define_event_row!(

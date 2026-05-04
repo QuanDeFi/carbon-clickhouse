@@ -1,4 +1,4 @@
-import { isNode, resolveNestedTypeNode, snakeCase, SnakeCaseString, TypeNode } from '@codama/nodes';
+import { isNode, pascalCase, resolveNestedTypeNode, snakeCase, SnakeCaseString, TypeNode } from '@codama/nodes';
 
 export type ClickHouseFlattenedField = {
     column: string;
@@ -7,6 +7,12 @@ export type ClickHouseFlattenedField = {
     clickHouseColumnType: string;
     expr: string;
     docs: string[];
+};
+
+type ClickHouseMappedValue = {
+    rowType: string;
+    clickHouseColumnType: string;
+    expr: string;
 };
 
 export class ClickHouseRowMapper {
@@ -77,7 +83,7 @@ export class ClickHouseRowMapper {
         ];
     }
 
-    private mapValue(typeNode: TypeNode, source: string): { rowType: string; clickHouseColumnType: string; expr: string } {
+    private mapValue(typeNode: TypeNode, source: string): ClickHouseMappedValue {
         if (isNode(typeNode, 'hiddenPrefixTypeNode') || isNode(typeNode, 'sizePrefixTypeNode')) {
             return this.mapValue(typeNode.type, source);
         }
@@ -130,7 +136,10 @@ export class ClickHouseRowMapper {
 
         if (isNode(typeNode, 'definedTypeLinkNode')) {
             const resolved = this.resolveDefinedType(typeNode.name);
-            if (resolved && resolved.kind !== 'enumTypeNode') {
+            if (resolved?.kind === 'enumTypeNode') {
+                return this.mapEnum(resolved, `&${source}`);
+            }
+            if (resolved) {
                 const simple = this.tryMapResolvedDefinedType(resolved, source);
                 if (simple) {
                     return simple;
@@ -145,10 +154,7 @@ export class ClickHouseRowMapper {
         };
     }
 
-    private mapCollectionItem(
-        typeNode: TypeNode,
-        source: string,
-    ): { rowType: string; clickHouseColumnType: string; expr: string } {
+    private mapCollectionItem(typeNode: TypeNode, source: string): ClickHouseMappedValue {
         if (isNode(typeNode, 'hiddenPrefixTypeNode') || isNode(typeNode, 'sizePrefixTypeNode')) {
             return this.mapCollectionItem(typeNode.type, source);
         }
@@ -171,9 +177,23 @@ export class ClickHouseRowMapper {
 
         if (isNode(typeNode, 'definedTypeLinkNode')) {
             const resolved = this.resolveDefinedType(typeNode.name);
-            if (resolved && resolved.kind !== 'enumTypeNode') {
+            if (resolved?.kind === 'enumTypeNode') {
+                return this.mapEnum(resolved, source);
+            }
+            if (resolved?.kind === 'structTypeNode') {
+                return this.mapStructTuple(resolved, source);
+            }
+            if (resolved) {
                 return this.mapCollectionItem(resolved, source);
             }
+        }
+
+        if (isNode(typeNode, 'structTypeNode')) {
+            return this.mapStructTuple(typeNode, source);
+        }
+
+        if (isNode(typeNode, 'enumTypeNode')) {
+            return this.mapEnum(typeNode, source);
         }
 
         return {
@@ -183,7 +203,122 @@ export class ClickHouseRowMapper {
         };
     }
 
-    private mapNumber(format: string, source: string): { rowType: string; clickHouseColumnType: string; expr: string } {
+    private mapStructTuple(typeNode: TypeNode, source: string): ClickHouseMappedValue {
+        if (!isNode(typeNode, 'structTypeNode')) {
+            return this.mapCollectionItem(typeNode, source);
+        }
+
+        const fields = typeNode.fields.map(field => {
+            const fieldName = snakeCase(field.name);
+            const fieldSource = `${source}.${fieldName}`;
+            return {
+                column: fieldName,
+                mapped: this.mapTupleField(field.type, fieldSource),
+            };
+        });
+
+        return {
+            rowType: 'serde_json::Value',
+            clickHouseColumnType: `Tuple(${fields
+                .map(field => `${field.column} ${field.mapped.clickHouseColumnType}`)
+                .join(', ')})`,
+            expr: `serde_json::json!({ ${fields
+                .map(field => `"${field.column}": ${field.mapped.expr}`)
+                .join(', ')} })`,
+        };
+    }
+
+    private mapTupleField(typeNode: TypeNode, source: string): ClickHouseMappedValue {
+        if (isNode(typeNode, 'hiddenPrefixTypeNode') || isNode(typeNode, 'sizePrefixTypeNode')) {
+            return this.mapTupleField(typeNode.type, source);
+        }
+
+        if (isNode(typeNode, 'booleanTypeNode') || isNode(typeNode, 'numberTypeNode')) {
+            const mapped = this.mapValue(typeNode, source);
+            return { ...mapped, expr: source };
+        }
+
+        if (isNode(typeNode, 'stringTypeNode')) {
+            return { rowType: 'String', clickHouseColumnType: 'String', expr: source };
+        }
+
+        if (isNode(typeNode, 'publicKeyTypeNode')) {
+            return { rowType: 'String', clickHouseColumnType: 'String', expr: `${source}.to_string()` };
+        }
+
+        if (isNode(typeNode, 'bytesTypeNode')) {
+            return { rowType: 'Vec<u8>', clickHouseColumnType: 'Array(UInt8)', expr: `${source}.to_vec()` };
+        }
+
+        if (isNode(typeNode, 'arrayTypeNode') || isNode(typeNode, 'fixedSizeTypeNode')) {
+            return this.mapValue(typeNode, source);
+        }
+
+        if (isNode(typeNode, 'definedTypeLinkNode')) {
+            const resolved = this.resolveDefinedType(typeNode.name);
+            if (resolved?.kind === 'enumTypeNode') {
+                return this.mapEnum(resolved, `&${source}`);
+            }
+            if (resolved?.kind === 'structTypeNode') {
+                return this.mapStructTuple(resolved, source);
+            }
+            if (resolved) {
+                return this.mapTupleField(resolved, source);
+            }
+        }
+
+        if (isNode(typeNode, 'enumTypeNode')) {
+            return this.mapEnum(typeNode, `&${source}`);
+        }
+
+        if (isNode(typeNode, 'structTypeNode')) {
+            return this.mapStructTuple(typeNode, source);
+        }
+
+        return {
+            rowType: 'serde_json::Value',
+            clickHouseColumnType: 'JSON',
+            expr: `serde_json::to_value(${source}).expect("serialize clickhouse field")`,
+        };
+    }
+
+    private mapEnum(typeNode: TypeNode, source: string): ClickHouseMappedValue {
+        if (this.isFieldlessEnum(typeNode)) {
+            return {
+                rowType: 'String',
+                clickHouseColumnType: this.enumClickHouseType(typeNode),
+                expr: `clickhouse_enum_variant(${source})`,
+            };
+        }
+
+        return {
+            rowType: 'serde_json::Value',
+            clickHouseColumnType: 'JSON',
+            expr: `clickhouse_enum_json(${source})`,
+        };
+    }
+
+    private isFieldlessEnum(typeNode: TypeNode): boolean {
+        return isNode(typeNode, 'enumTypeNode') && typeNode.variants.every(variant => variant.kind === 'enumEmptyVariantTypeNode');
+    }
+
+    private enumClickHouseType(typeNode: TypeNode): string {
+        if (!isNode(typeNode, 'enumTypeNode')) {
+            return 'LowCardinality(String)';
+        }
+
+        const enumType = typeNode.variants.length <= 128 ? 'Enum8' : 'Enum16';
+        const values = typeNode.variants
+            .map((variant, index) => `'${this.escapeClickHouseEnumValue(pascalCase(String((variant as any).name)))}' = ${index}`)
+            .join(', ');
+        return `${enumType}(${values})`;
+    }
+
+    private escapeClickHouseEnumValue(value: string): string {
+        return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    }
+
+    private mapNumber(format: string, source: string): ClickHouseMappedValue {
         switch (format) {
             case 'u8':
                 return { rowType: 'u8', clickHouseColumnType: 'UInt8', expr: source };
@@ -230,7 +365,7 @@ export class ClickHouseRowMapper {
     private tryMapResolvedDefinedType(
         typeNode: TypeNode,
         source: string,
-    ): { rowType: string; clickHouseColumnType: string; expr: string } | null {
+    ): ClickHouseMappedValue | null {
         if (
             isNode(typeNode, 'numberTypeNode') ||
             isNode(typeNode, 'booleanTypeNode') ||

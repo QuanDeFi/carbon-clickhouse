@@ -28,7 +28,7 @@ pub struct TokenAccountClickHouseRow {
     pub token_owner: String,
     pub amount: u64,
     pub delegate: Option<String>,
-    pub state: serde_json::Value,
+    pub state: String,
     pub is_native: Option<u64>,
     pub delegated_amount: u64,
     pub close_authority: Option<String>,
@@ -77,7 +77,7 @@ impl TokenAccountClickHouseRow {
             token_owner: source.owner.to_string(),
             amount: source.amount,
             delegate: source.delegate.map(|value| value.to_string()),
-            state: serde_json::to_value(source.state).expect("serialize clickhouse field"),
+            state: clickhouse_enum_variant(&source.state),
             is_native: source.is_native,
             delegated_amount: source.delegated_amount,
             close_authority: source.close_authority.map(|value| value.to_string()),
@@ -142,7 +142,7 @@ impl ClickHouseTable for TokenAccountClickHouseRow {
             token_owner String,\
             amount UInt64,\
             delegate Nullable(String),\
-            state JSON,\
+            state Enum8('Uninitialized' = 0, 'Initialized' = 1, 'Frozen' = 2),\
             is_native Nullable(UInt64),\
             delegated_amount UInt64,\
             close_authority Nullable(String)\
@@ -165,4 +165,31 @@ impl ClickHouseRow for TokenAccountClickHouseRow {
 
 fn format_datetime(value: DateTime<Utc>) -> String {
     value.format("%Y-%m-%d %H:%M:%S%.3f").to_string()
+}
+
+fn clickhouse_enum_variant<T>(value: &T) -> String
+where
+    T: serde::Serialize + std::fmt::Debug + ?Sized,
+{
+    match serde_json::to_value(value) {
+        Ok(serde_json::Value::String(variant)) => variant,
+        Ok(serde_json::Value::Object(object)) if object.len() == 1 => object
+            .into_iter()
+            .next()
+            .map(|(variant, _)| variant)
+            .unwrap_or_default(),
+        _ => clickhouse_debug_variant(value),
+    }
+}
+
+fn clickhouse_debug_variant<T>(value: &T) -> String
+where
+    T: std::fmt::Debug + ?Sized,
+{
+    let debug = format!("{value:?}");
+    debug
+        .split(|ch: char| ch == '(' || ch == '{' || ch.is_whitespace())
+        .next()
+        .unwrap_or_default()
+        .to_string()
 }
