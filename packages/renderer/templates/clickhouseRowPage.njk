@@ -15,6 +15,11 @@ use carbon_core::instruction::InstructionMetadata;
 {% endif %}
 use chrono::{DateTime, Utc};
 
+{% for helper in helperDefinitions | default([]) %}
+{{ helper }}
+
+{% endfor %}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct {{ entityName | pascalCase }}{% if isAccount %}Account{% else %}Instruction{% endif %}ClickHouseRow {
     pub program_id: String,
@@ -275,37 +280,6 @@ where
             object.into_iter().next().map(|(variant, _)| variant).unwrap_or_default()
         }
         _ => clickhouse_debug_variant(value),
-    }
-}
-
-#[allow(dead_code)]
-fn clickhouse_enum_json<T>(value: &T) -> serde_json::Value
-where
-    T: serde::Serialize + std::fmt::Debug + ?Sized,
-{
-    match serde_json::to_value(value) {
-        Ok(serde_json::Value::String(variant)) => serde_json::json!({ "variant": variant }),
-        Ok(serde_json::Value::Object(object)) if object.len() == 1 => {
-            let (variant, payload) = object.into_iter().next().expect("enum object has one variant");
-            match payload {
-                serde_json::Value::Object(mut fields) => {
-                    fields.insert("variant".to_string(), serde_json::Value::String(variant));
-                    serde_json::Value::Object(fields)
-                }
-                serde_json::Value::Array(values) => {
-                    let mut fields = serde_json::Map::new();
-                    fields.insert("variant".to_string(), serde_json::Value::String(variant));
-                    for (index, item) in values.into_iter().enumerate() {
-                        fields.insert(format!("value_{index}"), item);
-                    }
-                    serde_json::Value::Object(fields)
-                }
-                serde_json::Value::Null => serde_json::json!({ "variant": variant }),
-                value => serde_json::json!({ "variant": variant, "value": value }),
-            }
-        }
-        Ok(value) => serde_json::json!({ "variant": clickhouse_debug_variant(value), "value": value }),
-        Err(_) => serde_json::json!({ "variant": clickhouse_debug_variant(value), "debug": format!("{value:?}") }),
     }
 }
 

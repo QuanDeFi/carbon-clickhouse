@@ -207,13 +207,14 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                     }
 
                     if (options.withClickHouse === true) {
-                        const clickhouseFlatFields = clickhouseRowMapper.flattenType(newNode.data, [], [], new Set());
+                        const clickhousePlan = clickhouseRowMapper.planType(newNode.data, [], [], new Set());
                         renderMap.add(
                             `src/accounts/clickhouse/${snakeCase(node.name)}_row.rs`,
                             render('clickhouseRowPage.njk', {
                                 entityDocs: node.docs,
                                 entityName: node.name,
-                                flatFields: clickhouseFlatFields,
+                                flatFields: clickhousePlan.fields,
+                                helperDefinitions: clickhousePlan.helperDefinitions,
                                 isAccount: true,
                                 program: currentRenderProgram(),
                             }),
@@ -377,12 +378,13 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                             );
 
                             if (options.withClickHouse === true) {
-                                const clickhouseFlatFields = clickhouseRowMapper.flattenType(node.type, [], [], new Set());
+                                const clickhousePlan = clickhouseRowMapper.planType(node.type, [], [], new Set());
                                 renderMap.add(
                                     `src/instructions/clickhouse/${snakeCase(node.name)}_event_row.rs`,
                                     render('eventInstructionClickHouseRowPage.njk', {
                                         event: node,
-                                        flatFields: clickhouseFlatFields,
+                                        flatFields: clickhousePlan.fields,
+                                        helperDefinitions: clickhousePlan.helperDefinitions,
                                         program: currentRenderProgram(),
                                     }),
                                 );
@@ -609,7 +611,7 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                     }
 
                     if (options.withClickHouse === true) {
-                        const clickhouseFlatFields = clickhouseRowMapper.flattenType(
+                        const clickhousePlan = clickhouseRowMapper.planType(
                             structTypeNode(
                                 newNode.arguments.map(a =>
                                     structFieldTypeNode({
@@ -627,7 +629,8 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                             render('clickhouseRowPage.njk', {
                                 entityDocs: node.docs,
                                 entityName: node.name,
-                                flatFields: clickhouseFlatFields,
+                                flatFields: clickhousePlan.fields,
+                                helperDefinitions: clickhousePlan.helperDefinitions,
                                 isAccount: false,
                                 program: currentRenderProgram(),
                             }),

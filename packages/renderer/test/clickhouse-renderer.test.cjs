@@ -4,6 +4,8 @@ const fs = require('node:fs');
 const { camelCase, kebabCase, pascalCase, snakeCase, titleCase } = require('@codama/nodes');
 const nunjucks = require('nunjucks');
 
+const { ClickHouseRowMapper } = require('../dist/index.js');
+
 const env = nunjucks.configure('templates', {
     autoescape: false,
     trimBlocks: true,
@@ -98,6 +100,108 @@ function render(template, context) {
     assert.match(cargoTomlGenerator, /"dep:chrono"/);
     assert.match(cargoTomlGenerator, /const chronoDep = getCrateDependencyString\('chrono'/);
     assert.match(cargoTomlGenerator, /dependencies\.push\(chronoDep\)/);
+}
+
+{
+    const number = format => ({ kind: 'numberTypeNode', format, endian: 'le' });
+    const bool = { kind: 'booleanTypeNode', size: number('u8') };
+    const field = (name, type) => ({ kind: 'structFieldTypeNode', name, type });
+    const struct = fields => ({ kind: 'structTypeNode', fields });
+    const tuple = items => ({ kind: 'tupleTypeNode', items });
+    const array = item => ({ kind: 'arrayTypeNode', item, count: { kind: 'remainderCountNode' } });
+    const option = item => ({ kind: 'optionTypeNode', item, prefix: number('u8') });
+    const defined = name => ({ kind: 'definedTypeLinkNode', name });
+    const emptyVariant = name => ({ kind: 'enumEmptyVariantTypeNode', name });
+    const structVariant = (name, fields) => ({ kind: 'enumStructVariantTypeNode', name, struct: struct(fields) });
+    const tupleVariant = (name, items) => ({ kind: 'enumTupleVariantTypeNode', name, tuple: { kind: 'tupleTypeNode', items } });
+
+    const side = {
+        kind: 'enumTypeNode',
+        variants: [emptyVariant('bid'), emptyVariant('ask')],
+        size: number('u8'),
+    };
+    const remainingAccountsSlice = struct([field('accountsType', number('u8')), field('length', number('u8'))]);
+    const remainingAccountsInfo = struct([field('slices', array(defined('remainingAccountsSlice')))]);
+    const candidateSwap = {
+        kind: 'enumTypeNode',
+        variants: [
+            structVariant('humidiFi', [field('swapId', number('u64')), field('isBaseToQuote', bool)]),
+            structVariant('humidiFiV2', [field('swapId', number('u64')), field('isBaseToQuote', bool)]),
+            structVariant('tesseraV', [field('side', defined('side'))]),
+            emptyVariant('raydiumV2'),
+        ],
+        size: number('u8'),
+    };
+    const swap = {
+        kind: 'enumTypeNode',
+        variants: [
+            emptyVariant('saber'),
+            structVariant('humidiFi', [field('swapId', number('u64')), field('isBaseToQuote', bool)]),
+            structVariant('scorch', [field('swapId', number('u128'))]),
+            structVariant('whirlpoolSwapV2', [
+                field('aToB', bool),
+                field('remainingAccountsInfo', option(defined('remainingAccountsInfo'))),
+            ]),
+            structVariant('meteoraDlmmSwapV2', [field('remainingAccountsInfo', defined('remainingAccountsInfo'))]),
+            structVariant('dynamicV1', [
+                field('candidateSwaps', array(defined('candidateSwap'))),
+                field('bestPosition', option(number('u8'))),
+            ]),
+            tupleVariant('tuplePayload', [number('u64'), bool]),
+        ],
+        size: number('u8'),
+    };
+    const routePlanStep = struct([
+        field('swap', defined('swap')),
+        field('percent', number('u8')),
+        field('inputIndex', number('u8')),
+        field('outputIndex', number('u8')),
+    ]);
+
+    const definedTypes = new Map([
+        ['side', { name: 'side', type: side }],
+        ['remainingAccountsSlice', { name: 'remainingAccountsSlice', type: remainingAccountsSlice }],
+        ['remainingAccountsInfo', { name: 'remainingAccountsInfo', type: remainingAccountsInfo }],
+        ['candidateSwap', { name: 'candidateSwap', type: candidateSwap }],
+        ['swap', { name: 'swap', type: swap }],
+        ['routePlanStep', { name: 'routePlanStep', type: routePlanStep }],
+    ]);
+
+    const mapper = new ClickHouseRowMapper({ getDefinedTypesMap: () => definedTypes });
+    const plan = mapper.planType(
+        struct([
+            field('routePlan', array(defined('routePlanStep'))),
+            field('tuplePair', tuple([number('u64'), bool])),
+            field('tuplePairs', array(tuple([number('u8'), bool]))),
+        ]),
+        [],
+        [],
+        new Set(),
+    );
+    const output = [JSON.stringify(plan.fields), ...plan.helperDefinitions].join('\n');
+
+    assert.match(output, /pub struct ClickHouseSwap/);
+    assert.match(output, /pub struct ClickHouseRoutePlanStep/);
+    assert.match(output, /pub struct ClickHouseCandidateSwap/);
+    assert.match(output, /pub struct ClickHouseSourceTuplePair/);
+    assert.match(output, /pub struct ClickHouseUInt128/);
+    assert.match(output, /route_plan.*Array\(Tuple/);
+    assert.match(output, /tuple_pair.*Tuple\(value_0 UInt64, value_1 Bool\)/);
+    assert.match(output, /tuple_pairs.*Array\(Tuple\(value_0 UInt8, value_1 Bool\)\)/);
+    assert.match(output, /variant Enum8\('Saber' = 0/);
+    assert.match(output, /swap_id: Option<ClickHouseUInt128>/);
+    assert.match(output, /swap_id Nullable\(UInt128\)/);
+    assert.match(output, /remaining_accounts_info_present Bool/);
+    assert.match(output, /candidate_swaps_present Bool/);
+    assert.match(output, /candidate_swaps Array\(Tuple\(variant Enum8/);
+    assert.match(output, /side Nullable\(Enum8\('Bid' = 0, 'Ask' = 1\)\)/);
+    assert.match(output, /value_0 Nullable\(UInt64\)/);
+    assert.match(output, /row\.remaining_accounts_info = ClickHouseRemainingAccountsInfo::from\(value\);/);
+    assert.match(output, /row\.best_position = best_position\.as_ref\(\)\.map\(\|value\| \*value\);/);
+    assert.match(output, /row\.swap_id = Some\(ClickHouseUInt128\(\(\*swap_id\) as u128\)\);/);
+    assert.doesNotMatch(output, /payload String/);
+    assert.doesNotMatch(output, /clickhouse_enum_json/);
+    assert.doesNotMatch(output, /serde_json::Value/);
 }
 
 {

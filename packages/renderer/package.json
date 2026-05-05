@@ -39,7 +39,7 @@
         "dev": "tsup --watch",
         "type-check": "tsc --noEmit",
         "lint": "echo 'No linting configured'",
-        "test": "node test/clickhouse-renderer.test.cjs",
+        "test": "pnpm run build && node test/clickhouse-renderer.test.cjs",
         "clean": "rimraf dist"
     },
     "dependencies": {
