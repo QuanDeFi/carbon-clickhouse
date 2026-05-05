@@ -166,7 +166,7 @@ fn route_plan_step_clickhouse_type(is_v2: bool) -> String {
 fn swap_clickhouse_type() -> String {
     format!(
         "Tuple(\
-            variant LowCardinality(String),\
+            variant {swap_variant_type},\
             side Nullable(Enum8('Bid' = 0, 'Ask' = 1)),\
             hylo_swap_type Nullable({hylo_swap_type}),\
             a_to_b Nullable(Bool),\
@@ -210,18 +210,186 @@ fn swap_clickhouse_type() -> String {
             max_split_quote_calls Nullable(UInt8),\
             max_split_candidates Nullable(UInt8))",
         candidate_swap = candidate_swap_clickhouse_type(),
-        hylo_swap_type = hylo_swap_type_clickhouse_type()
+        hylo_swap_type = hylo_swap_type_clickhouse_type(),
+        swap_variant_type = swap_variant_clickhouse_type()
     )
 }
 
-fn candidate_swap_clickhouse_type() -> &'static str {
-    "Tuple(\
-        variant LowCardinality(String),\
+fn candidate_swap_clickhouse_type() -> String {
+    format!(
+        "Tuple(\
+        variant {},\
         side Nullable(Enum8('Bid' = 0, 'Ask' = 1)),\
         swap_id Nullable(UInt64),\
         is_base_to_quote Nullable(Bool),\
         a_to_b Nullable(Bool),\
-        is_bid Nullable(Bool))"
+        is_bid Nullable(Bool))",
+        candidate_swap_variant_clickhouse_type()
+    )
+}
+
+fn swap_variant_clickhouse_type() -> &'static str {
+    "Enum16(\
+        'Saber' = 0,\
+        'SaberAddDecimalsDeposit' = 1,\
+        'SaberAddDecimalsWithdraw' = 2,\
+        'TokenSwap' = 3,\
+        'Sencha' = 4,\
+        'Step' = 5,\
+        'Cropper' = 6,\
+        'Raydium' = 7,\
+        'Crema' = 8,\
+        'Lifinity' = 9,\
+        'Mercurial' = 10,\
+        'Cykura' = 11,\
+        'Serum' = 12,\
+        'MarinadeDeposit' = 13,\
+        'MarinadeUnstake' = 14,\
+        'Aldrin' = 15,\
+        'AldrinV2' = 16,\
+        'Whirlpool' = 17,\
+        'Invariant' = 18,\
+        'Meteora' = 19,\
+        'GooseFX' = 20,\
+        'DeltaFi' = 21,\
+        'Balansol' = 22,\
+        'MarcoPolo' = 23,\
+        'Dradex' = 24,\
+        'LifinityV2' = 25,\
+        'RaydiumClmm' = 26,\
+        'Openbook' = 27,\
+        'Phoenix' = 28,\
+        'Symmetry' = 29,\
+        'TokenSwapV2' = 30,\
+        'HeliumTreasuryManagementRedeemV0' = 31,\
+        'StakeDexStakeWrappedSol' = 32,\
+        'StakeDexSwapViaStake' = 33,\
+        'GooseFXV2' = 34,\
+        'Perps' = 35,\
+        'PerpsAddLiquidity' = 36,\
+        'PerpsRemoveLiquidity' = 37,\
+        'MeteoraDlmm' = 38,\
+        'OpenBookV2' = 39,\
+        'RaydiumClmmV2' = 40,\
+        'StakeDexPrefundWithdrawStakeAndDepositStake' = 41,\
+        'Clone' = 42,\
+        'SanctumS' = 43,\
+        'SanctumSAddLiquidity' = 44,\
+        'SanctumSRemoveLiquidity' = 45,\
+        'RaydiumCP' = 46,\
+        'WhirlpoolSwapV2' = 47,\
+        'OneIntro' = 48,\
+        'PumpWrappedBuy' = 49,\
+        'PumpWrappedSell' = 50,\
+        'PerpsV2' = 51,\
+        'PerpsV2AddLiquidity' = 52,\
+        'PerpsV2RemoveLiquidity' = 53,\
+        'MoonshotWrappedBuy' = 54,\
+        'MoonshotWrappedSell' = 55,\
+        'StabbleStableSwap' = 56,\
+        'StabbleWeightedSwap' = 57,\
+        'Obric' = 58,\
+        'FoxBuyFromEstimatedCost' = 59,\
+        'FoxClaimPartial' = 60,\
+        'SolFi' = 61,\
+        'SolayerDelegateNoInit' = 62,\
+        'SolayerUndelegateNoInit' = 63,\
+        'TokenMill' = 64,\
+        'DaosFunBuy' = 65,\
+        'DaosFunSell' = 66,\
+        'ZeroFi' = 67,\
+        'StakeDexWithdrawWrappedSol' = 68,\
+        'VirtualsBuy' = 69,\
+        'VirtualsSell' = 70,\
+        'Perena' = 71,\
+        'PumpSwapBuy' = 72,\
+        'PumpSwapSell' = 73,\
+        'Gamma' = 74,\
+        'MeteoraDlmmSwapV2' = 75,\
+        'Woofi' = 76,\
+        'MeteoraDammV2' = 77,\
+        'MeteoraDynamicBondingCurveSwap' = 78,\
+        'StabbleStableSwapV2' = 79,\
+        'StabbleWeightedSwapV2' = 80,\
+        'RaydiumLaunchlabBuy' = 81,\
+        'RaydiumLaunchlabSell' = 82,\
+        'BoopdotfunWrappedBuy' = 83,\
+        'BoopdotfunWrappedSell' = 84,\
+        'Plasma' = 85,\
+        'GoonFi' = 86,\
+        'HumidiFi' = 87,\
+        'MeteoraDynamicBondingCurveSwapWithRemainingAccounts' = 88,\
+        'TesseraV' = 89,\
+        'PumpWrappedBuyV2' = 90,\
+        'PumpWrappedSellV2' = 91,\
+        'PumpSwapBuyV2' = 92,\
+        'PumpSwapSellV2' = 93,\
+        'Heaven' = 94,\
+        'SolFiV2' = 95,\
+        'Aquifer' = 96,\
+        'PumpWrappedBuyV3' = 97,\
+        'PumpWrappedSellV3' = 98,\
+        'PumpSwapBuyV3' = 99,\
+        'PumpSwapSellV3' = 100,\
+        'JupiterLendDeposit' = 101,\
+        'JupiterLendRedeem' = 102,\
+        'DefiTuna' = 103,\
+        'AlphaQ' = 104,\
+        'RaydiumV2' = 105,\
+        'SarosDlmm' = 106,\
+        'Futarchy' = 107,\
+        'MeteoraDammV2WithRemainingAccounts' = 108,\
+        'Obsidian' = 109,\
+        'WhaleStreet' = 110,\
+        'DynamicV1' = 111,\
+        'PumpWrappedBuyV4' = 112,\
+        'PumpWrappedSellV4' = 113,\
+        'CarrotIssue' = 114,\
+        'CarrotRedeem' = 115,\
+        'Manifest' = 116,\
+        'BisonFi' = 117,\
+        'HumidiFiV2' = 118,\
+        'PerenaStar' = 119,\
+        'JupiterRfqV2' = 120,\
+        'GoonFiV2' = 121,\
+        'Scorch' = 122,\
+        'VaultLiquidUnstake' = 123,\
+        'XOrca' = 124,\
+        'Quantum' = 125,\
+        'WhaleStreetV2' = 126,\
+        'Riptide' = 127,\
+        'RunnerRodeo' = 128,\
+        'TaurusFi' = 129,\
+        'Omnipair' = 130,\
+        'MSwap' = 131,\
+        'Hylo' = 132,\
+        'VoltrDeposit' = 133,\
+        'VoltrWithdraw' = 134,\
+        'SanctumSV2' = 135,\
+        'LemmingsFi' = 136,\
+        'ScaleVmmBuy' = 137,\
+        'ScaleVmmSell' = 138,\
+        'ScaleAmmBuy' = 139,\
+        'ScaleAmmSell' = 140,\
+        'BisonFiV2' = 141,\
+        'Trends' = 142,\
+        'HumaDeposit' = 143,\
+        'HumaInstantWithdraw' = 144,\
+        'Kipseli' = 145,\
+        'DynamicV2' = 146)"
+}
+
+fn candidate_swap_variant_clickhouse_type() -> &'static str {
+    "Enum8(\
+        'HumidiFi' = 0,\
+        'TesseraV' = 1,\
+        'HumidiFiV2' = 2,\
+        'RaydiumV2' = 3,\
+        'RaydiumClmm' = 4,\
+        'Whirlpool' = 5,\
+        'ZeroFi' = 6,\
+        'BisonFiV2' = 7,\
+        'GoonFiV2' = 8)"
 }
 
 fn hylo_swap_type_clickhouse_type() -> &'static str {
@@ -261,16 +429,42 @@ pub struct ClickHouseCandidateSwap {
     pub is_bid: Option<bool>,
 }
 
-impl From<&crate::types::CandidateSwap> for ClickHouseCandidateSwap {
-    fn from(value: &crate::types::CandidateSwap) -> Self {
-        let mut candidate = Self {
-            variant: clickhouse_enum_variant(value),
+impl ClickHouseCandidateSwap {
+    fn new(variant: String) -> Self {
+        Self {
+            variant,
             side: None,
             swap_id: None,
             is_base_to_quote: None,
             a_to_b: None,
             is_bid: None,
-        };
+        }
+    }
+}
+
+impl Default for ClickHouseCandidateSwap {
+    fn default() -> Self {
+        Self::new("HumidiFi".to_string())
+    }
+}
+
+fn candidate_swap_variant_name(value: &crate::types::CandidateSwap) -> &'static str {
+    match value {
+        crate::types::CandidateSwap::HumidiFi { .. } => "HumidiFi",
+        crate::types::CandidateSwap::TesseraV { .. } => "TesseraV",
+        crate::types::CandidateSwap::HumidiFiV2 { .. } => "HumidiFiV2",
+        crate::types::CandidateSwap::RaydiumV2 => "RaydiumV2",
+        crate::types::CandidateSwap::RaydiumClmm => "RaydiumClmm",
+        crate::types::CandidateSwap::Whirlpool { .. } => "Whirlpool",
+        crate::types::CandidateSwap::ZeroFi => "ZeroFi",
+        crate::types::CandidateSwap::BisonFiV2 { .. } => "BisonFiV2",
+        crate::types::CandidateSwap::GoonFiV2 { .. } => "GoonFiV2",
+    }
+}
+
+impl From<&crate::types::CandidateSwap> for ClickHouseCandidateSwap {
+    fn from(value: &crate::types::CandidateSwap) -> Self {
+        let mut candidate = Self::new(candidate_swap_variant_name(value).to_string());
 
         match value {
             crate::types::CandidateSwap::HumidiFi {
@@ -427,6 +621,170 @@ impl ClickHouseSwap {
     }
 }
 
+impl Default for ClickHouseSwap {
+    fn default() -> Self {
+        Self::new("Saber".to_string())
+    }
+}
+
+fn swap_variant_name(value: &crate::types::Swap) -> &'static str {
+    match value {
+        crate::types::Swap::Saber => "Saber",
+        crate::types::Swap::SaberAddDecimalsDeposit => "SaberAddDecimalsDeposit",
+        crate::types::Swap::SaberAddDecimalsWithdraw => "SaberAddDecimalsWithdraw",
+        crate::types::Swap::TokenSwap => "TokenSwap",
+        crate::types::Swap::Sencha => "Sencha",
+        crate::types::Swap::Step => "Step",
+        crate::types::Swap::Cropper => "Cropper",
+        crate::types::Swap::Raydium => "Raydium",
+        crate::types::Swap::Crema { .. } => "Crema",
+        crate::types::Swap::Lifinity => "Lifinity",
+        crate::types::Swap::Mercurial => "Mercurial",
+        crate::types::Swap::Cykura => "Cykura",
+        crate::types::Swap::Serum { .. } => "Serum",
+        crate::types::Swap::MarinadeDeposit => "MarinadeDeposit",
+        crate::types::Swap::MarinadeUnstake => "MarinadeUnstake",
+        crate::types::Swap::Aldrin { .. } => "Aldrin",
+        crate::types::Swap::AldrinV2 { .. } => "AldrinV2",
+        crate::types::Swap::Whirlpool { .. } => "Whirlpool",
+        crate::types::Swap::Invariant { .. } => "Invariant",
+        crate::types::Swap::Meteora => "Meteora",
+        crate::types::Swap::GooseFX => "GooseFX",
+        crate::types::Swap::DeltaFi { .. } => "DeltaFi",
+        crate::types::Swap::Balansol => "Balansol",
+        crate::types::Swap::MarcoPolo { .. } => "MarcoPolo",
+        crate::types::Swap::Dradex { .. } => "Dradex",
+        crate::types::Swap::LifinityV2 => "LifinityV2",
+        crate::types::Swap::RaydiumClmm => "RaydiumClmm",
+        crate::types::Swap::Openbook { .. } => "Openbook",
+        crate::types::Swap::Phoenix { .. } => "Phoenix",
+        crate::types::Swap::Symmetry { .. } => "Symmetry",
+        crate::types::Swap::TokenSwapV2 => "TokenSwapV2",
+        crate::types::Swap::HeliumTreasuryManagementRedeemV0 => "HeliumTreasuryManagementRedeemV0",
+        crate::types::Swap::StakeDexStakeWrappedSol => "StakeDexStakeWrappedSol",
+        crate::types::Swap::StakeDexSwapViaStake { .. } => "StakeDexSwapViaStake",
+        crate::types::Swap::GooseFXV2 => "GooseFXV2",
+        crate::types::Swap::Perps => "Perps",
+        crate::types::Swap::PerpsAddLiquidity => "PerpsAddLiquidity",
+        crate::types::Swap::PerpsRemoveLiquidity => "PerpsRemoveLiquidity",
+        crate::types::Swap::MeteoraDlmm => "MeteoraDlmm",
+        crate::types::Swap::OpenBookV2 { .. } => "OpenBookV2",
+        crate::types::Swap::RaydiumClmmV2 => "RaydiumClmmV2",
+        crate::types::Swap::StakeDexPrefundWithdrawStakeAndDepositStake { .. } => {
+            "StakeDexPrefundWithdrawStakeAndDepositStake"
+        }
+        crate::types::Swap::Clone { .. } => "Clone",
+        crate::types::Swap::SanctumS { .. } => "SanctumS",
+        crate::types::Swap::SanctumSAddLiquidity { .. } => "SanctumSAddLiquidity",
+        crate::types::Swap::SanctumSRemoveLiquidity { .. } => "SanctumSRemoveLiquidity",
+        crate::types::Swap::RaydiumCP => "RaydiumCP",
+        crate::types::Swap::WhirlpoolSwapV2 { .. } => "WhirlpoolSwapV2",
+        crate::types::Swap::OneIntro => "OneIntro",
+        crate::types::Swap::PumpWrappedBuy => "PumpWrappedBuy",
+        crate::types::Swap::PumpWrappedSell => "PumpWrappedSell",
+        crate::types::Swap::PerpsV2 => "PerpsV2",
+        crate::types::Swap::PerpsV2AddLiquidity => "PerpsV2AddLiquidity",
+        crate::types::Swap::PerpsV2RemoveLiquidity => "PerpsV2RemoveLiquidity",
+        crate::types::Swap::MoonshotWrappedBuy => "MoonshotWrappedBuy",
+        crate::types::Swap::MoonshotWrappedSell => "MoonshotWrappedSell",
+        crate::types::Swap::StabbleStableSwap => "StabbleStableSwap",
+        crate::types::Swap::StabbleWeightedSwap => "StabbleWeightedSwap",
+        crate::types::Swap::Obric { .. } => "Obric",
+        crate::types::Swap::FoxBuyFromEstimatedCost => "FoxBuyFromEstimatedCost",
+        crate::types::Swap::FoxClaimPartial { .. } => "FoxClaimPartial",
+        crate::types::Swap::SolFi { .. } => "SolFi",
+        crate::types::Swap::SolayerDelegateNoInit => "SolayerDelegateNoInit",
+        crate::types::Swap::SolayerUndelegateNoInit => "SolayerUndelegateNoInit",
+        crate::types::Swap::TokenMill { .. } => "TokenMill",
+        crate::types::Swap::DaosFunBuy => "DaosFunBuy",
+        crate::types::Swap::DaosFunSell => "DaosFunSell",
+        crate::types::Swap::ZeroFi => "ZeroFi",
+        crate::types::Swap::StakeDexWithdrawWrappedSol => "StakeDexWithdrawWrappedSol",
+        crate::types::Swap::VirtualsBuy => "VirtualsBuy",
+        crate::types::Swap::VirtualsSell => "VirtualsSell",
+        crate::types::Swap::Perena { .. } => "Perena",
+        crate::types::Swap::PumpSwapBuy => "PumpSwapBuy",
+        crate::types::Swap::PumpSwapSell => "PumpSwapSell",
+        crate::types::Swap::Gamma => "Gamma",
+        crate::types::Swap::MeteoraDlmmSwapV2 { .. } => "MeteoraDlmmSwapV2",
+        crate::types::Swap::Woofi => "Woofi",
+        crate::types::Swap::MeteoraDammV2 => "MeteoraDammV2",
+        crate::types::Swap::MeteoraDynamicBondingCurveSwap => "MeteoraDynamicBondingCurveSwap",
+        crate::types::Swap::StabbleStableSwapV2 => "StabbleStableSwapV2",
+        crate::types::Swap::StabbleWeightedSwapV2 => "StabbleWeightedSwapV2",
+        crate::types::Swap::RaydiumLaunchlabBuy { .. } => "RaydiumLaunchlabBuy",
+        crate::types::Swap::RaydiumLaunchlabSell { .. } => "RaydiumLaunchlabSell",
+        crate::types::Swap::BoopdotfunWrappedBuy => "BoopdotfunWrappedBuy",
+        crate::types::Swap::BoopdotfunWrappedSell => "BoopdotfunWrappedSell",
+        crate::types::Swap::Plasma { .. } => "Plasma",
+        crate::types::Swap::GoonFi { .. } => "GoonFi",
+        crate::types::Swap::HumidiFi { .. } => "HumidiFi",
+        crate::types::Swap::MeteoraDynamicBondingCurveSwapWithRemainingAccounts => {
+            "MeteoraDynamicBondingCurveSwapWithRemainingAccounts"
+        }
+        crate::types::Swap::TesseraV { .. } => "TesseraV",
+        crate::types::Swap::PumpWrappedBuyV2 => "PumpWrappedBuyV2",
+        crate::types::Swap::PumpWrappedSellV2 => "PumpWrappedSellV2",
+        crate::types::Swap::PumpSwapBuyV2 => "PumpSwapBuyV2",
+        crate::types::Swap::PumpSwapSellV2 => "PumpSwapSellV2",
+        crate::types::Swap::Heaven { .. } => "Heaven",
+        crate::types::Swap::SolFiV2 { .. } => "SolFiV2",
+        crate::types::Swap::Aquifer => "Aquifer",
+        crate::types::Swap::PumpWrappedBuyV3 => "PumpWrappedBuyV3",
+        crate::types::Swap::PumpWrappedSellV3 => "PumpWrappedSellV3",
+        crate::types::Swap::PumpSwapBuyV3 => "PumpSwapBuyV3",
+        crate::types::Swap::PumpSwapSellV3 => "PumpSwapSellV3",
+        crate::types::Swap::JupiterLendDeposit => "JupiterLendDeposit",
+        crate::types::Swap::JupiterLendRedeem => "JupiterLendRedeem",
+        crate::types::Swap::DefiTuna { .. } => "DefiTuna",
+        crate::types::Swap::AlphaQ { .. } => "AlphaQ",
+        crate::types::Swap::RaydiumV2 => "RaydiumV2",
+        crate::types::Swap::SarosDlmm { .. } => "SarosDlmm",
+        crate::types::Swap::Futarchy { .. } => "Futarchy",
+        crate::types::Swap::MeteoraDammV2WithRemainingAccounts => {
+            "MeteoraDammV2WithRemainingAccounts"
+        }
+        crate::types::Swap::Obsidian => "Obsidian",
+        crate::types::Swap::WhaleStreet { .. } => "WhaleStreet",
+        crate::types::Swap::DynamicV1 { .. } => "DynamicV1",
+        crate::types::Swap::PumpWrappedBuyV4 => "PumpWrappedBuyV4",
+        crate::types::Swap::PumpWrappedSellV4 => "PumpWrappedSellV4",
+        crate::types::Swap::CarrotIssue => "CarrotIssue",
+        crate::types::Swap::CarrotRedeem => "CarrotRedeem",
+        crate::types::Swap::Manifest { .. } => "Manifest",
+        crate::types::Swap::BisonFi { .. } => "BisonFi",
+        crate::types::Swap::HumidiFiV2 { .. } => "HumidiFiV2",
+        crate::types::Swap::PerenaStar { .. } => "PerenaStar",
+        crate::types::Swap::JupiterRfqV2 { .. } => "JupiterRfqV2",
+        crate::types::Swap::GoonFiV2 { .. } => "GoonFiV2",
+        crate::types::Swap::Scorch { .. } => "Scorch",
+        crate::types::Swap::VaultLiquidUnstake { .. } => "VaultLiquidUnstake",
+        crate::types::Swap::XOrca => "XOrca",
+        crate::types::Swap::Quantum { .. } => "Quantum",
+        crate::types::Swap::WhaleStreetV2 { .. } => "WhaleStreetV2",
+        crate::types::Swap::Riptide { .. } => "Riptide",
+        crate::types::Swap::RunnerRodeo => "RunnerRodeo",
+        crate::types::Swap::TaurusFi { .. } => "TaurusFi",
+        crate::types::Swap::Omnipair => "Omnipair",
+        crate::types::Swap::MSwap => "MSwap",
+        crate::types::Swap::Hylo { .. } => "Hylo",
+        crate::types::Swap::VoltrDeposit => "VoltrDeposit",
+        crate::types::Swap::VoltrWithdraw => "VoltrWithdraw",
+        crate::types::Swap::SanctumSV2 { .. } => "SanctumSV2",
+        crate::types::Swap::LemmingsFi { .. } => "LemmingsFi",
+        crate::types::Swap::ScaleVmmBuy => "ScaleVmmBuy",
+        crate::types::Swap::ScaleVmmSell => "ScaleVmmSell",
+        crate::types::Swap::ScaleAmmBuy => "ScaleAmmBuy",
+        crate::types::Swap::ScaleAmmSell => "ScaleAmmSell",
+        crate::types::Swap::BisonFiV2 { .. } => "BisonFiV2",
+        crate::types::Swap::Trends => "Trends",
+        crate::types::Swap::HumaDeposit => "HumaDeposit",
+        crate::types::Swap::HumaInstantWithdraw => "HumaInstantWithdraw",
+        crate::types::Swap::Kipseli { .. } => "Kipseli",
+        crate::types::Swap::DynamicV2 { .. } => "DynamicV2",
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
 pub struct ClickHouseRoutePlanStep {
     pub swap: ClickHouseSwap,
@@ -438,7 +796,7 @@ pub struct ClickHouseRoutePlanStep {
 impl From<&crate::types::RoutePlanStep> for ClickHouseRoutePlanStep {
     fn from(value: &crate::types::RoutePlanStep) -> Self {
         Self {
-            swap: clickhouse_swap(&value.swap),
+            swap: ClickHouseSwap::from(&value.swap),
             percent: value.percent,
             input_index: value.input_index,
             output_index: value.output_index,
@@ -457,7 +815,7 @@ pub struct ClickHouseRoutePlanStepV2 {
 impl From<&crate::types::RoutePlanStepV2> for ClickHouseRoutePlanStepV2 {
     fn from(value: &crate::types::RoutePlanStepV2) -> Self {
         Self {
-            swap: clickhouse_swap(&value.swap),
+            swap: ClickHouseSwap::from(&value.swap),
             bps: value.bps,
             input_index: value.input_index,
             output_index: value.output_index,
@@ -475,307 +833,311 @@ fn clickhouse_route_plan_v2(
     value.iter().map(ClickHouseRoutePlanStepV2::from).collect()
 }
 
-fn clickhouse_swap(value: &crate::types::Swap) -> ClickHouseSwap {
-    let mut swap = ClickHouseSwap::new(clickhouse_enum_variant(value));
+impl From<&crate::types::Swap> for ClickHouseSwap {
+    fn from(value: &crate::types::Swap) -> Self {
+        let mut swap = Self::new(swap_variant_name(value).to_string());
 
-    match value {
-        crate::types::Swap::WhirlpoolSwapV2 {
-            a_to_b,
-            remaining_accounts_info,
-        }
-        | crate::types::Swap::DefiTuna {
-            a_to_b,
-            remaining_accounts_info,
-        } => {
-            swap.a_to_b = Some(*a_to_b);
-            if let Some(remaining_accounts_info) = remaining_accounts_info {
+        match value {
+            crate::types::Swap::WhirlpoolSwapV2 {
+                a_to_b,
+                remaining_accounts_info,
+            }
+            | crate::types::Swap::DefiTuna {
+                a_to_b,
+                remaining_accounts_info,
+            } => {
+                swap.a_to_b = Some(*a_to_b);
+                if let Some(remaining_accounts_info) = remaining_accounts_info {
+                    swap.remaining_accounts_info_present = true;
+                    swap.remaining_accounts_slices =
+                        clickhouse_remaining_accounts_slices(remaining_accounts_info);
+                }
+            }
+            crate::types::Swap::JupiterRfqV2 { side, fill_data } => {
+                swap.side = Some(clickhouse_enum_variant(side));
+                swap.fill_data = fill_data.clone();
+            }
+            crate::types::Swap::WhaleStreetV2 {
+                side,
+                auth_amount_in,
+                auth,
+            } => {
+                swap.side = Some(clickhouse_enum_variant(side));
+                swap.auth_amount_in = Some(*auth_amount_in);
+                swap.auth = Some(*auth);
+            }
+            crate::types::Swap::Crema { a_to_b }
+            | crate::types::Swap::Whirlpool { a_to_b }
+            | crate::types::Swap::Heaven { a_to_b }
+            | crate::types::Swap::AlphaQ { a_to_b }
+            | crate::types::Swap::BisonFi { a_to_b }
+            | crate::types::Swap::BisonFiV2 { a_to_b } => {
+                swap.a_to_b = Some(*a_to_b);
+            }
+            crate::types::Swap::Serum { side }
+            | crate::types::Swap::Aldrin { side }
+            | crate::types::Swap::AldrinV2 { side }
+            | crate::types::Swap::Dradex { side }
+            | crate::types::Swap::Openbook { side }
+            | crate::types::Swap::Phoenix { side }
+            | crate::types::Swap::OpenBookV2 { side }
+            | crate::types::Swap::Plasma { side }
+            | crate::types::Swap::TesseraV { side }
+            | crate::types::Swap::Futarchy { side }
+            | crate::types::Swap::WhaleStreet { side }
+            | crate::types::Swap::Manifest { side }
+            | crate::types::Swap::Quantum { side } => {
+                swap.side = Some(clickhouse_enum_variant(side));
+            }
+            crate::types::Swap::Hylo { swap_type } => {
+                swap.hylo_swap_type = Some(clickhouse_enum_variant(swap_type));
+            }
+            crate::types::Swap::Invariant { x_to_y } | crate::types::Swap::MarcoPolo { x_to_y } => {
+                swap.x_to_y = Some(*x_to_y);
+            }
+            crate::types::Swap::DeltaFi { stable } => {
+                swap.stable = Some(*stable);
+            }
+            crate::types::Swap::Symmetry {
+                from_token_id,
+                to_token_id,
+            } => {
+                swap.from_token_id = Some(*from_token_id);
+                swap.to_token_id = Some(*to_token_id);
+            }
+            crate::types::Swap::StakeDexSwapViaStake { bridge_stake_seed }
+            | crate::types::Swap::StakeDexPrefundWithdrawStakeAndDepositStake {
+                bridge_stake_seed,
+            } => {
+                swap.bridge_stake_seed = Some(*bridge_stake_seed);
+            }
+            crate::types::Swap::Clone {
+                pool_index,
+                quantity_is_input,
+                quantity_is_collateral,
+            } => {
+                swap.pool_index = Some(*pool_index);
+                swap.quantity_is_input = Some(*quantity_is_input);
+                swap.quantity_is_collateral = Some(*quantity_is_collateral);
+            }
+            crate::types::Swap::SanctumS {
+                src_lst_value_calc_accs,
+                dst_lst_value_calc_accs,
+                src_lst_index,
+                dst_lst_index,
+            }
+            | crate::types::Swap::SanctumSV2 {
+                src_lst_value_calc_accs,
+                dst_lst_value_calc_accs,
+                src_lst_index,
+                dst_lst_index,
+            } => {
+                swap.src_lst_value_calc_accs = Some(*src_lst_value_calc_accs);
+                swap.dst_lst_value_calc_accs = Some(*dst_lst_value_calc_accs);
+                swap.src_lst_index = Some(*src_lst_index);
+                swap.dst_lst_index = Some(*dst_lst_index);
+            }
+            crate::types::Swap::SanctumSAddLiquidity {
+                lst_value_calc_accs,
+                lst_index,
+            }
+            | crate::types::Swap::SanctumSRemoveLiquidity {
+                lst_value_calc_accs,
+                lst_index,
+            } => {
+                swap.lst_value_calc_accs = Some(*lst_value_calc_accs);
+                swap.lst_index = Some(*lst_index);
+            }
+            crate::types::Swap::MeteoraDlmmSwapV2 {
+                remaining_accounts_info,
+            } => {
                 swap.remaining_accounts_info_present = true;
                 swap.remaining_accounts_slices =
                     clickhouse_remaining_accounts_slices(remaining_accounts_info);
             }
+            crate::types::Swap::Obric { x_to_y } => {
+                swap.x_to_y = Some(*x_to_y);
+            }
+            crate::types::Swap::FoxClaimPartial { is_y } => {
+                swap.is_y = Some(*is_y);
+            }
+            crate::types::Swap::SolFi { is_quote_to_base }
+            | crate::types::Swap::SolFiV2 { is_quote_to_base } => {
+                swap.is_quote_to_base = Some(*is_quote_to_base);
+            }
+            crate::types::Swap::TokenMill { side } => {
+                swap.side = Some(clickhouse_enum_variant(side));
+            }
+            crate::types::Swap::Perena {
+                in_index,
+                out_index,
+            } => {
+                swap.in_index = Some(*in_index);
+                swap.out_index = Some(*out_index);
+            }
+            crate::types::Swap::RaydiumLaunchlabBuy { share_fee_rate }
+            | crate::types::Swap::RaydiumLaunchlabSell { share_fee_rate } => {
+                swap.share_fee_rate = Some(*share_fee_rate);
+            }
+            crate::types::Swap::GoonFi {
+                is_bid,
+                blacklist_bump,
+            } => {
+                swap.is_bid = Some(*is_bid);
+                swap.blacklist_bump = Some(*blacklist_bump);
+            }
+            crate::types::Swap::GoonFiV2 { is_bid } => {
+                swap.is_bid = Some(*is_bid);
+            }
+            crate::types::Swap::HumidiFi {
+                swap_id,
+                is_base_to_quote,
+            }
+            | crate::types::Swap::HumidiFiV2 {
+                swap_id,
+                is_base_to_quote,
+            } => {
+                swap.swap_id = Some(ClickHouseUInt128((*swap_id).into()));
+                swap.is_base_to_quote = Some(*is_base_to_quote);
+            }
+            crate::types::Swap::Scorch { swap_id } => {
+                swap.swap_id = Some(ClickHouseUInt128(*swap_id));
+            }
+            crate::types::Swap::SarosDlmm { swap_for_y } => {
+                swap.swap_for_y = Some(*swap_for_y);
+            }
+            crate::types::Swap::DynamicV1 {
+                candidate_swaps,
+                best_position,
+            } => {
+                swap.candidate_swaps = candidate_swaps
+                    .iter()
+                    .map(ClickHouseCandidateSwap::from)
+                    .collect();
+                swap.best_position = *best_position;
+            }
+            crate::types::Swap::PerenaStar { is_mint } => {
+                swap.is_mint = Some(*is_mint);
+            }
+            crate::types::Swap::VaultLiquidUnstake { lst_amounts, seed } => {
+                swap.lst_amounts = lst_amounts.to_vec();
+                swap.seed = Some(*seed);
+            }
+            crate::types::Swap::Riptide { amount_is_token_a } => {
+                swap.amount_is_token_a = Some(*amount_is_token_a);
+            }
+            crate::types::Swap::TaurusFi { is_base_in }
+            | crate::types::Swap::LemmingsFi { is_base_in } => {
+                swap.is_base_in = Some(*is_base_in);
+            }
+            crate::types::Swap::Kipseli { is_base_to_quote } => {
+                swap.is_base_to_quote = Some(*is_base_to_quote);
+            }
+            crate::types::Swap::DynamicV2 {
+                candidate_swaps,
+                max_split_quote_calls,
+                max_split_candidates,
+            } => {
+                swap.candidate_swaps_with_bps = candidate_swaps
+                    .iter()
+                    .map(ClickHouseCandidateSwapWithBps::from)
+                    .collect();
+                swap.max_split_quote_calls = Some(*max_split_quote_calls);
+                swap.max_split_candidates = Some(*max_split_candidates);
+            }
+            crate::types::Swap::Saber
+            | crate::types::Swap::SaberAddDecimalsDeposit
+            | crate::types::Swap::SaberAddDecimalsWithdraw
+            | crate::types::Swap::TokenSwap
+            | crate::types::Swap::Sencha
+            | crate::types::Swap::Step
+            | crate::types::Swap::Cropper
+            | crate::types::Swap::Raydium
+            | crate::types::Swap::Lifinity
+            | crate::types::Swap::Mercurial
+            | crate::types::Swap::Cykura
+            | crate::types::Swap::MarinadeDeposit
+            | crate::types::Swap::MarinadeUnstake
+            | crate::types::Swap::Meteora
+            | crate::types::Swap::GooseFX
+            | crate::types::Swap::Balansol
+            | crate::types::Swap::LifinityV2
+            | crate::types::Swap::RaydiumClmm
+            | crate::types::Swap::TokenSwapV2
+            | crate::types::Swap::HeliumTreasuryManagementRedeemV0
+            | crate::types::Swap::StakeDexStakeWrappedSol
+            | crate::types::Swap::GooseFXV2
+            | crate::types::Swap::Perps
+            | crate::types::Swap::PerpsAddLiquidity
+            | crate::types::Swap::PerpsRemoveLiquidity
+            | crate::types::Swap::MeteoraDlmm
+            | crate::types::Swap::RaydiumClmmV2
+            | crate::types::Swap::RaydiumCP
+            | crate::types::Swap::OneIntro
+            | crate::types::Swap::PumpWrappedBuy
+            | crate::types::Swap::PumpWrappedSell
+            | crate::types::Swap::PerpsV2
+            | crate::types::Swap::PerpsV2AddLiquidity
+            | crate::types::Swap::PerpsV2RemoveLiquidity
+            | crate::types::Swap::MoonshotWrappedBuy
+            | crate::types::Swap::MoonshotWrappedSell
+            | crate::types::Swap::StabbleStableSwap
+            | crate::types::Swap::StabbleWeightedSwap
+            | crate::types::Swap::FoxBuyFromEstimatedCost
+            | crate::types::Swap::SolayerDelegateNoInit
+            | crate::types::Swap::SolayerUndelegateNoInit
+            | crate::types::Swap::DaosFunBuy
+            | crate::types::Swap::DaosFunSell
+            | crate::types::Swap::ZeroFi
+            | crate::types::Swap::StakeDexWithdrawWrappedSol
+            | crate::types::Swap::VirtualsBuy
+            | crate::types::Swap::VirtualsSell
+            | crate::types::Swap::PumpSwapBuy
+            | crate::types::Swap::PumpSwapSell
+            | crate::types::Swap::Gamma
+            | crate::types::Swap::Woofi
+            | crate::types::Swap::MeteoraDammV2
+            | crate::types::Swap::MeteoraDynamicBondingCurveSwap
+            | crate::types::Swap::StabbleStableSwapV2
+            | crate::types::Swap::StabbleWeightedSwapV2
+            | crate::types::Swap::BoopdotfunWrappedBuy
+            | crate::types::Swap::BoopdotfunWrappedSell
+            | crate::types::Swap::MeteoraDynamicBondingCurveSwapWithRemainingAccounts
+            | crate::types::Swap::PumpWrappedBuyV2
+            | crate::types::Swap::PumpWrappedSellV2
+            | crate::types::Swap::PumpSwapBuyV2
+            | crate::types::Swap::PumpSwapSellV2
+            | crate::types::Swap::Aquifer
+            | crate::types::Swap::PumpWrappedBuyV3
+            | crate::types::Swap::PumpWrappedSellV3
+            | crate::types::Swap::PumpSwapBuyV3
+            | crate::types::Swap::PumpSwapSellV3
+            | crate::types::Swap::JupiterLendDeposit
+            | crate::types::Swap::JupiterLendRedeem
+            | crate::types::Swap::RaydiumV2
+            | crate::types::Swap::MeteoraDammV2WithRemainingAccounts
+            | crate::types::Swap::Obsidian
+            | crate::types::Swap::PumpWrappedBuyV4
+            | crate::types::Swap::PumpWrappedSellV4
+            | crate::types::Swap::CarrotIssue
+            | crate::types::Swap::CarrotRedeem
+            | crate::types::Swap::XOrca
+            | crate::types::Swap::RunnerRodeo
+            | crate::types::Swap::Omnipair
+            | crate::types::Swap::MSwap
+            | crate::types::Swap::VoltrDeposit
+            | crate::types::Swap::VoltrWithdraw
+            | crate::types::Swap::ScaleVmmBuy
+            | crate::types::Swap::ScaleVmmSell
+            | crate::types::Swap::ScaleAmmBuy
+            | crate::types::Swap::ScaleAmmSell
+            | crate::types::Swap::Trends
+            | crate::types::Swap::HumaDeposit
+            | crate::types::Swap::HumaInstantWithdraw => {}
         }
-        crate::types::Swap::JupiterRfqV2 { side, fill_data } => {
-            swap.side = Some(clickhouse_enum_variant(side));
-            swap.fill_data = fill_data.clone();
-        }
-        crate::types::Swap::WhaleStreetV2 {
-            side,
-            auth_amount_in,
-            auth,
-        } => {
-            swap.side = Some(clickhouse_enum_variant(side));
-            swap.auth_amount_in = Some(*auth_amount_in);
-            swap.auth = Some(*auth);
-        }
-        crate::types::Swap::Crema { a_to_b }
-        | crate::types::Swap::Whirlpool { a_to_b }
-        | crate::types::Swap::Heaven { a_to_b }
-        | crate::types::Swap::AlphaQ { a_to_b }
-        | crate::types::Swap::BisonFi { a_to_b }
-        | crate::types::Swap::BisonFiV2 { a_to_b } => {
-            swap.a_to_b = Some(*a_to_b);
-        }
-        crate::types::Swap::Serum { side }
-        | crate::types::Swap::Aldrin { side }
-        | crate::types::Swap::AldrinV2 { side }
-        | crate::types::Swap::Dradex { side }
-        | crate::types::Swap::Openbook { side }
-        | crate::types::Swap::Phoenix { side }
-        | crate::types::Swap::OpenBookV2 { side }
-        | crate::types::Swap::Plasma { side }
-        | crate::types::Swap::TesseraV { side }
-        | crate::types::Swap::Futarchy { side }
-        | crate::types::Swap::WhaleStreet { side }
-        | crate::types::Swap::Manifest { side }
-        | crate::types::Swap::Quantum { side } => {
-            swap.side = Some(clickhouse_enum_variant(side));
-        }
-        crate::types::Swap::Hylo { swap_type } => {
-            swap.hylo_swap_type = Some(clickhouse_enum_variant(swap_type));
-        }
-        crate::types::Swap::Invariant { x_to_y } | crate::types::Swap::MarcoPolo { x_to_y } => {
-            swap.x_to_y = Some(*x_to_y);
-        }
-        crate::types::Swap::DeltaFi { stable } => {
-            swap.stable = Some(*stable);
-        }
-        crate::types::Swap::Symmetry {
-            from_token_id,
-            to_token_id,
-        } => {
-            swap.from_token_id = Some(*from_token_id);
-            swap.to_token_id = Some(*to_token_id);
-        }
-        crate::types::Swap::StakeDexSwapViaStake { bridge_stake_seed }
-        | crate::types::Swap::StakeDexPrefundWithdrawStakeAndDepositStake { bridge_stake_seed } => {
-            swap.bridge_stake_seed = Some(*bridge_stake_seed);
-        }
-        crate::types::Swap::Clone {
-            pool_index,
-            quantity_is_input,
-            quantity_is_collateral,
-        } => {
-            swap.pool_index = Some(*pool_index);
-            swap.quantity_is_input = Some(*quantity_is_input);
-            swap.quantity_is_collateral = Some(*quantity_is_collateral);
-        }
-        crate::types::Swap::SanctumS {
-            src_lst_value_calc_accs,
-            dst_lst_value_calc_accs,
-            src_lst_index,
-            dst_lst_index,
-        }
-        | crate::types::Swap::SanctumSV2 {
-            src_lst_value_calc_accs,
-            dst_lst_value_calc_accs,
-            src_lst_index,
-            dst_lst_index,
-        } => {
-            swap.src_lst_value_calc_accs = Some(*src_lst_value_calc_accs);
-            swap.dst_lst_value_calc_accs = Some(*dst_lst_value_calc_accs);
-            swap.src_lst_index = Some(*src_lst_index);
-            swap.dst_lst_index = Some(*dst_lst_index);
-        }
-        crate::types::Swap::SanctumSAddLiquidity {
-            lst_value_calc_accs,
-            lst_index,
-        }
-        | crate::types::Swap::SanctumSRemoveLiquidity {
-            lst_value_calc_accs,
-            lst_index,
-        } => {
-            swap.lst_value_calc_accs = Some(*lst_value_calc_accs);
-            swap.lst_index = Some(*lst_index);
-        }
-        crate::types::Swap::MeteoraDlmmSwapV2 {
-            remaining_accounts_info,
-        } => {
-            swap.remaining_accounts_info_present = true;
-            swap.remaining_accounts_slices =
-                clickhouse_remaining_accounts_slices(remaining_accounts_info);
-        }
-        crate::types::Swap::Obric { x_to_y } => {
-            swap.x_to_y = Some(*x_to_y);
-        }
-        crate::types::Swap::FoxClaimPartial { is_y } => {
-            swap.is_y = Some(*is_y);
-        }
-        crate::types::Swap::SolFi { is_quote_to_base }
-        | crate::types::Swap::SolFiV2 { is_quote_to_base } => {
-            swap.is_quote_to_base = Some(*is_quote_to_base);
-        }
-        crate::types::Swap::TokenMill { side } => {
-            swap.side = Some(clickhouse_enum_variant(side));
-        }
-        crate::types::Swap::Perena {
-            in_index,
-            out_index,
-        } => {
-            swap.in_index = Some(*in_index);
-            swap.out_index = Some(*out_index);
-        }
-        crate::types::Swap::RaydiumLaunchlabBuy { share_fee_rate }
-        | crate::types::Swap::RaydiumLaunchlabSell { share_fee_rate } => {
-            swap.share_fee_rate = Some(*share_fee_rate);
-        }
-        crate::types::Swap::GoonFi {
-            is_bid,
-            blacklist_bump,
-        } => {
-            swap.is_bid = Some(*is_bid);
-            swap.blacklist_bump = Some(*blacklist_bump);
-        }
-        crate::types::Swap::GoonFiV2 { is_bid } => {
-            swap.is_bid = Some(*is_bid);
-        }
-        crate::types::Swap::HumidiFi {
-            swap_id,
-            is_base_to_quote,
-        }
-        | crate::types::Swap::HumidiFiV2 {
-            swap_id,
-            is_base_to_quote,
-        } => {
-            swap.swap_id = Some(ClickHouseUInt128((*swap_id).into()));
-            swap.is_base_to_quote = Some(*is_base_to_quote);
-        }
-        crate::types::Swap::Scorch { swap_id } => {
-            swap.swap_id = Some(ClickHouseUInt128(*swap_id));
-        }
-        crate::types::Swap::SarosDlmm { swap_for_y } => {
-            swap.swap_for_y = Some(*swap_for_y);
-        }
-        crate::types::Swap::DynamicV1 {
-            candidate_swaps,
-            best_position,
-        } => {
-            swap.candidate_swaps = candidate_swaps
-                .iter()
-                .map(ClickHouseCandidateSwap::from)
-                .collect();
-            swap.best_position = *best_position;
-        }
-        crate::types::Swap::PerenaStar { is_mint } => {
-            swap.is_mint = Some(*is_mint);
-        }
-        crate::types::Swap::VaultLiquidUnstake { lst_amounts, seed } => {
-            swap.lst_amounts = lst_amounts.to_vec();
-            swap.seed = Some(*seed);
-        }
-        crate::types::Swap::Riptide { amount_is_token_a } => {
-            swap.amount_is_token_a = Some(*amount_is_token_a);
-        }
-        crate::types::Swap::TaurusFi { is_base_in }
-        | crate::types::Swap::LemmingsFi { is_base_in } => {
-            swap.is_base_in = Some(*is_base_in);
-        }
-        crate::types::Swap::Kipseli { is_base_to_quote } => {
-            swap.is_base_to_quote = Some(*is_base_to_quote);
-        }
-        crate::types::Swap::DynamicV2 {
-            candidate_swaps,
-            max_split_quote_calls,
-            max_split_candidates,
-        } => {
-            swap.candidate_swaps_with_bps = candidate_swaps
-                .iter()
-                .map(ClickHouseCandidateSwapWithBps::from)
-                .collect();
-            swap.max_split_quote_calls = Some(*max_split_quote_calls);
-            swap.max_split_candidates = Some(*max_split_candidates);
-        }
-        crate::types::Swap::Saber
-        | crate::types::Swap::SaberAddDecimalsDeposit
-        | crate::types::Swap::SaberAddDecimalsWithdraw
-        | crate::types::Swap::TokenSwap
-        | crate::types::Swap::Sencha
-        | crate::types::Swap::Step
-        | crate::types::Swap::Cropper
-        | crate::types::Swap::Raydium
-        | crate::types::Swap::Lifinity
-        | crate::types::Swap::Mercurial
-        | crate::types::Swap::Cykura
-        | crate::types::Swap::MarinadeDeposit
-        | crate::types::Swap::MarinadeUnstake
-        | crate::types::Swap::Meteora
-        | crate::types::Swap::GooseFX
-        | crate::types::Swap::Balansol
-        | crate::types::Swap::LifinityV2
-        | crate::types::Swap::RaydiumClmm
-        | crate::types::Swap::TokenSwapV2
-        | crate::types::Swap::HeliumTreasuryManagementRedeemV0
-        | crate::types::Swap::StakeDexStakeWrappedSol
-        | crate::types::Swap::GooseFXV2
-        | crate::types::Swap::Perps
-        | crate::types::Swap::PerpsAddLiquidity
-        | crate::types::Swap::PerpsRemoveLiquidity
-        | crate::types::Swap::MeteoraDlmm
-        | crate::types::Swap::RaydiumClmmV2
-        | crate::types::Swap::RaydiumCP
-        | crate::types::Swap::OneIntro
-        | crate::types::Swap::PumpWrappedBuy
-        | crate::types::Swap::PumpWrappedSell
-        | crate::types::Swap::PerpsV2
-        | crate::types::Swap::PerpsV2AddLiquidity
-        | crate::types::Swap::PerpsV2RemoveLiquidity
-        | crate::types::Swap::MoonshotWrappedBuy
-        | crate::types::Swap::MoonshotWrappedSell
-        | crate::types::Swap::StabbleStableSwap
-        | crate::types::Swap::StabbleWeightedSwap
-        | crate::types::Swap::FoxBuyFromEstimatedCost
-        | crate::types::Swap::SolayerDelegateNoInit
-        | crate::types::Swap::SolayerUndelegateNoInit
-        | crate::types::Swap::DaosFunBuy
-        | crate::types::Swap::DaosFunSell
-        | crate::types::Swap::ZeroFi
-        | crate::types::Swap::StakeDexWithdrawWrappedSol
-        | crate::types::Swap::VirtualsBuy
-        | crate::types::Swap::VirtualsSell
-        | crate::types::Swap::PumpSwapBuy
-        | crate::types::Swap::PumpSwapSell
-        | crate::types::Swap::Gamma
-        | crate::types::Swap::Woofi
-        | crate::types::Swap::MeteoraDammV2
-        | crate::types::Swap::MeteoraDynamicBondingCurveSwap
-        | crate::types::Swap::StabbleStableSwapV2
-        | crate::types::Swap::StabbleWeightedSwapV2
-        | crate::types::Swap::BoopdotfunWrappedBuy
-        | crate::types::Swap::BoopdotfunWrappedSell
-        | crate::types::Swap::MeteoraDynamicBondingCurveSwapWithRemainingAccounts
-        | crate::types::Swap::PumpWrappedBuyV2
-        | crate::types::Swap::PumpWrappedSellV2
-        | crate::types::Swap::PumpSwapBuyV2
-        | crate::types::Swap::PumpSwapSellV2
-        | crate::types::Swap::Aquifer
-        | crate::types::Swap::PumpWrappedBuyV3
-        | crate::types::Swap::PumpWrappedSellV3
-        | crate::types::Swap::PumpSwapBuyV3
-        | crate::types::Swap::PumpSwapSellV3
-        | crate::types::Swap::JupiterLendDeposit
-        | crate::types::Swap::JupiterLendRedeem
-        | crate::types::Swap::RaydiumV2
-        | crate::types::Swap::MeteoraDammV2WithRemainingAccounts
-        | crate::types::Swap::Obsidian
-        | crate::types::Swap::PumpWrappedBuyV4
-        | crate::types::Swap::PumpWrappedSellV4
-        | crate::types::Swap::CarrotIssue
-        | crate::types::Swap::CarrotRedeem
-        | crate::types::Swap::XOrca
-        | crate::types::Swap::RunnerRodeo
-        | crate::types::Swap::Omnipair
-        | crate::types::Swap::MSwap
-        | crate::types::Swap::VoltrDeposit
-        | crate::types::Swap::VoltrWithdraw
-        | crate::types::Swap::ScaleVmmBuy
-        | crate::types::Swap::ScaleVmmSell
-        | crate::types::Swap::ScaleAmmBuy
-        | crate::types::Swap::ScaleAmmSell
-        | crate::types::Swap::Trends
-        | crate::types::Swap::HumaDeposit
-        | crate::types::Swap::HumaInstantWithdraw => {}
-    }
 
-    swap
+        swap
+    }
 }
 
 fn clickhouse_remaining_accounts_slices(
@@ -1189,6 +1551,34 @@ mod tests {
         assert_eq!(first.quoted_out_amount, 20);
         assert_eq!(first.partition_key(), "2024");
         assert!(JupiterSwapRouteInstructionLandingRow::columns().contains(&"route_plan"));
+    }
+
+    #[test]
+    fn route_plan_uses_structured_payload_enum_tags() {
+        let ddl =
+            JupiterSwapRouteInstructionLandingRow::create_table_sql("jupiter_swap_route_test");
+
+        assert!(ddl.contains("variant Enum16("));
+        assert!(ddl.contains("candidate_swaps Array(Tuple(variant Enum8("));
+        assert!(!ddl.contains("variant LowCardinality(String)"));
+
+        let step = crate::types::RoutePlanStep {
+            swap: crate::types::Swap::HumidiFi {
+                swap_id: 42,
+                is_base_to_quote: true,
+            },
+            percent: 100,
+            input_index: 0,
+            output_index: 1,
+        };
+        let row_step = ClickHouseRoutePlanStep::from(&step);
+
+        assert_eq!(row_step.swap.variant, "HumidiFi");
+        assert_eq!(
+            row_step.swap.swap_id.as_ref().map(|value| value.0),
+            Some(42)
+        );
+        assert_eq!(row_step.swap.is_base_to_quote, Some(true));
     }
 
     #[test]

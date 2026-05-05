@@ -257,7 +257,22 @@ impl From<&crate::types::SwapEventV2> for ClickHouseSwapEventV2 {
 #[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
 pub struct ClickHouseCandidateSwapResult {
     pub variant: String,
-    pub value: u64,
+    pub value_0: Option<u64>,
+}
+
+impl ClickHouseCandidateSwapResult {
+    fn new(variant: String) -> Self {
+        Self {
+            variant,
+            value_0: None,
+        }
+    }
+}
+
+impl Default for ClickHouseCandidateSwapResult {
+    fn default() -> Self {
+        Self::new("OutAmount".to_string())
+    }
 }
 
 impl From<&crate::types::CandidateSwapResult> for ClickHouseCandidateSwapResult {
@@ -265,11 +280,11 @@ impl From<&crate::types::CandidateSwapResult> for ClickHouseCandidateSwapResult 
         match value {
             crate::types::CandidateSwapResult::OutAmount(value) => Self {
                 variant: "OutAmount".to_string(),
-                value: *value,
+                value_0: Some(*value),
             },
             crate::types::CandidateSwapResult::ProgramError(value) => Self {
                 variant: "ProgramError".to_string(),
-                value: *value,
+                value_0: Some(*value),
             },
         }
     }
@@ -437,7 +452,7 @@ define_event_row!(
     "jupiter_swap_candidate_swap_results_event",
     "candidate_swap_results",
     "jupiter_swap_candidate_swap_results_event_landing",
-    [(results: Vec<ClickHouseCandidateSwapResult> = |source: &crate::events::candidate_swap_results::CandidateSwapResultsEvent| clickhouse_candidate_swap_results(&source.results), "Array(Tuple(variant LowCardinality(String), value UInt64))")]
+    [(results: Vec<ClickHouseCandidateSwapResult> = |source: &crate::events::candidate_swap_results::CandidateSwapResultsEvent| clickhouse_candidate_swap_results(&source.results), "Array(Tuple(variant Enum8('OutAmount' = 0, 'ProgramError' = 1), value_0 Nullable(UInt64)))")]
 );
 
 define_event_row!(
@@ -570,5 +585,22 @@ mod tests {
 
         assert!(row.chain_time.is_none());
         assert_eq!(row.partition_key(), "2024");
+    }
+
+    #[test]
+    fn candidate_swap_result_uses_structured_payload_enum_tag() {
+        let ddl = JupiterSwapCandidateSwapResultsEventLandingRow::create_table_sql(
+            "jupiter_swap_candidate_swap_results_test",
+        );
+
+        assert!(ddl.contains("variant Enum8('OutAmount' = 0, 'ProgramError' = 1)"));
+        assert!(ddl.contains("value_0 Nullable(UInt64)"));
+        assert!(!ddl.contains("variant LowCardinality(String)"));
+
+        let result = ClickHouseCandidateSwapResult::from(
+            &crate::types::CandidateSwapResult::ProgramError(6001),
+        );
+        assert_eq!(result.variant, "ProgramError");
+        assert_eq!(result.value_0, Some(6001));
     }
 }

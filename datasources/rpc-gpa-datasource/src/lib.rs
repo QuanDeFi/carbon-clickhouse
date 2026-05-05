@@ -86,13 +86,21 @@ impl Datasource for GpaDatasource {
         let params = serde_json::json!([self.program_id.to_string(), rpc_config]);
 
         let fetch_start = std::time::Instant::now();
-        let Ok(OptionalContext::Context(rpc_response)) = rpc_client
+        let rpc_response = match rpc_client
             .send::<OptionalContext<Vec<RpcKeyedAccount>>>(RpcRequest::GetProgramAccounts, params)
             .await
-        else {
-            return Err(carbon_core::error::Error::FailedToConsumeDatasource(
-                "Failed to fetch program accounts".to_string(),
-            ));
+        {
+            Ok(OptionalContext::Context(rpc_response)) => rpc_response,
+            Ok(OptionalContext::NoContext(_)) => {
+                return Err(carbon_core::error::Error::FailedToConsumeDatasource(
+                    "RPC getProgramAccounts response did not include context".to_string(),
+                ));
+            }
+            Err(err) => {
+                return Err(carbon_core::error::Error::FailedToConsumeDatasource(
+                    format!("Failed to fetch program accounts: {err}"),
+                ));
+            }
         };
         let fetch_elapsed = fetch_start.elapsed();
         FETCH_DURATION_MILLIS.record(fetch_elapsed.as_millis() as f64);
