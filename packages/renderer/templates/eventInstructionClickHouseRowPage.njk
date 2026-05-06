@@ -129,7 +129,9 @@ impl ClickHouseTable for {{ event.name | pascalCase }}EventClickHouseRow {
         let engine = Self::clickhouse_engine(table_name);
         Self::create_table_sql_for(table_name, &engine, {{ "false" if clickHouseDdl.mode == "distributed" else "true" }})
     }
+}
 
+impl {{ event.name | pascalCase }}EventClickHouseRow {
     pub fn migration_operations(table_name: &str) -> Vec<String> {
         let mut operations = Vec::new();
 {% if clickHouseDdl.createLocalTable %}
@@ -181,11 +183,13 @@ impl ClickHouseTable for {{ event.name | pascalCase }}EventClickHouseRow {
     }
 
     fn clickhouse_engine(table_name: &str) -> String {
+        let _ = table_name;
         format!("{{ clickHouseDdl.engine }}")
     }
 
 {% if clickHouseDdl.createLocalTable %}
     fn clickhouse_local_engine(table_name: &str) -> String {
+        let _ = table_name;
         format!("{{ clickHouseDdl.localEngine }}")
     }
 

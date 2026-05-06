@@ -208,7 +208,9 @@ impl ClickHouseTable for {{ entityName | pascalCase }}{% if isAccount %}Account{
         let engine = Self::clickhouse_engine(table_name);
         Self::create_table_sql_for(table_name, &engine, {{ "false" if clickHouseDdl.mode == "distributed" else "true" }})
     }
+}
 
+impl {{ entityName | pascalCase }}{% if isAccount %}Account{% else %}Instruction{% endif %}ClickHouseRow {
     pub fn migration_operations(table_name: &str) -> Vec<String> {
         let mut operations = Vec::new();
 {% if clickHouseDdl.createLocalTable %}
@@ -275,11 +277,13 @@ impl ClickHouseTable for {{ entityName | pascalCase }}{% if isAccount %}Account{
     }
 
     fn clickhouse_engine(table_name: &str) -> String {
+        let _ = table_name;
         format!("{{ clickHouseDdl.engine }}")
     }
 
 {% if clickHouseDdl.createLocalTable %}
     fn clickhouse_local_engine(table_name: &str) -> String {
+        let _ = table_name;
         format!("{{ clickHouseDdl.localEngine }}")
     }
 

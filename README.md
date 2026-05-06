@@ -99,6 +99,7 @@ carbon-cli scaffold [OPTIONS]
 - `-s, --standard <anchor|codama>`: Specify the IDL standard to parse (default: anchor)
 - `--event-hints <csv>`: Comma-separated names of defined types to parse as CPI Events (Codama only)
 - `-u, --url <rpcUrl>`: RPC URL for fetching IDL when using a program address
+- `--with-clickhouse <boolean>`: Include ClickHouse wiring and deps (default: false)
 - `--no-clean`: Do not delete output directory before rendering
 
 #### Scaffold Options
@@ -114,6 +115,7 @@ carbon-cli scaffold [OPTIONS]
 - `-m, --metrics <log|prometheus>`: Metrics to use (default: log)
 - `--with-postgres <boolean>`: Include Postgres wiring and deps (default: true)
 - `--with-graphql <boolean>`: Include GraphQL wiring and deps (default: true)
+- `--with-clickhouse <boolean>`: Include ClickHouse wiring and deps (default: false)
 - `--with-serde <boolean>`: Include serde feature for decoder (default: false)
 - `--force`: Overwrite output directory if it exists
 

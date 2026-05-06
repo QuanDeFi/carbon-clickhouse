@@ -17,10 +17,16 @@ export function generateIndexerCargoToml(opts: ScaffoldOptions): string {
     const decoderFeatures: string[] = [];
     if (opts.withPostgres) decoderFeatures.push('postgres');
     if (opts.withGraphql) decoderFeatures.push('graphql');
+    if (opts.withClickHouse) decoderFeatures.push('clickhouse');
     if (opts.withSerde) decoderFeatures.push('serde');
     if (opts.withBase58) decoderFeatures.push('base58');
 
-    const carbonCoreDep = getCrateDependencyString('carbon-core', VERSIONS['carbon-core'], ['postgres', 'graphql']);
+    const carbonCoreFeatures: string[] = [];
+    if (opts.withPostgres) carbonCoreFeatures.push('postgres');
+    if (opts.withGraphql) carbonCoreFeatures.push('graphql');
+    if (opts.withClickHouse) carbonCoreFeatures.push('clickhouse');
+
+    const carbonCoreDep = getCrateDependencyString('carbon-core', VERSIONS['carbon-core'], carbonCoreFeatures);
     const tokioDep = getCrateDependencyString('tokio', VERSIONS['tokio']);
     const dotenvDep = getCrateDependencyString('dotenv', VERSIONS['dotenv']);
     const envLoggerDep = getCrateDependencyString('env_logger', VERSIONS['env_logger']);
@@ -75,6 +81,9 @@ export function generateIndexerCargoToml(opts: ScaffoldOptions): string {
     }
     if (opts.withGraphql) {
         features.push('graphql = []');
+    }
+    if (opts.withClickHouse) {
+        features.push('clickhouse = []');
     }
 
     const dependencies: string[] = [carbonCoreDep, decoderDep, datasourceDep, metricsDep];

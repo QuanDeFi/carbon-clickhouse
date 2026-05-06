@@ -13,14 +13,18 @@ Implemented scope:
 - one typed landing table per generated row family
 - append-only writes into ClickHouse
 - client-side batching
+- byte-aware backpressure, retry/backoff, gzip, and optional exact-batch deduplication tokens
+- renderer-controlled `MergeTree`, `ReplicatedMergeTree`, and `Distributed` DDL modes
 - multi-table row dispatch from decoder-owned wrappers
 - buffered-write drain on pipeline shutdown
 
 Outside implementation scope:
 - serving/canonicalization tables
 - coverage/range tracking
-- production cluster DDL generation for replicated/distributed ClickHouse deployments
-- explicit insert deduplication tokens
+- durable retry queues and DLQs
+- replay orchestration, finality policy, and serving APIs
+- destructive schema migrations
+- committed broad decoder regeneration beyond the current canaries
 
 ## Design Goals
 
@@ -94,6 +98,7 @@ This matches how Postgres integration is structured in Carbon: generic backend b
 
 Implemented in:
 - `packages/renderer/src/clickhouseRowMapper.ts`
+- `packages/renderer/src/clickhouseDdl.ts`
 - `packages/renderer/templates/instructionsClickHouseMod.njk`
 - `packages/renderer/templates/accountsClickHouseMod.njk`
 - `packages/renderer/templates/clickhouseRowPage.njk`
@@ -103,7 +108,7 @@ Implemented in:
 
 This layer keeps ClickHouse support aligned with Carbon's generator system rather than making it a handwritten per-decoder integration.
 
-Generator support covers typed row generation for account, instruction, and CPI-event landing families. The checked-in canaries are Jupiter swap for instruction/CPI-event rows and Token Program for account rows.
+Generator support covers typed row generation for account, instruction, and CPI-event landing families plus renderer-controlled ClickHouse DDL modes. The checked-in canaries are Jupiter swap for instruction/CPI-event rows and Token Program for account rows.
 
 ### 4. Thin Example Layer
 
@@ -164,8 +169,11 @@ The sink uses client-side batching in `ClickHouseBatchWriter`.
 
 Implemented behavior:
 - rows are grouped by table and partition key in memory
-- the writer flushes only the touched buffer when that buffer reaches `max_rows`
+- rows are serialized before buffering so byte limits match the exact HTTP body
+- the writer flushes only the touched buffer when that buffer reaches `max_rows` or `max_bytes`
 - the writer has a background timer that flushes only stale buffers whose own `flush_interval` has elapsed
+- global row and byte caps trigger a local drain attempt before rejecting new rows
+- retryable HTTP failures use configured exponential backoff
 - `finalize()`/shutdown drains all remaining buffers
 - flush sends `JSONEachRow` batches over HTTP
 
@@ -247,6 +255,7 @@ Implemented in the canary paths:
 - `JupiterSwapClickHouseInstructionsMigration`
 - `TokenProgramClickHouseAccountsMigration`
 - generated `*ClickHouseRow::create_table_sql(...)` row families
+- generated `*ClickHouseRow::migration_operations(...)` additive schema operations
 
 Reasons:
 - the decoder crate knows the semantic shape of the family best
@@ -260,6 +269,16 @@ The generic core layer provides only the mechanism:
 - `ClickHouseAdmin`
 
 The decoder decides what actual tables and DDL statements exist.
+
+Renderer DDL support keeps that ownership while allowing deployment-specific table engines:
+
+- default `MergeTree`
+- `ReplicatedMergeTree` with configurable path, replica name, and optional `ON CLUSTER`
+- `Distributed` table plus generated local table
+- custom `PARTITION BY`, `ORDER BY`, `TTL`, engine settings, and column codecs
+- additive `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` for generated columns
+
+The renderer does not generate destructive type-change migrations.
 
 ## Why We Introduced `ClickHouseRowContext`
 
@@ -384,7 +403,9 @@ Common account columns include:
 - `partition_slot`
 
 Engine choice:
-- `MergeTree`
+- default `MergeTree`
+- optional renderer-controlled `ReplicatedMergeTree`
+- optional renderer-controlled `Distributed` table with generated local table
 
 Canary partitioning:
 - instruction and event rows: `PARTITION BY toYear(partition_time)`
@@ -396,7 +417,7 @@ Why this shape:
 - partitions by durable keys without requiring chain time to always exist
 - keeps tables family-specific and typed rather than forcing a generic universal event blob
 
-Production partition and sort keys are workload-specific and are not encoded as a universal renderer policy.
+Production partition and sort keys are workload-specific. The renderer provides defaults for canaries and accepts explicit production overrides.
 
 ## Identity and Replay Model
 
@@ -442,11 +463,17 @@ The ClickHouse sink registers its own processor metrics with Carbon's upstream-v
 
 Metrics tracked by the sink:
 - successful inserted rows
+- successful inserted bytes
 - failed rows in failed batches
+- failed bytes in failed batches
 - buffered row count
+- buffered byte count
+- active buffer count
 - successful flush batch count
 - failed flush batch count
 - flush duration histogram
+- retry count
+- backpressure rejection count
 
 Why these metrics exist:
 - ClickHouse inserts are batch-oriented, so row metrics alone are not enough
@@ -490,13 +517,13 @@ Generation support is canary-limited in this repository. That is a rollout bound
 - HTTP + `JSONEachRow` is simpler than more optimized formats, but not the performance ceiling
 
 ### Non-goals of the implementation
-- full ClickHouse parity with the Postgres sink surface
 - serving-table canonicalization
 - online dedup logic in the sink itself
 - generic universal event tables
-- replacing client batching with server-side async inserts
-- production cluster DDL generation
-- explicit insert deduplication tokens
+- fire-and-forget async inserts
+- destructive schema migration generation
+- durable retry queues or DLQs inside the sink
+- committed broad decoder regeneration before upstream v1 stabilizes
 
 ## Why This Design Fits Carbon
 
@@ -518,8 +545,7 @@ Given those constraints, this design provides:
 The implementation is the ClickHouse landing-table foundation for Carbon. It keeps these areas outside the sink:
 
 - decoder-wide regeneration beyond the Jupiter and Token Program canaries
-- renderer-controlled replicated/distributed DDL modes
-- explicit insert deduplication tokens
 - serving/canonicalization tables
 - coverage/range tracking
 - durable retry queues
+- replay orchestration, finality policy, DLQs, and serving APIs

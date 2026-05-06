@@ -16,6 +16,7 @@ export type ScaffoldOptions = {
     metrics: 'log' | 'prometheus';
     withPostgres: boolean;
     withGraphql: boolean;
+    withClickHouse: boolean;
     withSerde: boolean;
     withBase58?: boolean;
     force?: boolean;
@@ -173,6 +174,7 @@ export function renderScaffold(opts: ScaffoldOptions) {
         },
         withPostgres: opts.withPostgres,
         withGraphql: opts.withGraphql,
+        withClickHouse: opts.withClickHouse,
         useGenericPostgres: opts.postgresMode === 'generic',
     };
 
@@ -241,6 +243,7 @@ cargo run -p ${opts.name}-indexer
 - Metrics: ${opts.metrics}
 - Postgres: ${opts.withPostgres}
 - GraphQL: ${opts.withGraphql}
+- ClickHouse: ${opts.withClickHouse}
 - Decoder: carbon-${opts.decoder}-decoder (generated)
 `;
 

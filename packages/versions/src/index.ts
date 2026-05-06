@@ -82,6 +82,7 @@ export const VERSIONS: Record<string, CrateDependency> = {
     },
     serde_json: '1.0.145',
     'serde-big-array': '0.5.1',
+    chrono: '0.4.42',
     'async-trait': '0.1.89',
     tokio: {
         version: '1',

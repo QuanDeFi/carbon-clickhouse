@@ -64,6 +64,7 @@ program
     .option('--postgres-mode <generic|typed>', 'Postgres table storage mode', 'typed')
     .option('--with-postgres <boolean>', 'Include Postgres wiring and deps (default: true)')
     .option('--with-graphql <boolean>', 'Include GraphQL wiring and deps (default: true)')
+    .option('--with-clickhouse <boolean>', 'Include ClickHouse wiring and deps (default: false)')
     .option('--with-serde <boolean>', 'Include serde feature for decoder (default: false)')
     .option('--with-base58 <boolean>', 'Include base58 feature for decoder (default: false)')
     .option(
@@ -89,7 +90,8 @@ program
         // Normalize boolean options
         const withPostgres = parseBoolOpt(opts.withPostgres, true);
         const withGraphql = parseBoolOpt(opts.withGraphql, true);
-        const withSerdeDefault = !withPostgres && !withGraphql;
+        const withClickHouse = parseBoolOpt(opts.withClickhouse, false);
+        const withSerdeDefault = !withPostgres && !withGraphql && !withClickHouse;
         const withSerde = parseBoolOpt(opts.withSerde, withSerdeDefault);
         const withBase58 = parseBoolOpt(opts.withBase58, false);
         const standalone = parseBoolOpt(opts.standalone, true);
@@ -139,6 +141,7 @@ program
                 postgresMode: opts.postgresMode,
                 withPostgres,
                 withGraphql,
+                withClickHouse,
                 withSerde,
                 withBase58,
                 standalone,
@@ -187,6 +190,7 @@ program
     .option('-m, --metrics <log|prometheus>', 'Metrics to use', 'log')
     .option('--with-postgres <boolean>', 'Include Postgres wiring and deps (default: true)')
     .option('--with-graphql <boolean>', 'Include GraphQL wiring and deps (default: true)')
+    .option('--with-clickhouse <boolean>', 'Include ClickHouse wiring and deps (default: false)')
     .option('--with-serde <boolean>', 'Include serde feature for decoder (default: false)')
     .option('--with-base58 <boolean>', 'Include base58 feature for decoder (default: false)')
     .option('--package-version <string>', 'Package version in Cargo.toml (default: 0.1.0)')
@@ -212,9 +216,10 @@ program
         const metrics = String(opts.metrics || 'log').toLowerCase();
         const withPostgres = parseBoolOpt(opts.withPostgres, true);
         const withGraphql = parseBoolOpt(opts.withGraphql, true);
+        const withClickHouse = parseBoolOpt(opts.withClickhouse, false);
         // Default serde to true if both postgres and graphql are disabled (since generated code always includes serde attributes)
         // Otherwise, serde will be auto-enabled by postgres/graphql, so default to false
-        const withSerdeDefault = !withPostgres && !withGraphql;
+        const withSerdeDefault = !withPostgres && !withGraphql && !withClickHouse;
         const withSerde = parseBoolOpt(opts.withSerde, withSerdeDefault);
         const withBase58 = parseBoolOpt(opts.withBase58, false);
         const force = Boolean(opts.force);
@@ -253,6 +258,7 @@ program
                 metrics,
                 withPostgres,
                 withGraphql,
+                withClickHouse,
                 withSerde,
                 withBase58,
                 force,
@@ -284,6 +290,7 @@ program
                 postgresMode: opts.postgresMode,
                 withPostgres,
                 withGraphql,
+                withClickHouse,
                 withSerde,
                 withBase58,
                 standalone: false,

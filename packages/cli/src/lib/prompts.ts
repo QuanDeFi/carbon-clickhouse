@@ -158,6 +158,7 @@ export type ScaffoldOptions = {
     metrics?: string;
     withPostgres?: boolean;
     withGraphql?: boolean;
+    withClickHouse?: boolean;
     force?: boolean;
     programId?: string;
     postgresMode?: 'generic' | 'typed';
@@ -353,6 +354,7 @@ export async function promptForScaffold(existingOpts: ScaffoldOptions = {}): Pro
         metrics,
         withPostgres,
         withGraphql,
+        withClickHouse: existingOpts.withClickHouse,
         force,
         programId,
         postgresMode,
