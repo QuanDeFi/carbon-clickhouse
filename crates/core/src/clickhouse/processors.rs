@@ -36,7 +36,7 @@ where
         register_clickhouse_metrics();
         Self {
             row_context: config.row_context(),
-            writer: ClickHouseBatchWriter::new_with_metrics(
+            writer: ClickHouseBatchWriter::<R>::new_with_metrics(
                 config,
                 ClickHouseMetricsFamily::Instructions,
             ),
@@ -105,7 +105,7 @@ where
         register_clickhouse_metrics();
         Self {
             row_context: config.row_context(),
-            writer: ClickHouseBatchWriter::new_with_metrics(
+            writer: ClickHouseBatchWriter::<R>::new_with_metrics(
                 config,
                 ClickHouseMetricsFamily::Accounts,
             ),

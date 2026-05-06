@@ -1,5 +1,9 @@
 use crate::{
-    clickhouse::{config::ClickHouseQuerySetting, http::post_query, ClickHouseConfig},
+    clickhouse::{
+        config::ClickHouseQuerySetting,
+        http::{client_from_config, post_query},
+        ClickHouseConfig,
+    },
     error::CarbonResult,
 };
 
@@ -15,7 +19,7 @@ pub struct ClickHouseAdmin {
 impl ClickHouseAdmin {
     pub fn new(config: ClickHouseConfig) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: client_from_config(&config),
             config,
         }
     }
@@ -30,7 +34,8 @@ impl ClickHouseAdmin {
                 "best_effort",
             )],
         )
-        .await
+        .await?;
+        Ok(())
     }
 
     pub async fn execute_queries<I>(&self, queries: I) -> CarbonResult<()>

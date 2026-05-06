@@ -34,6 +34,70 @@ pub struct ClickHouseAsyncInsertSettings {
     pub deduplicate: Option<bool>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClickHouseBatchSettings {
+    pub max_rows: usize,
+    pub max_bytes: Option<usize>,
+    pub max_buffered_rows: Option<usize>,
+    pub max_buffered_bytes: Option<usize>,
+    pub flush_interval: Duration,
+}
+
+impl ClickHouseBatchSettings {
+    pub fn new(max_rows: usize, flush_interval: Duration) -> Self {
+        Self {
+            max_rows,
+            max_bytes: None,
+            max_buffered_rows: None,
+            max_buffered_bytes: None,
+            flush_interval,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ClickHouseHttpCompression {
+    #[default]
+    None,
+    Gzip,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ClickHouseTransportSettings {
+    pub request_timeout: Option<Duration>,
+    pub connect_timeout: Option<Duration>,
+    pub pool_idle_timeout: Option<Duration>,
+    pub pool_max_idle_per_host: Option<usize>,
+    pub compression: ClickHouseHttpCompression,
+    pub user_agent: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClickHouseRetrySettings {
+    pub max_retries: usize,
+    pub initial_backoff: Duration,
+    pub max_backoff: Duration,
+    pub jitter: bool,
+}
+
+impl Default for ClickHouseRetrySettings {
+    fn default() -> Self {
+        Self {
+            max_retries: 0,
+            initial_backoff: Duration::from_millis(100),
+            max_backoff: Duration::from_secs(5),
+            jitter: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ClickHouseDeduplicationSettings {
+    #[default]
+    Disabled,
+    ExactBatchHash,
+}
+
 #[derive(Debug, Clone)]
 pub struct ClickHouseConfig {
     pub endpoint: String,
@@ -47,6 +111,10 @@ pub struct ClickHouseConfig {
     pub max_rows: usize,
     pub flush_interval: Duration,
     pub insert_settings: ClickHouseInsertSettings,
+    pub batch_settings: ClickHouseBatchSettings,
+    pub transport_settings: ClickHouseTransportSettings,
+    pub retry_settings: ClickHouseRetrySettings,
+    pub deduplication_settings: ClickHouseDeduplicationSettings,
 }
 
 impl ClickHouseConfig {
@@ -75,6 +143,10 @@ impl ClickHouseConfig {
             max_rows,
             flush_interval,
             insert_settings: ClickHouseInsertSettings::Sync,
+            batch_settings: ClickHouseBatchSettings::new(max_rows, flush_interval),
+            transport_settings: ClickHouseTransportSettings::default(),
+            retry_settings: ClickHouseRetrySettings::default(),
+            deduplication_settings: ClickHouseDeduplicationSettings::default(),
         }
     }
 
@@ -133,6 +205,31 @@ impl ClickHouseConfig {
 
     pub fn with_insert_settings(mut self, settings: ClickHouseInsertSettings) -> Self {
         self.insert_settings = settings;
+        self
+    }
+
+    pub fn with_batch_settings(mut self, settings: ClickHouseBatchSettings) -> Self {
+        self.max_rows = settings.max_rows;
+        self.flush_interval = settings.flush_interval;
+        self.batch_settings = settings;
+        self
+    }
+
+    pub fn with_transport_settings(mut self, settings: ClickHouseTransportSettings) -> Self {
+        self.transport_settings = settings;
+        self
+    }
+
+    pub fn with_retry_settings(mut self, settings: ClickHouseRetrySettings) -> Self {
+        self.retry_settings = settings;
+        self
+    }
+
+    pub fn with_deduplication_settings(
+        mut self,
+        settings: ClickHouseDeduplicationSettings,
+    ) -> Self {
+        self.deduplication_settings = settings;
         self
     }
 
@@ -205,6 +302,43 @@ mod tests {
         assert_eq!(settings.len(), 1);
         assert_eq!(settings[0].name, "date_time_input_format");
         assert_eq!(settings[0].value, "best_effort");
+    }
+
+    #[test]
+    fn legacy_constructors_populate_production_defaults() {
+        let config = config();
+
+        assert_eq!(config.batch_settings.max_rows, config.max_rows);
+        assert_eq!(config.batch_settings.flush_interval, config.flush_interval);
+        assert_eq!(config.batch_settings.max_bytes, None);
+        assert_eq!(config.batch_settings.max_buffered_rows, None);
+        assert_eq!(config.batch_settings.max_buffered_bytes, None);
+        assert_eq!(
+            config.transport_settings,
+            ClickHouseTransportSettings::default()
+        );
+        assert_eq!(config.retry_settings, ClickHouseRetrySettings::default());
+        assert_eq!(
+            config.deduplication_settings,
+            ClickHouseDeduplicationSettings::Disabled
+        );
+    }
+
+    #[test]
+    fn batch_settings_builder_updates_legacy_fields() {
+        let config = config().with_batch_settings(ClickHouseBatchSettings {
+            max_rows: 10,
+            max_bytes: Some(1024),
+            max_buffered_rows: Some(100),
+            max_buffered_bytes: Some(4096),
+            flush_interval: Duration::from_secs(2),
+        });
+
+        assert_eq!(config.max_rows, 10);
+        assert_eq!(config.flush_interval, Duration::from_secs(2));
+        assert_eq!(config.batch_settings.max_bytes, Some(1024));
+        assert_eq!(config.batch_settings.max_buffered_rows, Some(100));
+        assert_eq!(config.batch_settings.max_buffered_bytes, Some(4096));
     }
 
     #[test]

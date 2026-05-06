@@ -1472,6 +1472,7 @@ dependencies = [
  "carbon-proc-macros",
  "carbon-test-utils",
  "chrono",
+ "flate2",
  "juniper",
  "juniper_axum",
  "log",
