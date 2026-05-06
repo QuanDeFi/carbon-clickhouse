@@ -35,6 +35,11 @@ type HelperContext = {
     emitting: Set<string>;
 };
 
+export type ClickHouseRowMapperOptions = {
+    getDefinedTypesMap: () => Map<string, any> | null;
+    allowJsonFallback?: boolean;
+};
+
 type PayloadField = {
     variantName: string;
     variantRustName: string;
@@ -55,11 +60,7 @@ const UNSIGNED_ORDER = ['u8', 'u16', 'u32', 'u64', 'u128'];
 const SIGNED_ORDER = ['i8', 'i16', 'i32', 'i64', 'i128'];
 
 export class ClickHouseRowMapper {
-    constructor(
-        private ctx: {
-            getDefinedTypesMap: () => Map<string, any> | null;
-        },
-    ) {}
+    constructor(private ctx: ClickHouseRowMapperOptions) {}
 
     planType(typeNode: TypeNode, prefix: string[], docsPrefix: string[], seen: Set<string>): ClickHouseRowPlan {
         const helperContext: HelperContext = { helpers: new Map(), emitting: new Set() };
@@ -282,13 +283,24 @@ export class ClickHouseRowMapper {
             return this.mapEnum(unwrapped, source, helperContext, this.helperNameFromSource(source), null, sourceRef);
         }
 
-        return {
-            rowType: 'serde_json::Value',
-            clickHouseColumnType: 'JSON',
-            expr: `serde_json::to_value(${source}).expect("serialize clickhouse field")`,
-            defaultExpr: 'serde_json::Value::Null',
-            nullableSafe: false,
-        };
+        return this.mapUnsupportedValue(unwrapped, source);
+    }
+
+    private mapUnsupportedValue(typeNode: TypeNode, source: string): ClickHouseMappedValue {
+        if (this.ctx.allowJsonFallback === true) {
+            return {
+                rowType: 'serde_json::Value',
+                clickHouseColumnType: 'JSON',
+                expr: `serde_json::to_value(${source}).expect("serialize clickhouse field")`,
+                defaultExpr: 'serde_json::Value::Null',
+                nullableSafe: false,
+            };
+        }
+
+        const kind = (typeNode as any)?.kind ?? 'unknownTypeNode';
+        throw new Error(
+            `Unsupported ClickHouse type "${kind}" at "${source}". Add structured ClickHouse mapper support or set allowClickHouseJsonFallback to true to serialize this field as JSON.`,
+        );
     }
 
     private mapDefinedStruct(

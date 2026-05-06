@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const path = require('node:path');
 
 const { camelCase, kebabCase, pascalCase, snakeCase, titleCase } = require('@codama/nodes');
 const nunjucks = require('nunjucks');
@@ -28,6 +29,35 @@ const typedField = {
 
 function render(template, context) {
     return env.render(template, context);
+}
+
+function readFilesRecursively(dir) {
+    const out = [];
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const entryPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+            out.push(...readFilesRecursively(entryPath));
+        } else {
+            out.push(entryPath);
+        }
+    }
+    return out;
+}
+
+function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
+    const dir = path.resolve(__dirname, '../../../', relativeDir);
+    const files = readFilesRecursively(dir).filter(file => file.endsWith('.rs'));
+    assert.ok(files.length > 0, `expected generated ClickHouse files under ${relativeDir}`);
+
+    for (const file of files) {
+        const output = fs.readFileSync(file, 'utf8');
+        assert.doesNotMatch(output, /\b[a-zA-Z_][a-zA-Z0-9_]*\s+JSON\b/, `${file} contains a JSON column`);
+        assert.doesNotMatch(
+            output,
+            /pub\s+[a-zA-Z_][a-zA-Z0-9_]*:\s*serde_json::Value\b/,
+            `${file} contains a serde_json::Value row field`,
+        );
+    }
 }
 
 {
@@ -202,6 +232,37 @@ function render(template, context) {
     assert.doesNotMatch(output, /payload String/);
     assert.doesNotMatch(output, /clickhouse_enum_json/);
     assert.doesNotMatch(output, /serde_json::Value/);
+}
+
+{
+    const number = format => ({ kind: 'numberTypeNode', format, endian: 'le' });
+    const field = (name, type) => ({ kind: 'structFieldTypeNode', name, type });
+    const struct = fields => ({ kind: 'structTypeNode', fields });
+    const unsupportedMap = {
+        kind: 'mapTypeNode',
+        key: { kind: 'stringTypeNode', encoding: 'utf8' },
+        value: number('u64'),
+    };
+
+    const strictMapper = new ClickHouseRowMapper({ getDefinedTypesMap: () => new Map() });
+    assert.throws(
+        () => strictMapper.planType(struct([field('rawPayload', unsupportedMap)]), [], [], new Set()),
+        /Unsupported ClickHouse type "mapTypeNode" at "source\.raw_payload"/,
+    );
+
+    const fallbackMapper = new ClickHouseRowMapper({
+        getDefinedTypesMap: () => new Map(),
+        allowJsonFallback: true,
+    });
+    const plan = fallbackMapper.planType(struct([field('rawPayload', unsupportedMap)]), [], [], new Set());
+    assert.equal(plan.fields[0].clickHouseColumnType, 'JSON');
+    assert.equal(plan.fields[0].rowType, 'serde_json::Value');
+    assert.match(plan.fields[0].expr, /serde_json::to_value\(source\.raw_payload\)/);
+}
+
+{
+    assertNoGeneratedClickHouseJsonFallback('decoders/jupiter-swap-decoder/src/instructions/clickhouse');
+    assertNoGeneratedClickHouseJsonFallback('decoders/token-program-decoder/src/accounts/clickhouse');
 }
 
 {

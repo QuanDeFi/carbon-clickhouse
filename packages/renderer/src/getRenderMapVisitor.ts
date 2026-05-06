@@ -46,6 +46,7 @@ export type GetRenderMapOptions = {
     withPostgres?: boolean;
     withGraphql?: boolean;
     withClickHouse?: boolean;
+    allowClickHouseJsonFallback?: boolean;
     withSerde?: boolean;
     withBase58?: boolean;
     standalone?: boolean;
@@ -73,6 +74,7 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
     });
     const clickhouseRowMapper = new ClickHouseRowMapper({
         getDefinedTypesMap: () => definedTypesMap,
+        allowJsonFallback: options.allowClickHouseJsonFallback === true,
     });
 
     let currentProgram: ProgramNode | null = null;
