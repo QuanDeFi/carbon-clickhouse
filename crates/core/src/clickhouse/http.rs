@@ -190,10 +190,44 @@ fn gzip(data: &str) -> Result<Vec<u8>, String> {
 }
 
 fn is_retryable_status(status: StatusCode, body: &str) -> bool {
-    if status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error() {
+    if status == StatusCode::REQUEST_TIMEOUT
+        || status == StatusCode::TOO_MANY_REQUESTS
+        || status.is_server_error()
+    {
         return true;
     }
 
     let body = body.to_ascii_lowercase();
     body.contains("too many parts") || body.contains("too many inactive parts")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn request_timeout_status_is_retryable() {
+        let error = ClickHouseHttpError::response(StatusCode::REQUEST_TIMEOUT, String::new());
+
+        assert_eq!(error.kind, ClickHouseHttpErrorKind::RetryableStatus);
+        assert!(error.kind.is_retryable());
+    }
+
+    #[test]
+    fn too_many_parts_body_is_retryable_even_on_bad_request() {
+        let error =
+            ClickHouseHttpError::response(StatusCode::BAD_REQUEST, "Too many parts".to_string());
+
+        assert_eq!(error.kind, ClickHouseHttpErrorKind::RetryableStatus);
+        assert!(error.kind.is_retryable());
+    }
+
+    #[test]
+    fn schema_bad_request_is_permanent() {
+        let error =
+            ClickHouseHttpError::response(StatusCode::BAD_REQUEST, "Unknown column".to_string());
+
+        assert_eq!(error.kind, ClickHouseHttpErrorKind::PermanentStatus);
+        assert!(!error.kind.is_retryable());
+    }
 }

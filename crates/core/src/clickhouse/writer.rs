@@ -655,7 +655,7 @@ fn retry_delay(config: &ClickHouseConfig, attempt: usize) -> Duration {
         }
     }
 
-    delay
+    delay.min(config.retry_settings.max_backoff)
 }
 
 fn pseudo_jitter_nanos(max: u64) -> u64 {
@@ -1418,6 +1418,18 @@ mod tests {
             && setting
                 .value
                 .starts_with("carbon-clickhouse-settings_table-")));
+    }
+
+    #[test]
+    fn retry_delay_with_jitter_stays_capped_by_max_backoff() {
+        let config = config().with_retry_settings(ClickHouseRetrySettings {
+            max_retries: 3,
+            initial_backoff: Duration::from_millis(100),
+            max_backoff: Duration::from_millis(100),
+            jitter: true,
+        });
+
+        assert!(retry_delay(&config, 8) <= Duration::from_millis(100));
     }
 
     #[tokio::test]
