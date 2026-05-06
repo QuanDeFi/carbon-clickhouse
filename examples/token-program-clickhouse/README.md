@@ -57,6 +57,4 @@ cargo run -p token-program-clickhouse-carbon-example
 
 ## Instruction-Side Real-World Test
 
-The existing `jupiter-swap-clickhouse` example is currently the instruction-side real-world test. It validates real RPC blocks into generated Jupiter instruction and CPI-event ClickHouse rows.
-
-If we want a second instruction example that is not Jupiter-specific, the best next target is `token-program-instructions-clickhouse`: generate Token Program instruction ClickHouse rows, then run a bounded block-crawler pipeline over slots known to contain SPL Token transfers, mints, burns, approvals, and close-account instructions.
+`examples/jupiter-swap-clickhouse` is the instruction-side real-world test. It validates real RPC blocks into generated Jupiter instruction and CPI-event ClickHouse rows.

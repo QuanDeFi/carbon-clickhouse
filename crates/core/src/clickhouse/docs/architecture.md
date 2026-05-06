@@ -2,11 +2,11 @@
 
 ## Purpose
 
-This document explains the ClickHouse sink architecture currently implemented on the upstream-v1 port of Carbon, why it is designed this way, and where it intentionally differs from other Carbon sink integrations.
+This document explains the ClickHouse sink architecture on the upstream-v1 port of Carbon, why it is designed this way, and where it intentionally differs from other Carbon sink integrations.
 
-The current implementation is a generator-backed typed landing-table foundation. It is still landing-only, but it now covers the first canary slice across instruction, CPI-event, and account row families.
+The implementation is a generator-backed typed landing-table foundation. It is landing-only and covers a canary slice across instruction, CPI-event, and account row families.
 
-Current implemented scope:
+Implemented scope:
 - instruction, CPI-event, and account ingestion
 - Jupiter swap instruction and CPI-event ClickHouse canary coverage
 - Token Program account ClickHouse canary coverage
@@ -16,11 +16,11 @@ Current implemented scope:
 - multi-table row dispatch from decoder-owned wrappers
 - buffered-write drain on pipeline shutdown
 
-Deferred scope:
+Outside implementation scope:
 - serving/canonicalization tables
 - coverage/range tracking
-- async inserts as a primary ingest model
 - production cluster DDL generation for replicated/distributed ClickHouse deployments
+- explicit insert deduplication tokens
 
 ## Design Goals
 
@@ -101,16 +101,16 @@ Implemented in:
 - `packages/renderer/src/getRenderMapVisitor.ts`
 - `packages/renderer/src/cargoTomlGenerator.ts`
 
-This layer exists so ClickHouse support can scale through Carbon's generator system rather than becoming a handwritten per-decoder integration forever.
+This layer keeps ClickHouse support aligned with Carbon's generator system rather than making it a handwritten per-decoder integration.
 
-The current generator support covers typed row generation for account, instruction, and CPI-event landing families. The first checked-in canaries are Jupiter swap for instruction/CPI-event rows and Token Program for account rows.
+Generator support covers typed row generation for account, instruction, and CPI-event landing families. The checked-in canaries are Jupiter swap for instruction/CPI-event rows and Token Program for account rows.
 
 ### 4. Thin Example Layer
 
 Implemented in:
 - `examples/jupiter-swap-clickhouse/src/main.rs`
 
-The example is intentionally small. It should not contain sink-specific mapping logic or DDL details. It should only:
+The example is intentionally small. It contains no sink-specific mapping logic or DDL details. It only:
 - load environment
 - construct datasource
 - call decoder-owned ClickHouse setup
@@ -156,11 +156,11 @@ So the ClickHouse sink deliberately differs in these ways:
 - it needs explicit shutdown draining
 - it treats landing-table inserts as append-only
 
-The goal was not to copy Postgres mechanically. The goal was to preserve Carbon's integration style while using a ClickHouse-appropriate write model.
+The sink preserves Carbon's integration style while using a ClickHouse-appropriate write model.
 
 ## Why We Chose Client-Side Batching
 
-The current implementation uses client-side batching in `ClickHouseBatchWriter`.
+The sink uses client-side batching in `ClickHouseBatchWriter`.
 
 Implemented behavior:
 - rows are grouped by table and partition key in memory
@@ -169,14 +169,14 @@ Implemented behavior:
 - `finalize()`/shutdown drains all remaining buffers
 - flush sends `JSONEachRow` batches over HTTP
 
-Reasons this was chosen:
+Reasons:
 - ClickHouse benefits from larger batched inserts
 - Carbon workloads include backfills and bounded crawlers, not just tiny live writes
 - client-side batching gives deterministic control over batch contents and order
 - it makes landing-table ingestion predictable and easy to reason about
 - it fits replay-heavy ingestion better than relying purely on server-side async buffering
 
-We intentionally did not make `async_insert` the default runtime model.
+`async_insert` is not the default runtime model.
 
 Why not:
 - it shifts batching behavior to the server
@@ -186,9 +186,9 @@ Why not:
 
 Async inserts are available through explicit `ClickHouseConfig` insert settings for live production deployments with many Carbon writers. The sink only exposes async inserts with `wait_for_async_insert=1`; fire-and-forget `wait_for_async_insert=0` is intentionally unsupported.
 
-## Why We Added Processor Finalization
+## Why Processor Finalization Exists
 
-The buffered ClickHouse sink must drain accepted rows before the pipeline exits.
+The buffered ClickHouse sink must drain processed rows before the pipeline exits.
 
 Because of that, upstream-v1 Carbon was extended so processors can finalize.
 
@@ -198,16 +198,16 @@ Implemented in:
 - all pipe wrappers that delegate processor finalization
 
 Why this was necessary:
-- a buffered writer can contain rows that were accepted by the processor but not yet flushed
+- a buffered writer can contain rows processed by the processor but not yet flushed
 - without a pipeline-level lifecycle hook, those rows can be lost on shutdown
 - timer-based flush alone is not enough
 - relying on `Drop` for async I/O would be fragile and incorrect
 
-So the current rule is:
+Lifecycle rule:
 - ClickHouse processors flush buffered rows in `finalize()`
 - the pipeline calls `finalize()` before completing shutdown
 
-This is the main architectural core change introduced by the ClickHouse port. It is justified because it solves a real correctness problem for buffered sinks.
+This lifecycle hook solves a correctness problem for buffered sinks.
 
 ## Why We Use a Minimal HTTP Transport
 
@@ -220,7 +220,7 @@ It exposes two shared helpers:
 - `post_query(...)`
 - `post_query_with_data(...)`
 
-This shape was chosen to match ClickHouse's own lightweight HTTP testing style rather than building a heavy client abstraction.
+This shape matches ClickHouse's own lightweight HTTP testing style rather than building a heavy client abstraction.
 
 Reasons:
 - it keeps transport logic easy to audit
@@ -228,7 +228,7 @@ Reasons:
 - it avoids duplicating authentication and HTTP error handling
 - it keeps the sink close to ClickHouse's native HTTP model
 
-Current insert format:
+Insert format:
 - `JSONEachRow`
 
 Why `JSONEachRow`:
@@ -237,13 +237,13 @@ Why `JSONEachRow`:
 - it keeps the row trait small
 - it is a strong minimal choice for landing-table ingestion
 
-We intentionally did not choose a more complex binary protocol or native format for the current v1 path because that would increase complexity without improving the architecture.
+The v1 path does not use a more complex binary protocol or native format because that would increase complexity without improving the architecture.
 
 ## Why Schema Ownership Lives In Decoder Crates
 
 Schema ownership for concrete tables is decoder-owned, not writer-owned.
 
-Implemented in the current canary paths:
+Implemented in the canary paths:
 - `JupiterSwapClickHouseInstructionsMigration`
 - `TokenProgramClickHouseAccountsMigration`
 - generated `*ClickHouseRow::create_table_sql(...)` row families
@@ -270,16 +270,16 @@ Rows need some sink metadata that does not come from decoded blockchain data:
 
 Originally, row generation depended on the full `ClickHouseConfig`. That was broader than necessary.
 
-Now row generation depends on a smaller immutable context:
+Row generation depends on a smaller immutable context:
 - `ClickHouseRowContext`
 
 Reasons:
-- row mapping should depend only on the metadata it actually needs
+- row mapping depends only on the metadata it actually needs
 - it reduces coupling between row generation and transport settings
 - decoder row modules remain focused on row semantics, not connection details
 - it keeps the boundary between writer concerns and row concerns cleaner
 
-## Current Row and Table Contracts
+## Row and Table Contracts
 
 Core traits:
 - `ClickHouseTable`
@@ -309,26 +309,26 @@ Why:
 - ClickHouse is append-oriented here, not row-operation oriented
 - row emission maps more naturally to event-family ingestion than one-row-at-a-time operations
 
-## Why The Current Sink Is Landing-Only
+## Why The Sink Is Landing-Only
 
-The current implementation writes only to landing tables.
+The implementation writes only to landing tables.
 
 Reasons:
 - landing tables are the smallest correct first step
 - they let us validate the full path from datasource to ClickHouse without prematurely building the serving layer
-- Carbon ingestion may include repeats, replays, and bounded backfills, so append-only landing storage is the safest initial contract
-- serving/canonicalization introduces a different class of decisions about deduplication and replay resolution that are intentionally deferred
+- Carbon ingestion may include repeats, replays, and bounded backfills, so append-only landing storage is the safest landing contract
+- serving/canonicalization introduces a different class of decisions about deduplication and replay resolution that live outside this sink
 
-So the current sink proves:
+The sink proves:
 - Carbon can decode real data
 - Carbon can write that data to ClickHouse efficiently enough for a real pipeline
-- landing rows contain the metadata needed for future serving logic
+- landing rows contain the metadata needed for serving logic above the landing layer
 
-It does not yet try to solve the entire analytics warehouse problem.
+It does not solve the entire analytics warehouse problem.
 
-## Current Typed Landing Table Design
+## Typed Landing Table Design
 
-The current standard is one typed landing table per generated row family.
+The standard is one typed landing table per generated row family.
 
 Canary coverage:
 - Jupiter swap instruction rows: one table per generated instruction variant
@@ -386,7 +386,7 @@ Common account columns include:
 Engine choice:
 - `MergeTree`
 
-Current canary partitioning:
+Canary partitioning:
 - instruction and event rows: `PARTITION BY toYear(partition_time)`
 - account rows: `PARTITION BY partition_slot`
 
@@ -396,11 +396,11 @@ Why this shape:
 - partitions by durable keys without requiring chain time to always exist
 - keeps tables family-specific and typed rather than forcing a generic universal event blob
 
-Production partition and sort keys should be revisited per high-volume family once the production ClickHouse topology is finalized.
+Production partition and sort keys are workload-specific and are not encoded as a universal renderer policy.
 
 ## Identity and Replay Model
 
-The current row identity uses deterministic IDs.
+Row identity uses deterministic IDs.
 
 Implemented helpers:
 - `deterministic_instruction_id(...)`
@@ -440,10 +440,10 @@ This is a landing-table contract, not a serving-table dedup policy.
 
 The ClickHouse sink registers its own processor metrics with Carbon's upstream-v1 metrics registry.
 
-Metrics tracked today:
+Metrics tracked by the sink:
 - successful inserted rows
 - failed rows in failed batches
-- current buffered row count
+- buffered row count
 - successful flush batch count
 - failed flush batch count
 - flush duration histogram
@@ -469,57 +469,57 @@ Reasons:
 
 The example is not meant to demonstrate every datasource mode. It is meant to prove a realistic, controllable end-to-end integration.
 
-## Why We Added Generator Support Early
+## Why Generator Support Is Part Of The Sink
 
-The Jupiter ClickHouse integration could have remained handwritten.
-It did not.
+ClickHouse schema and row generation follow Carbon's generator-backed sink model. A purely handwritten ClickHouse path would diverge from the rest of the project as decoder coverage expands.
 
-Initial ClickHouse renderer support was added because Carbon's long-term sink integrations are generator-backed. If ClickHouse remained purely handwritten, scaling it across decoders would diverge from the rest of the project.
-
-Reasons for early generator support:
+Reasons for generator support:
 - it keeps ClickHouse aligned with Carbon's decoder generation model
 - it reduces the risk that ClickHouse becomes a one-off path
 - it makes the decoder-owned design reproducible for other programs
 - it preserves architectural consistency with Postgres and GraphQL integrations
 
-The current generation support is intentionally canary-limited. That is a rollout choice, not an architectural rejection of broader generation.
+Generation support is canary-limited in this repository. That is a rollout boundary, not an architectural rejection of broader generation.
 
-## Known Tradeoffs and Non-Goals
+## Tradeoffs and Non-Goals
 
-### Tradeoffs we accepted
-- adding processor finalization required touching core lifecycle code
-- landing-only scope means the warehouse story is intentionally incomplete for now
-- the sink currently validates a canary decoder surface rather than regenerating the whole repository
-- HTTP + `JSONEachRow` is simpler than more optimized formats, but not the ultimate performance ceiling
+### Tradeoffs
+- processor finalization touches core lifecycle code
+- landing-only scope means serving/canonicalization lives outside this sink
+- the sink validates a canary decoder surface rather than regenerating the whole repository
+- HTTP + `JSONEachRow` is simpler than more optimized formats, but not the performance ceiling
 
-### Non-goals of the current implementation
+### Non-goals of the implementation
 - full ClickHouse parity with the Postgres sink surface
 - serving-table canonicalization
 - online dedup logic in the sink itself
 - generic universal event tables
 - replacing client batching with server-side async inserts
 - production cluster DDL generation
+- explicit insert deduplication tokens
 
-## Why This Design Was Chosen
+## Why This Design Fits Carbon
 
-The implemented design is the result of three practical constraints:
+The design follows three practical constraints:
 
-1. Carbon already has a strong processor-driven architecture.
+1. Carbon has a strong processor-driven architecture.
 2. ClickHouse needs a batched write model that is different from Postgres.
-3. The first useful milestone is a real end-to-end landing sink, not a complete warehouse.
+3. The useful v1 slice is a real end-to-end landing sink, not a complete warehouse.
 
-Given those constraints, this design was chosen because it provides:
-- a real working ClickHouse integration in the current Carbon architecture
+Given those constraints, this design provides:
+- a real working ClickHouse integration in Carbon's architecture
 - a decoder-owned schema/mapping model that matches the rest of the project
 - a ClickHouse-appropriate buffered runtime with safe shutdown behavior
-- a code-generation path that can scale later
+- a code-generation path that can scale across decoders
 - a narrow but correct v1 slice that proves the architecture with real data
 
-## Future Direction
+## Implementation Boundaries
 
-The most likely next steps are:
-- regenerate broader decoder families beyond the Jupiter and Token Program canaries
-- add production ClickHouse DDL modes for replicated and distributed deployments
-- add explicit insert deduplication token support if retry idempotency needs to be stronger than deterministic landing IDs
+The implementation is the ClickHouse landing-table foundation for Carbon. It keeps these areas outside the sink:
 
-The current implementation should be viewed as the minimal correct ClickHouse foundation, not the final state.
+- decoder-wide regeneration beyond the Jupiter and Token Program canaries
+- renderer-controlled replicated/distributed DDL modes
+- explicit insert deduplication tokens
+- serving/canonicalization tables
+- coverage/range tracking
+- durable retry queues
