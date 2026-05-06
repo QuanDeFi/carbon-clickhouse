@@ -9,10 +9,6 @@ pub mod accounts;
 {% if instructionsToExport.length > 0 %}
 pub mod instructions;
 {% endif %}
-{% if withClickHouse and instructionsToExport.length > 0 %}
-#[cfg(feature = "clickhouse")]
-pub mod transactions;
-{% endif %}
 {% if definedTypesToExport.length > 0 %}
 pub mod types;
 {% endif %}

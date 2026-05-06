@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, sync::Arc};
+use std::marker::PhantomData;
 
 use solana_instruction::AccountMeta;
 
@@ -7,15 +7,12 @@ use crate::{
     clickhouse::{
         metrics::{record_buffered_rows, ClickHouseMetricsFamily},
         rows::{ClickHouseRow, ClickHouseRowContext, ClickHouseRows},
-        surface_rows::{CarbonAccountDeletionClickHouseRow, CarbonBlockDetailsClickHouseRow},
         writer::{ClickHouseBatchWriter, ClickHouseBufferOutcome},
         ClickHouseConfig,
     },
-    datasource::{AccountDeletion, BlockDetails},
     error::CarbonResult,
     instruction::{InstructionMetadata, InstructionProcessorInputType},
     processor::Processor,
-    transaction::{TransactionMetadata, TransactionProcessorInputType},
 };
 
 pub use crate::clickhouse::metrics::register_clickhouse_metrics;
@@ -153,157 +150,6 @@ where
     }
 }
 
-pub struct ClickHouseTransactionProcessor<T, W, R>
-where
-    R: ClickHouseRow,
-    W: ClickHouseRows<R>,
-{
-    row_context: ClickHouseRowContext,
-    writer: ClickHouseBatchWriter<R>,
-    _phantom: PhantomData<(T, W)>,
-}
-
-impl<T, W, R> ClickHouseTransactionProcessor<T, W, R>
-where
-    R: ClickHouseRow,
-    W: ClickHouseRows<R>,
-{
-    pub fn new(config: ClickHouseConfig) -> Self {
-        register_clickhouse_metrics();
-        Self {
-            row_context: config.row_context(),
-            writer: ClickHouseBatchWriter::new_with_metrics(
-                config,
-                ClickHouseMetricsFamily::Transactions,
-            ),
-            _phantom: PhantomData,
-        }
-    }
-
-    pub async fn flush(&mut self) -> CarbonResult<usize> {
-        self.writer.flush().await.map(|outcome| outcome.rows)
-    }
-}
-
-impl<T, W, R> Processor<TransactionProcessorInputType<'_, T>>
-    for ClickHouseTransactionProcessor<T, W, R>
-where
-    T: Clone + Send + Sync + 'static,
-    R: ClickHouseRow,
-    W: ClickHouseRows<R>
-        + From<(Arc<TransactionMetadata>, Vec<(InstructionMetadata, T)>)>
-        + Send
-        + Sync
-        + 'static,
-{
-    async fn process(&mut self, input: &TransactionProcessorInputType<'_, T>) -> CarbonResult<()> {
-        let wrapper = W::from((Arc::clone(input.metadata), input.instructions.to_vec()));
-        let rows = wrapper.clickhouse_rows(&self.row_context);
-
-        if rows.is_empty() {
-            return Ok(());
-        }
-
-        for row in rows {
-            match self.writer.buffer_row(row).await {
-                Ok(ClickHouseBufferOutcome::Buffered { buffered_rows }) => {
-                    record_buffered_rows(ClickHouseMetricsFamily::Transactions, buffered_rows);
-                }
-                Ok(ClickHouseBufferOutcome::Flushed(_)) => {}
-                Err(error) => return Err(error),
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn finalize(&mut self) -> CarbonResult<()> {
-        self.writer.shutdown().await.map(|_| ())
-    }
-}
-
-pub struct ClickHouseAccountDeletionProcessor {
-    row_context: ClickHouseRowContext,
-    writer: ClickHouseBatchWriter<CarbonAccountDeletionClickHouseRow>,
-}
-
-impl ClickHouseAccountDeletionProcessor {
-    pub fn new(config: ClickHouseConfig) -> Self {
-        register_clickhouse_metrics();
-        Self {
-            row_context: config.row_context(),
-            writer: ClickHouseBatchWriter::new_with_metrics(
-                config,
-                ClickHouseMetricsFamily::AccountDeletions,
-            ),
-        }
-    }
-
-    pub async fn flush(&mut self) -> CarbonResult<usize> {
-        self.writer.flush().await.map(|outcome| outcome.rows)
-    }
-}
-
-impl Processor<AccountDeletion> for ClickHouseAccountDeletionProcessor {
-    async fn process(&mut self, input: &AccountDeletion) -> CarbonResult<()> {
-        let row = CarbonAccountDeletionClickHouseRow::from_parts(input, &self.row_context);
-        match self.writer.buffer_row(row).await {
-            Ok(ClickHouseBufferOutcome::Buffered { buffered_rows }) => {
-                record_buffered_rows(ClickHouseMetricsFamily::AccountDeletions, buffered_rows);
-            }
-            Ok(ClickHouseBufferOutcome::Flushed(_)) => {}
-            Err(error) => return Err(error),
-        }
-
-        Ok(())
-    }
-
-    async fn finalize(&mut self) -> CarbonResult<()> {
-        self.writer.shutdown().await.map(|_| ())
-    }
-}
-
-pub struct ClickHouseBlockDetailsProcessor {
-    row_context: ClickHouseRowContext,
-    writer: ClickHouseBatchWriter<CarbonBlockDetailsClickHouseRow>,
-}
-
-impl ClickHouseBlockDetailsProcessor {
-    pub fn new(config: ClickHouseConfig) -> Self {
-        register_clickhouse_metrics();
-        Self {
-            row_context: config.row_context(),
-            writer: ClickHouseBatchWriter::new_with_metrics(
-                config,
-                ClickHouseMetricsFamily::BlockDetails,
-            ),
-        }
-    }
-
-    pub async fn flush(&mut self) -> CarbonResult<usize> {
-        self.writer.flush().await.map(|outcome| outcome.rows)
-    }
-}
-
-impl Processor<BlockDetails> for ClickHouseBlockDetailsProcessor {
-    async fn process(&mut self, input: &BlockDetails) -> CarbonResult<()> {
-        let row = CarbonBlockDetailsClickHouseRow::from_parts(input, &self.row_context);
-        match self.writer.buffer_row(row).await {
-            Ok(ClickHouseBufferOutcome::Buffered { buffered_rows }) => {
-                record_buffered_rows(ClickHouseMetricsFamily::BlockDetails, buffered_rows);
-            }
-            Ok(ClickHouseBufferOutcome::Flushed(_)) => {}
-            Err(error) => return Err(error),
-        }
-
-        Ok(())
-    }
-
-    async fn finalize(&mut self) -> CarbonResult<()> {
-        self.writer.shutdown().await.map(|_| ())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -402,37 +248,6 @@ mod tests {
         }
     }
 
-    struct TransactionWrapper(
-        Arc<TransactionMetadata>,
-        Vec<(InstructionMetadata, DummyInstruction)>,
-    );
-
-    impl
-        From<(
-            Arc<TransactionMetadata>,
-            Vec<(InstructionMetadata, DummyInstruction)>,
-        )> for TransactionWrapper
-    {
-        fn from(
-            value: (
-                Arc<TransactionMetadata>,
-                Vec<(InstructionMetadata, DummyInstruction)>,
-            ),
-        ) -> Self {
-            Self(value.0, value.1)
-        }
-    }
-
-    impl ClickHouseRows<DummyRow> for TransactionWrapper {
-        fn clickhouse_rows(&self, _context: &ClickHouseRowContext) -> Vec<DummyRow> {
-            let Self(metadata, instructions) = self;
-            vec![DummyRow {
-                table: "dummy_transactions",
-                partition: format!("{}-{}", metadata.slot, instructions.len()),
-            }]
-        }
-    }
-
     fn config() -> ClickHouseConfig {
         config_with_endpoint("http://localhost:8123".to_string())
     }
@@ -517,31 +332,6 @@ mod tests {
         }
     }
 
-    fn transaction_metadata() -> Arc<TransactionMetadata> {
-        Arc::new(TransactionMetadata {
-            slot: 9,
-            signature: solana_signature::Signature::new_unique(),
-            fee_payer: Pubkey::new_unique(),
-            meta: solana_transaction_status::TransactionStatusMeta::default(),
-            message: solana_message::VersionedMessage::Legacy(
-                solana_message::legacy::Message::default(),
-            ),
-            index: Some(1),
-            block_time: None,
-            block_hash: Some(solana_hash::Hash::new_unique()),
-            is_vote: false,
-        })
-    }
-
-    fn instruction_metadata() -> InstructionMetadata {
-        InstructionMetadata {
-            transaction_metadata: transaction_metadata(),
-            stack_height: 1,
-            index: 0,
-            absolute_path: vec![0],
-        }
-    }
-
     #[tokio::test]
     async fn instruction_processor_finalize_drains_empty_writer() {
         let mut processor = ClickHouseInstructionProcessor::<
@@ -606,97 +396,5 @@ mod tests {
         assert!(requests.contains("dummy_accounts"));
         assert!(counter_value("clickhouse.accounts.inserted") > before_inserted);
         assert_eq!(gauge_value("clickhouse.accounts.buffered_rows"), 0.0);
-    }
-
-    #[tokio::test]
-    async fn transaction_processor_buffers_rows() {
-        let mut processor =
-            ClickHouseTransactionProcessor::<DummyInstruction, TransactionWrapper, DummyRow>::new(
-                config(),
-            );
-        let metadata = transaction_metadata();
-        let instructions = vec![(instruction_metadata(), DummyInstruction)];
-        let input = TransactionProcessorInputType {
-            metadata: &metadata,
-            instructions: &instructions,
-        };
-
-        processor.process(&input).await.unwrap();
-
-        assert_eq!(processor.writer.buffered_rows(), 1);
-    }
-
-    #[tokio::test]
-    async fn transaction_processor_finalize_flushes_buffered_rows_and_records_metrics() {
-        let (endpoint, server) = start_clickhouse_server(1).await;
-        let before_inserted = counter_value("clickhouse.transactions.inserted");
-        let mut processor =
-            ClickHouseTransactionProcessor::<DummyInstruction, TransactionWrapper, DummyRow>::new(
-                config_with_endpoint(endpoint),
-            );
-        let metadata = transaction_metadata();
-        let instructions = vec![(instruction_metadata(), DummyInstruction)];
-        let input = TransactionProcessorInputType {
-            metadata: &metadata,
-            instructions: &instructions,
-        };
-
-        processor.process(&input).await.unwrap();
-        processor.finalize().await.unwrap();
-
-        let requests = server.await.unwrap().join("\n");
-        assert_eq!(processor.writer.buffered_rows(), 0);
-        assert!(requests.contains("dummy_transactions"));
-        assert!(counter_value("clickhouse.transactions.inserted") > before_inserted);
-        assert_eq!(gauge_value("clickhouse.transactions.buffered_rows"), 0.0);
-    }
-
-    #[tokio::test]
-    async fn account_deletion_processor_finalize_flushes_buffered_rows_and_records_metrics() {
-        let (endpoint, server) = start_clickhouse_server(1).await;
-        let before_inserted = counter_value("clickhouse.account_deletions.inserted");
-        let mut processor = ClickHouseAccountDeletionProcessor::new(config_with_endpoint(endpoint));
-        let deletion = AccountDeletion {
-            pubkey: Pubkey::new_unique(),
-            slot: 2_000_000,
-            transaction_signature: None,
-        };
-
-        processor.process(&deletion).await.unwrap();
-        processor.finalize().await.unwrap();
-
-        let requests = server.await.unwrap().join("\n");
-        assert_eq!(processor.writer.buffered_rows(), 0);
-        assert!(requests.contains(CarbonAccountDeletionClickHouseRow::DEFAULT_TABLE_NAME));
-        assert!(counter_value("clickhouse.account_deletions.inserted") > before_inserted);
-        assert_eq!(
-            gauge_value("clickhouse.account_deletions.buffered_rows"),
-            0.0
-        );
-    }
-
-    #[tokio::test]
-    async fn block_details_processor_finalize_flushes_buffered_rows_and_records_metrics() {
-        let (endpoint, server) = start_clickhouse_server(1).await;
-        let before_inserted = counter_value("clickhouse.block_details.inserted");
-        let mut processor = ClickHouseBlockDetailsProcessor::new(config_with_endpoint(endpoint));
-        let block_details = BlockDetails {
-            slot: 3,
-            block_hash: Some(solana_hash::Hash::new_unique()),
-            previous_block_hash: Some(solana_hash::Hash::new_unique()),
-            rewards: Some(Vec::new()),
-            num_reward_partitions: Some(1),
-            block_time: Some(1_704_067_200),
-            block_height: Some(4),
-        };
-
-        processor.process(&block_details).await.unwrap();
-        processor.finalize().await.unwrap();
-
-        let requests = server.await.unwrap().join("\n");
-        assert_eq!(processor.writer.buffered_rows(), 0);
-        assert!(requests.contains(CarbonBlockDetailsClickHouseRow::DEFAULT_TABLE_NAME));
-        assert!(counter_value("clickhouse.block_details.inserted") > before_inserted);
-        assert_eq!(gauge_value("clickhouse.block_details.buffered_rows"), 0.0);
     }
 }

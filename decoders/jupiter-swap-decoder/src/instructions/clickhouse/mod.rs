@@ -454,7 +454,6 @@ mod tests {
             index: Some(11),
             block_time,
             block_hash: Some(Hash::new_unique()),
-            is_vote: false,
         };
 
         InstructionMetadata {

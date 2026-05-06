@@ -9,10 +9,6 @@ use {
     },
     carbon_jupiter_swap_decoder::{
         instructions::clickhouse::setup_clickhouse as setup_instruction_clickhouse,
-        transactions::clickhouse::{
-            setup_clickhouse as setup_transaction_clickhouse,
-            JupiterSwapClickHouseInstructionCollection,
-        },
         JupiterSwapDecoder,
     },
     carbon_log_metrics::LogMetrics,
@@ -76,7 +72,6 @@ pub async fn main() -> CarbonResult<()> {
     let database_url = env::var("DATABASE_URL")
         .map_err(|err| CarbonError::Custom(format!("DATABASE_URL must be set ({err})")))?;
     let instruction_processor = setup_instruction_clickhouse(&database_url).await?;
-    let transaction_processor = setup_transaction_clickhouse(&database_url).await?;
 
     let rpc_block_ds = RpcBlockCrawler::new(
         env::var("RPC_URL").unwrap_or_default(),
@@ -96,7 +91,6 @@ pub async fn main() -> CarbonResult<()> {
         .datasource(rpc_block_ds)
         .metrics(Arc::new(LogMetrics::new_with_flush_interval(3)))
         .instruction(JupiterSwapDecoder, instruction_processor)
-        .transaction::<JupiterSwapClickHouseInstructionCollection, _>(transaction_processor)
         .shutdown_strategy(ShutdownStrategy::Immediate)
         .build()?
         .run()

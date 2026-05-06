@@ -71,115 +71,12 @@ static CLICKHOUSE_ACCOUNTS_FLUSH_DURATION_MILLIS: LazyLock<Histogram> = LazyLock
     )
 });
 
-static CLICKHOUSE_TRANSACTIONS_INSERTED: Counter = Counter::new(
-    "clickhouse.transactions.inserted",
-    "Total number of ClickHouse transaction rows successfully inserted",
-);
-
-static CLICKHOUSE_TRANSACTIONS_FAILED: Counter = Counter::new(
-    "clickhouse.transactions.failed",
-    "Total number of ClickHouse transaction rows in failed batches",
-);
-
-static CLICKHOUSE_TRANSACTIONS_BUFFERED_ROWS: Gauge = Gauge::new(
-    "clickhouse.transactions.buffered_rows",
-    "Current number of transaction rows buffered in the ClickHouse sink",
-);
-
-static CLICKHOUSE_TRANSACTIONS_FLUSH_BATCHES: Counter = Counter::new(
-    "clickhouse.transactions.flush.batches",
-    "Total number of successful ClickHouse transaction flush batches",
-);
-
-static CLICKHOUSE_TRANSACTIONS_FLUSH_FAILED_BATCHES: Counter = Counter::new(
-    "clickhouse.transactions.flush.failed_batches",
-    "Total number of failed ClickHouse transaction flush batches",
-);
-
-static CLICKHOUSE_TRANSACTIONS_FLUSH_DURATION_MILLIS: LazyLock<Histogram> = LazyLock::new(|| {
-    Histogram::new(
-        "clickhouse.transactions.flush.duration_milliseconds",
-        "Duration of ClickHouse transaction flush operations in milliseconds",
-        vec![1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0],
-    )
-});
-
-static CLICKHOUSE_ACCOUNT_DELETIONS_INSERTED: Counter = Counter::new(
-    "clickhouse.account_deletions.inserted",
-    "Total number of ClickHouse account deletion rows successfully inserted",
-);
-
-static CLICKHOUSE_ACCOUNT_DELETIONS_FAILED: Counter = Counter::new(
-    "clickhouse.account_deletions.failed",
-    "Total number of ClickHouse account deletion rows in failed batches",
-);
-
-static CLICKHOUSE_ACCOUNT_DELETIONS_BUFFERED_ROWS: Gauge = Gauge::new(
-    "clickhouse.account_deletions.buffered_rows",
-    "Current number of account deletion rows buffered in the ClickHouse sink",
-);
-
-static CLICKHOUSE_ACCOUNT_DELETIONS_FLUSH_BATCHES: Counter = Counter::new(
-    "clickhouse.account_deletions.flush.batches",
-    "Total number of successful ClickHouse account deletion flush batches",
-);
-
-static CLICKHOUSE_ACCOUNT_DELETIONS_FLUSH_FAILED_BATCHES: Counter = Counter::new(
-    "clickhouse.account_deletions.flush.failed_batches",
-    "Total number of failed ClickHouse account deletion flush batches",
-);
-
-static CLICKHOUSE_ACCOUNT_DELETIONS_FLUSH_DURATION_MILLIS: LazyLock<Histogram> =
-    LazyLock::new(|| {
-        Histogram::new(
-            "clickhouse.account_deletions.flush.duration_milliseconds",
-            "Duration of ClickHouse account deletion flush operations in milliseconds",
-            vec![1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0],
-        )
-    });
-
-static CLICKHOUSE_BLOCK_DETAILS_INSERTED: Counter = Counter::new(
-    "clickhouse.block_details.inserted",
-    "Total number of ClickHouse block details rows successfully inserted",
-);
-
-static CLICKHOUSE_BLOCK_DETAILS_FAILED: Counter = Counter::new(
-    "clickhouse.block_details.failed",
-    "Total number of ClickHouse block details rows in failed batches",
-);
-
-static CLICKHOUSE_BLOCK_DETAILS_BUFFERED_ROWS: Gauge = Gauge::new(
-    "clickhouse.block_details.buffered_rows",
-    "Current number of block details rows buffered in the ClickHouse sink",
-);
-
-static CLICKHOUSE_BLOCK_DETAILS_FLUSH_BATCHES: Counter = Counter::new(
-    "clickhouse.block_details.flush.batches",
-    "Total number of successful ClickHouse block details flush batches",
-);
-
-static CLICKHOUSE_BLOCK_DETAILS_FLUSH_FAILED_BATCHES: Counter = Counter::new(
-    "clickhouse.block_details.flush.failed_batches",
-    "Total number of failed ClickHouse block details flush batches",
-);
-
-static CLICKHOUSE_BLOCK_DETAILS_FLUSH_DURATION_MILLIS: LazyLock<Histogram> = LazyLock::new(|| {
-    Histogram::new(
-        "clickhouse.block_details.flush.duration_milliseconds",
-        "Duration of ClickHouse block details flush operations in milliseconds",
-        vec![1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0],
-    )
-});
-
 static REGISTER_CLICKHOUSE_METRICS: Once = Once::new();
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ClickHouseMetricsFamily {
     Instructions,
     Accounts,
-    Transactions,
-    AccountDeletions,
-    BlockDetails,
 }
 
 #[derive(Clone, Copy)]
@@ -207,24 +104,6 @@ pub fn register_clickhouse_metrics() {
         registry.register_counter(&CLICKHOUSE_ACCOUNTS_FLUSH_BATCHES);
         registry.register_counter(&CLICKHOUSE_ACCOUNTS_FLUSH_FAILED_BATCHES);
         registry.register_histogram(&CLICKHOUSE_ACCOUNTS_FLUSH_DURATION_MILLIS);
-        registry.register_counter(&CLICKHOUSE_TRANSACTIONS_INSERTED);
-        registry.register_counter(&CLICKHOUSE_TRANSACTIONS_FAILED);
-        registry.register_gauge(&CLICKHOUSE_TRANSACTIONS_BUFFERED_ROWS);
-        registry.register_counter(&CLICKHOUSE_TRANSACTIONS_FLUSH_BATCHES);
-        registry.register_counter(&CLICKHOUSE_TRANSACTIONS_FLUSH_FAILED_BATCHES);
-        registry.register_histogram(&CLICKHOUSE_TRANSACTIONS_FLUSH_DURATION_MILLIS);
-        registry.register_counter(&CLICKHOUSE_ACCOUNT_DELETIONS_INSERTED);
-        registry.register_counter(&CLICKHOUSE_ACCOUNT_DELETIONS_FAILED);
-        registry.register_gauge(&CLICKHOUSE_ACCOUNT_DELETIONS_BUFFERED_ROWS);
-        registry.register_counter(&CLICKHOUSE_ACCOUNT_DELETIONS_FLUSH_BATCHES);
-        registry.register_counter(&CLICKHOUSE_ACCOUNT_DELETIONS_FLUSH_FAILED_BATCHES);
-        registry.register_histogram(&CLICKHOUSE_ACCOUNT_DELETIONS_FLUSH_DURATION_MILLIS);
-        registry.register_counter(&CLICKHOUSE_BLOCK_DETAILS_INSERTED);
-        registry.register_counter(&CLICKHOUSE_BLOCK_DETAILS_FAILED);
-        registry.register_gauge(&CLICKHOUSE_BLOCK_DETAILS_BUFFERED_ROWS);
-        registry.register_counter(&CLICKHOUSE_BLOCK_DETAILS_FLUSH_BATCHES);
-        registry.register_counter(&CLICKHOUSE_BLOCK_DETAILS_FLUSH_FAILED_BATCHES);
-        registry.register_histogram(&CLICKHOUSE_BLOCK_DETAILS_FLUSH_DURATION_MILLIS);
     });
 }
 
@@ -278,30 +157,6 @@ impl ClickHouseMetricsFamily {
                 flush_batches: &CLICKHOUSE_ACCOUNTS_FLUSH_BATCHES,
                 flush_failed_batches: &CLICKHOUSE_ACCOUNTS_FLUSH_FAILED_BATCHES,
                 flush_duration_millis: &CLICKHOUSE_ACCOUNTS_FLUSH_DURATION_MILLIS,
-            },
-            Self::Transactions => ClickHouseMetricSet {
-                inserted: &CLICKHOUSE_TRANSACTIONS_INSERTED,
-                failed: &CLICKHOUSE_TRANSACTIONS_FAILED,
-                buffered_rows: &CLICKHOUSE_TRANSACTIONS_BUFFERED_ROWS,
-                flush_batches: &CLICKHOUSE_TRANSACTIONS_FLUSH_BATCHES,
-                flush_failed_batches: &CLICKHOUSE_TRANSACTIONS_FLUSH_FAILED_BATCHES,
-                flush_duration_millis: &CLICKHOUSE_TRANSACTIONS_FLUSH_DURATION_MILLIS,
-            },
-            Self::AccountDeletions => ClickHouseMetricSet {
-                inserted: &CLICKHOUSE_ACCOUNT_DELETIONS_INSERTED,
-                failed: &CLICKHOUSE_ACCOUNT_DELETIONS_FAILED,
-                buffered_rows: &CLICKHOUSE_ACCOUNT_DELETIONS_BUFFERED_ROWS,
-                flush_batches: &CLICKHOUSE_ACCOUNT_DELETIONS_FLUSH_BATCHES,
-                flush_failed_batches: &CLICKHOUSE_ACCOUNT_DELETIONS_FLUSH_FAILED_BATCHES,
-                flush_duration_millis: &CLICKHOUSE_ACCOUNT_DELETIONS_FLUSH_DURATION_MILLIS,
-            },
-            Self::BlockDetails => ClickHouseMetricSet {
-                inserted: &CLICKHOUSE_BLOCK_DETAILS_INSERTED,
-                failed: &CLICKHOUSE_BLOCK_DETAILS_FAILED,
-                buffered_rows: &CLICKHOUSE_BLOCK_DETAILS_BUFFERED_ROWS,
-                flush_batches: &CLICKHOUSE_BLOCK_DETAILS_FLUSH_BATCHES,
-                flush_failed_batches: &CLICKHOUSE_BLOCK_DETAILS_FLUSH_FAILED_BATCHES,
-                flush_duration_millis: &CLICKHOUSE_BLOCK_DETAILS_FLUSH_DURATION_MILLIS,
             },
         }
     }

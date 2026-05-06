@@ -4,15 +4,13 @@
 
 This document explains the ClickHouse sink architecture on the upstream-v1 port of Carbon, why it is designed this way, and where it intentionally differs from other Carbon sink integrations.
 
-The implementation is a generator-backed typed landing-table foundation. It is landing-only and covers all Carbon processor surfaces: account, instruction, transaction, account deletion, and block details.
+The implementation is a generator-backed typed landing-table foundation. It is landing-only and follows Carbon's existing Postgres coverage boundary: decoder-owned accounts and instructions, with CPI-events represented through the instruction path.
 
 Implemented scope:
-- instruction, CPI-event, account, transaction, account-deletion, and block-details ingestion
+- instruction, CPI-event, and account ingestion
 - Jupiter swap instruction and CPI-event ClickHouse canary coverage
-- Jupiter swap transaction aggregation ClickHouse canary coverage
 - Token Program account ClickHouse canary coverage
 - one typed landing table per generated row family
-- generic core landing tables for transaction, account deletion, and block details
 - append-only writes into ClickHouse
 - client-side batching
 - multi-table row dispatch from decoder-owned wrappers
@@ -41,11 +39,11 @@ The ClickHouse integration is not a special pipeline type. It is a normal Carbon
 
 The flow is:
 
-1. a datasource emits transaction updates
-2. Carbon transforms those updates into account, instruction, transaction, deletion, or block inputs
+1. a datasource emits Carbon updates
+2. Carbon transforms those updates into decoded account or instruction inputs
 3. a ClickHouse processor receives the existing Carbon processor input for that surface
 4. the ClickHouse processor converts that input into backend-specific row wrappers
-5. decoder-owned or core ClickHouse code maps those wrappers to landing rows
+5. decoder-owned ClickHouse code maps those wrappers to landing rows
 6. the generic ClickHouse writer batches and inserts those rows into ClickHouse
 
 That keeps the integration aligned with Carbon's existing processor model instead of building a parallel sink framework.
@@ -59,7 +57,6 @@ Implemented in:
 - `crates/core/src/clickhouse/http.rs`
 - `crates/core/src/clickhouse/admin.rs`
 - `crates/core/src/clickhouse/rows/mod.rs`
-- `crates/core/src/clickhouse/surface_rows.rs`
 - `crates/core/src/clickhouse/writer.rs`
 - `crates/core/src/clickhouse/processors.rs`
 
@@ -71,10 +68,6 @@ This layer owns generic ClickHouse behavior only:
 - batched buffered writing
 - instruction processor integration
 - account processor integration
-- transaction processor integration
-- account-deletion processor integration
-- block-details processor integration
-- generic core surface rows and DDL
 - ClickHouse metrics registration
 
 This layer does not know Jupiter-specific schema details.
@@ -85,8 +78,6 @@ Implemented in:
 - `decoders/jupiter-swap-decoder/src/instructions/clickhouse/mod.rs`
 - `decoders/jupiter-swap-decoder/src/instructions/clickhouse/cpi_event_row.rs`
 - `decoders/jupiter-swap-decoder/src/instructions/clickhouse/instruction_rows.rs`
-- `decoders/jupiter-swap-decoder/src/transactions/clickhouse/mod.rs`
-- `decoders/jupiter-swap-decoder/src/transactions/clickhouse/transaction_row.rs`
 - `decoders/token-program-decoder/src/accounts/clickhouse/mod.rs`
 - `decoders/token-program-decoder/src/accounts/clickhouse/*_row.rs`
 
@@ -94,7 +85,6 @@ This layer owns program-specific sink logic:
 - the decoder wrapper type used by the generic processor
 - row mapping from decoded instruction/event data to ClickHouse rows
 - table DDL for each typed landing family
-- transaction aggregation/index rows for decoded program instructions and CPI-events
 - decoder-specific bootstrap helpers
 - default ClickHouse runtime settings for that decoder family
 
@@ -106,8 +96,6 @@ Implemented in:
 - `packages/renderer/src/clickhouseRowMapper.ts`
 - `packages/renderer/templates/instructionsClickHouseMod.njk`
 - `packages/renderer/templates/accountsClickHouseMod.njk`
-- `packages/renderer/templates/transactionsClickHouseMod.njk`
-- `packages/renderer/templates/transactionsClickHouseTransactionRowPage.njk`
 - `packages/renderer/templates/clickhouseRowPage.njk`
 - `packages/renderer/templates/eventInstructionClickHouseRowPage.njk`
 - `packages/renderer/src/getRenderMapVisitor.ts`
@@ -115,7 +103,7 @@ Implemented in:
 
 This layer keeps ClickHouse support aligned with Carbon's generator system rather than making it a handwritten per-decoder integration.
 
-Generator support covers typed row generation for account, instruction, CPI-event, and transaction landing families. The checked-in canaries are Jupiter swap for instruction/CPI-event/transaction rows and Token Program for account rows.
+Generator support covers typed row generation for account, instruction, and CPI-event landing families. The checked-in canaries are Jupiter swap for instruction/CPI-event rows and Token Program for account rows.
 
 ### 4. Thin Example Layer
 
@@ -257,7 +245,6 @@ Schema ownership for concrete tables is decoder-owned, not writer-owned.
 
 Implemented in the canary paths:
 - `JupiterSwapClickHouseInstructionsMigration`
-- `JupiterSwapClickHouseTransactionsMigration`
 - `TokenProgramClickHouseAccountsMigration`
 - generated `*ClickHouseRow::create_table_sql(...)` row families
 
@@ -346,11 +333,7 @@ The standard is one typed landing table per generated row family.
 Canary coverage:
 - Jupiter swap instruction rows: one table per generated instruction variant
 - Jupiter swap CPI-event rows: one table per generated event variant
-- Jupiter swap transaction rows: one aggregation table for decoded Jupiter instruction/event kinds
 - Token Program account rows: one table each for mint, token, and multisig accounts
-- Core transaction rows: `carbon_transaction_landing`
-- Core account-deletion rows: `carbon_account_deletion_landing`
-- Core block-details rows: `carbon_block_details_landing`
 
 Stored fields include:
 - deterministic row identity
@@ -400,39 +383,6 @@ Common account columns include:
 - `ingest_ts`
 - `partition_slot`
 
-Common transaction aggregation columns include:
-- `program_id`
-- `family_name`
-- `transaction_id`
-- `scope`
-- `slot`
-- `signature`
-- `fee_payer`
-- `is_vote`
-- `tx_index`
-- `block_hash`
-- `chain_time`
-- `partition_time`
-- `fee`
-- `status_success`
-- `status_error`
-- `compute_units_consumed`
-- `cost_units`
-- `decoded_instruction_count`
-- `instruction_kinds`
-- `absolute_paths`
-- `instruction_indexes`
-- `stack_heights`
-- `source_name`
-- `mode`
-- `decoder_version`
-- `ingest_ts`
-
-Generic core surface tables store metadata-only rows:
-- `carbon_transaction_landing` stores transaction metadata and decoded instruction count.
-- `carbon_account_deletion_landing` stores pubkey, slot, optional transaction signature, and sink metadata.
-- `carbon_block_details_landing` stores block hashes, time/height, reward partition count, and structured reward tuples.
-
 Engine choice:
 - `MergeTree`
 
@@ -456,9 +406,6 @@ Implemented helpers:
 - `deterministic_instruction_id(...)`
 - `deterministic_event_id(...)`
 - `deterministic_account_id(...)`
-- `deterministic_transaction_id(...)`
-- `deterministic_account_deletion_id(...)`
-- `deterministic_block_details_id(...)`
 
 Instruction identity inputs:
 - program id
