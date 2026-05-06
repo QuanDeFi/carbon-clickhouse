@@ -34,6 +34,12 @@ import { formatDocComments } from './utils/render';
 import { PostgresRowMapper, type FlattenedField } from './postgresRowMapper';
 import { checkRequiresBigArray } from './utils/postgresHelpers';
 import { ClickHouseRowMapper } from './clickhouseRowMapper';
+import {
+    getClickHouseDdlContext,
+    getClickHouseRenderOptions,
+    isClickHouseEnabled,
+    type ClickHouseRenderOptions,
+} from './clickhouseDdl';
 
 export type GetRenderMapOptions = {
     renderParentInstructions?: boolean;
@@ -45,7 +51,7 @@ export type GetRenderMapOptions = {
     postgresMode?: 'generic' | 'typed';
     withPostgres?: boolean;
     withGraphql?: boolean;
-    withClickHouse?: boolean;
+    withClickHouse?: boolean | ClickHouseRenderOptions;
     allowClickHouseJsonFallback?: boolean;
     withSerde?: boolean;
     withBase58?: boolean;
@@ -58,6 +64,8 @@ export type GetRenderMapOptions = {
 
 export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
     const renderParentInstructions = options.renderParentInstructions ?? false;
+    const clickHouseEnabled = isClickHouseEnabled(options.withClickHouse);
+    const clickHouseOptions = getClickHouseRenderOptions(options.withClickHouse);
     let definedTypesMap: Map<string, any> | null = null;
     const newtypeWrapperTypes = new Set<string>();
     const optionalBoolWrapperTypes = new Set<string>(); // single-bool tuples: EOF → false (e.g. pump.fun OptionBool)
@@ -74,7 +82,7 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
     });
     const clickhouseRowMapper = new ClickHouseRowMapper({
         getDefinedTypesMap: () => definedTypesMap,
-        allowJsonFallback: options.allowClickHouseJsonFallback === true,
+        allowJsonFallback: options.allowClickHouseJsonFallback === true || clickHouseOptions.allowJsonFallback === true,
     });
 
     let currentProgram: ProgramNode | null = null;
@@ -208,7 +216,7 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                         );
                     }
 
-                    if (options.withClickHouse === true) {
+                    if (clickHouseEnabled) {
                         const clickhousePlan = clickhouseRowMapper.planType(newNode.data, [], [], new Set());
                         renderMap.add(
                             `src/accounts/clickhouse/${snakeCase(node.name)}_row.rs`,
@@ -219,6 +227,7 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                                 helperDefinitions: clickhousePlan.helperDefinitions,
                                 isAccount: true,
                                 program: currentRenderProgram(),
+                                clickHouseDdl: getClickHouseDdlContext(options.withClickHouse, 'account'),
                             }),
                         );
                     }
@@ -379,7 +388,7 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                                 }),
                             );
 
-                            if (options.withClickHouse === true) {
+                            if (clickHouseEnabled) {
                                 const clickhousePlan = clickhouseRowMapper.planType(node.type, [], [], new Set());
                                 renderMap.add(
                                     `src/instructions/clickhouse/${snakeCase(node.name)}_event_row.rs`,
@@ -388,6 +397,7 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                                         flatFields: clickhousePlan.fields,
                                         helperDefinitions: clickhousePlan.helperDefinitions,
                                         program: currentRenderProgram(),
+                                        clickHouseDdl: getClickHouseDdlContext(options.withClickHouse, 'event'),
                                     }),
                                 );
                             }
@@ -612,7 +622,7 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                         );
                     }
 
-                    if (options.withClickHouse === true) {
+                    if (clickHouseEnabled) {
                         const clickhousePlan = clickhouseRowMapper.planType(
                             structTypeNode(
                                 newNode.arguments.map(a =>
@@ -635,6 +645,7 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                                 helperDefinitions: clickhousePlan.helperDefinitions,
                                 isAccount: false,
                                 program: currentRenderProgram(),
+                                clickHouseDdl: getClickHouseDdlContext(options.withClickHouse, 'instruction'),
                             }),
                         );
                     }
@@ -766,7 +777,7 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                         postgresMode: options.postgresMode || 'typed',
                         withPostgres: options.withPostgres !== false,
                         withGraphQL: options.withGraphql !== false,
-                        withClickHouse: options.withClickHouse === true,
+                        withClickHouse: clickHouseEnabled,
                         withSerde: options.withSerde ?? false,
                         withBase58: options.withBase58 ?? false,
                     };
@@ -792,7 +803,7 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                     if (options.postgresMode !== 'generic' && options.withPostgres !== false) {
                         map.add('src/accounts/postgres/mod.rs', render('accountsPostgresMod.njk', ctx));
                     }
-                    if (options.withClickHouse === true && accountsToExport.length > 0) {
+                    if (clickHouseEnabled && accountsToExport.length > 0) {
                         map.add('src/accounts/clickhouse/mod.rs', render('accountsClickHouseMod.njk', ctx));
                     }
                     if (options.withGraphql !== false) {
@@ -818,7 +829,7 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                             map.add('src/instructions/postgres/mod.rs', render('instructionsPostgresMod.njk', ctx));
                         }
                         if (
-                            options.withClickHouse === true &&
+                            clickHouseEnabled &&
                             (instructionsToExport.length > 0 || (options.anchorEvents?.length ?? 0) > 0)
                         ) {
                             map.add('src/instructions/clickhouse/mod.rs', render('instructionsClickHouseMod.njk', ctx));
@@ -956,7 +967,7 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                         versionName: options.versionName,
                         withPostgres: options.withPostgres !== false,
                         withGraphQL: options.withGraphql !== false,
-                        withClickHouse: options.withClickHouse === true,
+                        withClickHouse: clickHouseEnabled,
                         withSerde: options.withSerde ?? false,
                         withBase58: options.withBase58 ?? false,
                         withSerdeBigArray: requiresSerdeBigArray,

@@ -5,7 +5,7 @@ const path = require('node:path');
 const { camelCase, kebabCase, pascalCase, snakeCase, titleCase } = require('@codama/nodes');
 const nunjucks = require('nunjucks');
 
-const { ClickHouseRowMapper } = require('../dist/index.js');
+const { ClickHouseRowMapper, getClickHouseDdlContext, isClickHouseEnabled } = require('../dist/index.js');
 
 const env = nunjucks.configure('templates', {
     autoescape: false,
@@ -20,6 +20,9 @@ env.addFilter('titleCase', titleCase);
 env.addGlobal('RUST_KEYWORDS', []);
 
 const program = { name: 'demoProgram' };
+const defaultInstructionDdl = getClickHouseDdlContext(true, 'instruction');
+const defaultAccountDdl = getClickHouseDdlContext(true, 'account');
+const defaultEventDdl = getClickHouseDdlContext(true, 'event');
 const typedField = {
     column: 'amount',
     rowType: 'u64',
@@ -75,7 +78,7 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
     assert.match(output, /ClickHouseRows<DemoProgramClickHouseInstructionRow>/);
     assert.match(output, /DemoProgramInstruction::Swap/);
     assert.match(output, /super::CpiEvent::SwapEvent/);
-    assert.match(output, /create_table_sql\(swap_row::SwapInstructionClickHouseRow::DEFAULT_TABLE_NAME\)/);
+    assert.match(output, /migration_operations\(swap_row::SwapInstructionClickHouseRow::DEFAULT_TABLE_NAME\)/);
 }
 
 {
@@ -86,8 +89,8 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
 
     assert.match(output, /pub mod mint_row;/);
     assert.match(output, /pub mod token_row;/);
-    assert.match(output, /MintAccountClickHouseRow::create_table_sql/);
-    assert.match(output, /TokenAccountClickHouseRow::create_table_sql/);
+    assert.match(output, /MintAccountClickHouseRow::migration_operations/);
+    assert.match(output, /TokenAccountClickHouseRow::migration_operations/);
     assert.match(output, /ClickHouseAccountProcessor</);
     assert.match(output, /DemoProgramAccount::Mint/);
 }
@@ -98,12 +101,14 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
         entityName: 'mint',
         isAccount: true,
         flatFields: [typedField],
+        clickHouseDdl: defaultAccountDdl,
     });
 
     assert.match(output, /pub struct MintAccountClickHouseRow/);
     assert.match(output, /deterministic_account_id/);
     assert.match(output, /pub amount: u64/);
     assert.match(output, /amount UInt64/);
+    assert.match(output, /ALTER TABLE \{table_name\} ADD COLUMN IF NOT EXISTS amount UInt64/);
     assert.match(output, /demo_program_mint_account_landing/);
 }
 
@@ -112,13 +117,76 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
         program,
         event: { name: 'swapEvent' },
         flatFields: [typedField],
+        clickHouseDdl: defaultEventDdl,
     });
 
     assert.match(output, /pub struct SwapEventEventClickHouseRow/);
     assert.match(output, /deterministic_event_id/);
     assert.match(output, /pub amount: u64/);
     assert.match(output, /amount UInt64/);
+    assert.match(output, /ALTER TABLE \{table_name\} ADD COLUMN IF NOT EXISTS amount UInt64/);
     assert.doesNotMatch(output, /data JSON/);
+}
+
+{
+    assert.equal(isClickHouseEnabled(true), true);
+    assert.equal(isClickHouseEnabled({ ddlMode: 'replicated-merge-tree' }), true);
+    assert.equal(isClickHouseEnabled({ enabled: false, ddlMode: 'merge-tree' }), false);
+
+    const replicatedDdl = getClickHouseDdlContext(
+        {
+            ddlMode: 'replicated-merge-tree',
+            onCluster: 'prod_cluster',
+            partitionBy: { instruction: 'toYYYYMM(partition_time)' },
+            orderBy: { instruction: ['program_id', 'slot', 'instruction_id'] },
+            ttl: { instruction: 'partition_time + INTERVAL 30 DAY' },
+            engineSettings: { index_granularity: 8192 },
+            columnCodecs: { amount: 'ZSTD(3)' },
+            replicatedTablePath: '/clickhouse/{cluster}/{table_name}',
+            replicaName: '{replica}',
+        },
+        'instruction',
+    );
+    const replicatedOutput = render('clickhouseRowPage.njk', {
+        program,
+        entityName: 'swap',
+        isAccount: false,
+        flatFields: [typedField],
+        clickHouseDdl: replicatedDdl,
+    });
+
+    assert.match(replicatedOutput, /ON CLUSTER prod_cluster/);
+    assert.match(replicatedOutput, /ENGINE = \{engine\}\{merge_tree_clauses\}/);
+    assert.match(replicatedOutput, /ReplicatedMergeTree\('\/clickhouse\/\{\{cluster\}\}\/\{table_name\}', '\{\{replica\}\}'\)/);
+    assert.match(replicatedOutput, /PARTITION BY toYYYYMM\(partition_time\) ORDER BY \(program_id, slot, instruction_id\)/);
+    assert.match(replicatedOutput, /TTL partition_time \+ INTERVAL 30 DAY SETTINGS index_granularity = 8192/);
+    assert.match(replicatedOutput, /amount UInt64 CODEC\(ZSTD\(3\)\)/);
+    assert.match(replicatedOutput, /ALTER TABLE \{table_name\} ON CLUSTER prod_cluster ADD COLUMN IF NOT EXISTS amount UInt64 CODEC\(ZSTD\(3\)\)/);
+
+    const distributedDdl = getClickHouseDdlContext(
+        {
+            ddlMode: 'distributed',
+            onCluster: 'prod_cluster',
+            distributedCluster: 'prod_cluster',
+            distributedDatabase: 'analytics',
+            distributedShardingKey: 'cityHash64(instruction_id)',
+            distributedLocalTableSuffix: '_local',
+        },
+        'instruction',
+    );
+    const distributedOutput = render('clickhouseRowPage.njk', {
+        program,
+        entityName: 'swap',
+        isAccount: false,
+        flatFields: [typedField],
+        clickHouseDdl: distributedDdl,
+    });
+
+    assert.match(distributedOutput, /pub fn create_local_table_sql\(table_name: &str\) -> String/);
+    assert.match(distributedOutput, /format!\("\{table_name\}_local"\)/);
+    assert.match(distributedOutput, /Distributed\('prod_cluster', 'analytics', '\{table_name\}_local', cityHash64\(instruction_id\)\)/);
+    assert.match(distributedOutput, /Self::create_table_sql_for\(table_name, &engine, false\)/);
+    assert.match(distributedOutput, /Self::create_table_sql_for\(&local_table_name, &engine, true\)/);
 }
 
 {

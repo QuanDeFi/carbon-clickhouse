@@ -2,6 +2,10 @@
 {% import "macros.njk" as macros %}
 
 {% block main %}
+{% macro chType(column, type) -%}
+{{ type }}{% if clickHouseDdl.columnCodecs[column] %} CODEC({{ clickHouseDdl.columnCodecs[column] }}){% endif %}
+{%- endmacro %}
+
 use carbon_core::{
     clickhouse::rows::{deterministic_event_id, ClickHouseRow, ClickHouseRowContext, ClickHouseTable},
     instruction::InstructionMetadata,
@@ -122,32 +126,100 @@ impl ClickHouseTable for {{ event.name | pascalCase }}EventClickHouseRow {
     }
 
     fn create_table_sql(table_name: &str) -> String {
-        format!(
-            "CREATE TABLE IF NOT EXISTS {table_name} (\
-            program_id String,\
-            family_name String,\
-            event_type String,\
-            event_id String,\
-            slot UInt64,\
-            signature String,\
-            instruction_index UInt32,\
-            stack_height UInt32,\
-            absolute_path Array(UInt8),\
-            event_seq UInt32,\
-            source_name String,\
-            mode String,\
-            decoder_version String,\
-            ingest_ts DateTime64(3, 'UTC'),\
-            chain_time Nullable(DateTime64(3, 'UTC')),\
-            partition_time DateTime64(3, 'UTC'),\
-            block_hash Nullable(String),\
-            tx_index Nullable(UInt64){% if flatFields.length > 0 %},{% endif %}\
+        let engine = Self::clickhouse_engine(table_name);
+        Self::create_table_sql_for(table_name, &engine, {{ "false" if clickHouseDdl.mode == "distributed" else "true" }})
+    }
+
+    pub fn migration_operations(table_name: &str) -> Vec<String> {
+        let mut operations = Vec::new();
+{% if clickHouseDdl.createLocalTable %}
+        operations.push(Self::create_local_table_sql(table_name));
+        operations.extend(Self::add_local_column_sql(table_name));
+{% endif %}
+        operations.push(Self::create_table_sql(table_name));
+        operations.extend(Self::add_column_sql(table_name));
+        operations
+    }
+
+{% if clickHouseDdl.createLocalTable %}
+    pub fn create_local_table_sql(table_name: &str) -> String {
+        let local_table_name = format!("{table_name}{{ clickHouseDdl.localTableSuffix }}");
+        let engine = Self::clickhouse_local_engine(&local_table_name);
+        Self::create_table_sql_for(&local_table_name, &engine, true)
+    }
+
+    pub fn add_local_column_sql(table_name: &str) -> Vec<String> {
+        let local_table_name = format!("{table_name}{{ clickHouseDdl.localTableSuffix }}");
+        Self::add_column_sql(&local_table_name)
+    }
+
+{% endif %}
+    pub fn add_column_sql(table_name: &str) -> Vec<String> {
+        vec![
+            format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} ADD COLUMN IF NOT EXISTS program_id {{ chType('program_id', 'String') }}"),
+            format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} ADD COLUMN IF NOT EXISTS family_name {{ chType('family_name', 'String') }}"),
+            format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} ADD COLUMN IF NOT EXISTS event_type {{ chType('event_type', 'String') }}"),
+            format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} ADD COLUMN IF NOT EXISTS event_id {{ chType('event_id', 'String') }}"),
+            format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} ADD COLUMN IF NOT EXISTS slot {{ chType('slot', 'UInt64') }}"),
+            format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} ADD COLUMN IF NOT EXISTS signature {{ chType('signature', 'String') }}"),
+            format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} ADD COLUMN IF NOT EXISTS instruction_index {{ chType('instruction_index', 'UInt32') }}"),
+            format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} ADD COLUMN IF NOT EXISTS stack_height {{ chType('stack_height', 'UInt32') }}"),
+            format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} ADD COLUMN IF NOT EXISTS absolute_path {{ chType('absolute_path', 'Array(UInt8)') }}"),
+            format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} ADD COLUMN IF NOT EXISTS event_seq {{ chType('event_seq', 'UInt32') }}"),
+            format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} ADD COLUMN IF NOT EXISTS source_name {{ chType('source_name', 'String') }}"),
+            format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} ADD COLUMN IF NOT EXISTS mode {{ chType('mode', 'String') }}"),
+            format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} ADD COLUMN IF NOT EXISTS decoder_version {{ chType('decoder_version', 'String') }}"),
+            format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} ADD COLUMN IF NOT EXISTS ingest_ts {{ chType('ingest_ts', "DateTime64(3, 'UTC')") }}"),
+            format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} ADD COLUMN IF NOT EXISTS chain_time {{ chType('chain_time', "Nullable(DateTime64(3, 'UTC'))") }}"),
+            format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} ADD COLUMN IF NOT EXISTS partition_time {{ chType('partition_time', "DateTime64(3, 'UTC')") }}"),
+            format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} ADD COLUMN IF NOT EXISTS block_hash {{ chType('block_hash', 'Nullable(String)') }}"),
+            format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} ADD COLUMN IF NOT EXISTS tx_index {{ chType('tx_index', 'Nullable(UInt64)') }}"),
 {% for field in flatFields %}
-            {{ field.column }} {{ field.clickHouseColumnType }}{% if not loop.last %},{% endif %}\
+            format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} ADD COLUMN IF NOT EXISTS {{ field.column }} {{ chType(field.column, field.clickHouseColumnType) }}"),
 {% endfor %}
-        ) ENGINE = MergeTree \
-        PARTITION BY toYear(partition_time) \
-        ORDER BY (program_id, family_name, event_id, slot)"
+        ]
+    }
+
+    fn clickhouse_engine(table_name: &str) -> String {
+        format!("{{ clickHouseDdl.engine }}")
+    }
+
+{% if clickHouseDdl.createLocalTable %}
+    fn clickhouse_local_engine(table_name: &str) -> String {
+        format!("{{ clickHouseDdl.localEngine }}")
+    }
+
+{% endif %}
+    fn create_table_sql_for(table_name: &str, engine: &str, include_merge_tree_clauses: bool) -> String {
+        let merge_tree_clauses = if include_merge_tree_clauses {
+            "{{ ' PARTITION BY ' + clickHouseDdl.partitionBy + ' ORDER BY ' + clickHouseDdl.orderBy + clickHouseDdl.ttlClause + clickHouseDdl.settingsClause }}"
+        } else {
+            ""
+        };
+        format!(
+            "CREATE TABLE IF NOT EXISTS {table_name}{{ clickHouseDdl.onClusterClause }} (\
+            program_id {{ chType('program_id', 'String') }},\
+            family_name {{ chType('family_name', 'String') }},\
+            event_type {{ chType('event_type', 'String') }},\
+            event_id {{ chType('event_id', 'String') }},\
+            slot {{ chType('slot', 'UInt64') }},\
+            signature {{ chType('signature', 'String') }},\
+            instruction_index {{ chType('instruction_index', 'UInt32') }},\
+            stack_height {{ chType('stack_height', 'UInt32') }},\
+            absolute_path {{ chType('absolute_path', 'Array(UInt8)') }},\
+            event_seq {{ chType('event_seq', 'UInt32') }},\
+            source_name {{ chType('source_name', 'String') }},\
+            mode {{ chType('mode', 'String') }},\
+            decoder_version {{ chType('decoder_version', 'String') }},\
+            ingest_ts {{ chType('ingest_ts', "DateTime64(3, 'UTC')") }},\
+            chain_time {{ chType('chain_time', "Nullable(DateTime64(3, 'UTC'))") }},\
+            partition_time {{ chType('partition_time', "DateTime64(3, 'UTC')") }},\
+            block_hash {{ chType('block_hash', 'Nullable(String)') }},\
+            tx_index {{ chType('tx_index', 'Nullable(UInt64)') }}{% if flatFields.length > 0 %},{% endif %}\
+{% for field in flatFields %}
+            {{ field.column }} {{ chType(field.column, field.clickHouseColumnType) }}{% if not loop.last %},{% endif %}\
+{% endfor %}
+        ) ENGINE = {engine}{merge_tree_clauses}"
         )
     }
 }

@@ -94,11 +94,11 @@ impl ClickHouseSchema for {{ program.name | pascalCase }}ClickHouseInstructionsM
     fn operations(_config: &ClickHouseConfig) -> Vec<String> {
         let mut operations = Vec::new();
 {% for instruction in instructionsToExport | sort(false, false, 'name') %}
-        operations.push({{ macros.escapeRustKeyword(instruction.name | snakeCase) }}_row::{{ instruction.name | pascalCase }}InstructionClickHouseRow::create_table_sql({{ macros.escapeRustKeyword(instruction.name | snakeCase) }}_row::{{ instruction.name | pascalCase }}InstructionClickHouseRow::DEFAULT_TABLE_NAME));
+        operations.extend({{ macros.escapeRustKeyword(instruction.name | snakeCase) }}_row::{{ instruction.name | pascalCase }}InstructionClickHouseRow::migration_operations({{ macros.escapeRustKeyword(instruction.name | snakeCase) }}_row::{{ instruction.name | pascalCase }}InstructionClickHouseRow::DEFAULT_TABLE_NAME));
 {% endfor %}
 {% if hasAnchorEvents %}
 {% for event in events | sort(false, false, 'name') %}
-        operations.push({{ macros.escapeRustKeyword(event.name | snakeCase) }}_event_row::{{ event.name | pascalCase }}EventClickHouseRow::create_table_sql({{ macros.escapeRustKeyword(event.name | snakeCase) }}_event_row::{{ event.name | pascalCase }}EventClickHouseRow::DEFAULT_TABLE_NAME));
+        operations.extend({{ macros.escapeRustKeyword(event.name | snakeCase) }}_event_row::{{ event.name | pascalCase }}EventClickHouseRow::migration_operations({{ macros.escapeRustKeyword(event.name | snakeCase) }}_event_row::{{ event.name | pascalCase }}EventClickHouseRow::DEFAULT_TABLE_NAME));
 {% endfor %}
 {% endif %}
         operations

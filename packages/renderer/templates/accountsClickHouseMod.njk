@@ -68,7 +68,7 @@ impl ClickHouseSchema for {{ program.name | pascalCase }}ClickHouseAccountsMigra
     fn operations(_config: &ClickHouseConfig) -> Vec<String> {
         let mut operations = Vec::new();
 {% for account in accountsToExport | sort(false, false, 'name') %}
-        operations.push({{ macros.escapeRustKeyword(account.name | snakeCase) }}_row::{{ account.name | pascalCase }}AccountClickHouseRow::create_table_sql({{ macros.escapeRustKeyword(account.name | snakeCase) }}_row::{{ account.name | pascalCase }}AccountClickHouseRow::DEFAULT_TABLE_NAME));
+        operations.extend({{ macros.escapeRustKeyword(account.name | snakeCase) }}_row::{{ account.name | pascalCase }}AccountClickHouseRow::migration_operations({{ macros.escapeRustKeyword(account.name | snakeCase) }}_row::{{ account.name | pascalCase }}AccountClickHouseRow::DEFAULT_TABLE_NAME));
 {% endfor %}
         operations
     }
