@@ -63,6 +63,38 @@ function render(template, context) {
 }
 
 {
+    const output = render('transactionsClickHouseTransactionRowPage.njk', {
+        program,
+        instructionsToExport: [{ name: 'route' }, { name: 'swap' }],
+        events: [{ name: 'swapEvent' }],
+        hasAnchorEvents: true,
+    });
+
+    assert.match(output, /pub enum DemoProgramClickHouseInstructionKind/);
+    assert.match(output, /Route/);
+    assert.match(output, /SwapEventCpiEvent/);
+    assert.match(output, /impl InstructionDecoderCollection for DemoProgramClickHouseInstructionCollection/);
+    assert.match(output, /pub struct DemoProgramTransactionClickHouseRow/);
+    assert.match(output, /instruction_kinds Array\(\{\}\)/);
+    assert.match(output, /Enum16\('Route' = 0, 'Swap' = 1, 'SwapEventCpiEvent' = 2\)/);
+    assert.match(output, /absolute_paths Array\(Array\(UInt8\)\)/);
+    assert.match(output, /instruction_indexes Array\(UInt32\)/);
+    assert.match(output, /stack_heights Array\(UInt32\)/);
+    assert.match(output, /deterministic_transaction_id/);
+}
+
+{
+    const output = render('transactionsClickHouseMod.njk', {
+        program,
+    });
+
+    assert.match(output, /pub mod transaction_row;/);
+    assert.match(output, /ClickHouseTransactionProcessor</);
+    assert.match(output, /DemoProgramClickHouseTransactionsMigration/);
+    assert.match(output, /DemoProgramTransactionClickHouseRow::create_table_sql/);
+}
+
+{
     const output = render('clickhouseRowPage.njk', {
         program,
         entityName: 'mint',

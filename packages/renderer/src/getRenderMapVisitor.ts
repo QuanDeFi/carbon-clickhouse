@@ -821,6 +821,14 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                         ) {
                             map.add('src/instructions/clickhouse/mod.rs', render('instructionsClickHouseMod.njk', ctx));
                         }
+                        if (options.withClickHouse === true && instructionsToExport.length > 0) {
+                            map.add('src/transactions/mod.rs', render('transactionsMod.njk', ctx));
+                            map.add('src/transactions/clickhouse/mod.rs', render('transactionsClickHouseMod.njk', ctx));
+                            map.add(
+                                'src/transactions/clickhouse/transaction_row.rs',
+                                render('transactionsClickHouseTransactionRowPage.njk', ctx),
+                            );
+                        }
                         if (options.withGraphql !== false) {
                             const instructionsGraphqlTemplate =
                                 options.postgresMode === 'generic' || options.withPostgres === false

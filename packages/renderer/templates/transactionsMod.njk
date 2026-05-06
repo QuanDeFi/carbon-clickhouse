@@ -1,0 +1,6 @@
+{% extends "layout.njk" %}
+
+{% block main %}
+#[cfg(feature = "clickhouse")]
+pub mod clickhouse;
+{% endblock %}

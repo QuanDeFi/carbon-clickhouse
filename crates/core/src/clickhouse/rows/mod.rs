@@ -73,6 +73,36 @@ pub fn deterministic_account_id(
     hex_digest(hasher.finalize())
 }
 
+pub fn deterministic_transaction_id(scope: &str, signature: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(scope.as_bytes());
+    hasher.update(signature.as_bytes());
+    hex_digest(hasher.finalize())
+}
+
+pub fn deterministic_account_deletion_id(
+    pubkey: &[u8],
+    slot: u64,
+    transaction_signature: Option<&str>,
+) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(pubkey);
+    hasher.update(slot.to_le_bytes());
+    if let Some(signature) = transaction_signature {
+        hasher.update(signature.as_bytes());
+    }
+    hex_digest(hasher.finalize())
+}
+
+pub fn deterministic_block_details_id(slot: u64, block_hash: Option<&str>) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(slot.to_le_bytes());
+    if let Some(block_hash) = block_hash {
+        hasher.update(block_hash.as_bytes());
+    }
+    hex_digest(hasher.finalize())
+}
+
 fn hex_digest(digest: impl IntoIterator<Item = u8>) -> String {
     let mut output = String::with_capacity(64);
     for byte in digest {
@@ -84,7 +114,11 @@ fn hex_digest(digest: impl IntoIterator<Item = u8>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{deterministic_account_id, deterministic_event_id, deterministic_instruction_id};
+    use super::{
+        deterministic_account_deletion_id, deterministic_account_id,
+        deterministic_block_details_id, deterministic_event_id, deterministic_instruction_id,
+        deterministic_transaction_id,
+    };
 
     #[test]
     fn deterministic_event_id_is_stable() {
@@ -105,5 +139,35 @@ mod tests {
         let first = deterministic_account_id(b"program", b"pubkey", 42, "mint");
         let second = deterministic_account_id(b"program", b"pubkey", 42, "mint");
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn deterministic_transaction_id_is_stable_and_scoped() {
+        let first = deterministic_transaction_id("generic", "sig");
+        let second = deterministic_transaction_id("generic", "sig");
+        let other_scope = deterministic_transaction_id("jupiter_swap", "sig");
+
+        assert_eq!(first, second);
+        assert_ne!(first, other_scope);
+    }
+
+    #[test]
+    fn deterministic_account_deletion_id_is_stable_and_signature_sensitive() {
+        let first = deterministic_account_deletion_id(b"pubkey", 42, Some("sig"));
+        let second = deterministic_account_deletion_id(b"pubkey", 42, Some("sig"));
+        let without_signature = deterministic_account_deletion_id(b"pubkey", 42, None);
+
+        assert_eq!(first, second);
+        assert_ne!(first, without_signature);
+    }
+
+    #[test]
+    fn deterministic_block_details_id_is_stable_and_hash_sensitive() {
+        let first = deterministic_block_details_id(42, Some("hash"));
+        let second = deterministic_block_details_id(42, Some("hash"));
+        let without_hash = deterministic_block_details_id(42, None);
+
+        assert_eq!(first, second);
+        assert_ne!(first, without_hash);
     }
 }

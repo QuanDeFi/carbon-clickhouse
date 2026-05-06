@@ -9,4 +9,6 @@ pub mod events;
 #[cfg(feature = "graphql")]
 pub mod graphql;
 pub mod instructions;
+#[cfg(feature = "clickhouse")]
+pub mod transactions;
 pub mod types;

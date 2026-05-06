@@ -12,9 +12,11 @@ The ClickHouse path includes:
 2. Processor finalization so buffered processors drain on shutdown.
 3. Typed instruction and CPI-event ClickHouse coverage for `jupiter-swap-decoder`.
 4. Typed account ClickHouse coverage for `token-program-decoder`.
-5. Renderer support for generated typed account, instruction, and CPI-event landing rows.
-6. A per-buffer ClickHouse writer for independent Carbon processes writing into the same table families.
-7. Explicit synchronous and async-wait insert settings, with synchronous inserts as the default.
+5. Generic core landing rows/processors for transaction, account-deletion, and block-details surfaces.
+6. Generated Jupiter transaction aggregation rows.
+7. Renderer support for generated typed account, instruction, CPI-event, and transaction landing rows.
+8. A per-buffer ClickHouse writer for independent Carbon processes writing into the same table families.
+9. Explicit synchronous and async-wait insert settings, with synchronous inserts as the default.
 
 ## How It Fits Into Carbon
 
@@ -56,8 +58,9 @@ The generic ClickHouse runtime in `carbon-core` is split by responsibility:
 - `admin.rs` - explicit schema/bootstrap execution
 - `rows/mod.rs` - row/table traits, row context, multi-row contract, and deterministic ID helpers
 - `writer.rs` - per-buffer batch writer and background flush worker
-- `processors.rs` - ClickHouse instruction/account processors
-- `metrics.rs` - shared ClickHouse metrics for instruction and account families
+- `surface_rows.rs` - generic transaction, account-deletion, and block-details landing rows
+- `processors.rs` - ClickHouse instruction, account, transaction, account-deletion, and block-details processors
+- `metrics.rs` - shared ClickHouse metrics for all ClickHouse processor families
 
 Important boundary:
 
@@ -122,12 +125,13 @@ All insert requests include `date_time_input_format=best_effort`; async settings
 
 ## Generated Row Scope
 
-The generated row scope is canary-limited and covers all three row families:
+The generated row scope is canary-limited and covers account, instruction, CPI-event, and transaction row families:
 
 - Jupiter swap typed instruction landing rows.
 - Jupiter swap typed CPI-event landing rows.
+- Jupiter swap typed transaction aggregation landing rows.
 - Token Program typed account landing rows for mint, token, and multisig.
-- Renderer templates for typed account, instruction, and CPI-event ClickHouse generation.
+- Renderer templates for typed account, instruction, CPI-event, and transaction ClickHouse generation.
 - `withClickHouse` feature-gated generated modules.
 
 The table model is one typed landing table per generated row family. This avoids the schema, compression, and query-shape problems of one large generic JSON landing table.
@@ -145,7 +149,7 @@ Known decoder-owned enum payloads are not stringified. JSON remains only as an e
 
 ## Jupiter Example
 
-`examples/jupiter-swap-clickhouse` is the real-world smoke test for the Jupiter instruction and CPI-event path.
+`examples/jupiter-swap-clickhouse` is the real-world smoke test for the Jupiter instruction, CPI-event, and transaction aggregation path.
 
 It validates:
 
@@ -155,6 +159,7 @@ It validates:
 - Jupiter instruction and CPI-event decoding
 - typed ClickHouse row dispatch
 - structured CPI-event payloads such as `route_plan.swap`
+- generated transaction aggregation rows in `jupiter_swap_transaction_landing`
 - core writer batching and shutdown drain
 
 It does not validate:
@@ -190,6 +195,9 @@ Generated rows use deterministic IDs:
 - instruction rows use `deterministic_instruction_id(...)`
 - CPI-event rows use `deterministic_event_id(...)`
 - account rows use `deterministic_account_id(...)`
+- transaction rows use `deterministic_transaction_id(...)`
+- account-deletion rows use `deterministic_account_deletion_id(...)`
+- block-details rows use `deterministic_block_details_id(...)`
 
 That gives stable row identity across reprocessing, which is required for canonicalization, deduplication, or stronger retry idempotency above the landing layer.
 
@@ -222,6 +230,9 @@ Metrics are separated by processor family:
 
 - `clickhouse.instructions.*`
 - `clickhouse.accounts.*`
+- `clickhouse.transactions.*`
+- `clickhouse.account_deletions.*`
+- `clickhouse.block_details.*`
 
 Background flushes and shutdown-triggered flushes record through the shared ClickHouse metrics module, not through processor-local foreground accounting.
 
@@ -233,8 +244,10 @@ The renderer supports:
 - typed account landing row templates
 - typed instruction landing row templates
 - typed per-event CPI landing row templates
+- typed transaction aggregation row templates
 - generated account `clickhouse/mod.rs`
 - generated instruction `clickhouse/mod.rs`
+- generated transaction `clickhouse/mod.rs`
 - generated Cargo dependencies for ClickHouse, `serde`, and `chrono`
 
 The repository keeps ClickHouse decoder output canary-limited; it has not regenerated every decoder with ClickHouse output.
