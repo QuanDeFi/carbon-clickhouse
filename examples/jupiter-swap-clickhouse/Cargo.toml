@@ -8,6 +8,7 @@ publish = false
 carbon-core = { workspace = true, features = ["clickhouse"] }
 carbon-jupiter-swap-decoder = { workspace = true, features = ["clickhouse"] }
 carbon-log-metrics = { workspace = true }
+carbon-prometheus-metrics = { workspace = true }
 carbon-rpc-block-crawler-datasource = { workspace = true }
 
 clap = { workspace = true, features = ["derive"] }

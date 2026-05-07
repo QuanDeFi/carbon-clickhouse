@@ -1,4 +1,4 @@
-use std::{env, sync::Arc};
+use std::{env, net::SocketAddr, sync::Arc};
 
 use {
     carbon_core::{
@@ -8,6 +8,7 @@ use {
     },
     carbon_helius_gpa_v2_datasource::{HeliusGpaV2Config, HeliusGpaV2Datasource},
     carbon_log_metrics::LogMetrics,
+    carbon_prometheus_metrics::{PrometheusMetrics, PrometheusServerConfig},
     carbon_rpc_gpa_datasource::GpaDatasource,
     carbon_token_program_decoder::{
         accounts::clickhouse::{
@@ -119,6 +120,7 @@ where
     Pipeline::builder()
         .datasource(datasource)
         .metrics(Arc::new(LogMetrics::new_with_flush_interval(3)))
+        .metrics(Arc::new(prometheus_metrics()?))
         .account(TokenProgramDecoder, processor)
         .shutdown_strategy(ShutdownStrategy::ProcessPending)
         .build()?
@@ -184,6 +186,17 @@ fn init_logger() {
 
 fn required_env(name: &str) -> CarbonResult<String> {
     env::var(name).map_err(|err| CarbonError::Custom(format!("{name} must be set ({err})")))
+}
+
+fn prometheus_metrics() -> CarbonResult<PrometheusMetrics> {
+    let listen_addr = env::var("PROMETHEUS_METRICS_ADDR")
+        .unwrap_or_else(|_| "0.0.0.0:9464".to_string())
+        .parse::<SocketAddr>()
+        .map_err(|err| CarbonError::Custom(format!("Invalid PROMETHEUS_METRICS_ADDR: {err}")))?;
+
+    Ok(PrometheusMetrics::with_server(
+        PrometheusServerConfig::new().listen_addr(listen_addr),
+    ))
 }
 
 fn parse_pubkey(name: &str, value: &str) -> CarbonResult<Pubkey> {

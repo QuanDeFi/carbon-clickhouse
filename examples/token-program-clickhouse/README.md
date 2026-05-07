@@ -20,11 +20,12 @@ The default path tests token accounts because it can be bounded safely with owne
 Create `.env` from `.env.example`:
 
 ```env
-DATABASE_URL=http://localhost:8123
+DATABASE_URL=http://carbon:carbon@localhost:8123
 RPC_URL=https://api.mainnet-beta.solana.com
 TOKEN_ACCOUNT_OWNER=<wallet-pubkey>
 # TOKEN_MINT=<mint-pubkey>
 LOG_LEVEL=info
+PROMETHEUS_METRICS_ADDR=0.0.0.0:9464
 ```
 
 At least one of these filters must be set:
@@ -39,6 +40,10 @@ Using both fetches the intersection.
 ```sh
 cargo run -p token-program-clickhouse-carbon-example
 ```
+
+The example also exposes Carbon metrics for Prometheus at
+`PROMETHEUS_METRICS_ADDR` and keeps log metrics enabled. Use
+`monitoring/compose.yaml` to run the local Prometheus/Grafana stack.
 
 To use Helius gPA v2 instead:
 

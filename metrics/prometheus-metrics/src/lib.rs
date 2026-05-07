@@ -164,7 +164,15 @@ fn format_prometheus_text(snapshot: &MetricsSnapshot) -> String {
 }
 
 fn sanitize_name(name: &str) -> String {
-    name.replace('-', "_")
+    name.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == ':' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }
 
 #[cfg(feature = "http-server")]
@@ -176,6 +184,19 @@ pub async fn run_metrics_server(
         ..Default::default()
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sanitize_name;
+
+    #[test]
+    fn sanitizes_metric_names_for_prometheus() {
+        assert_eq!(
+            sanitize_name("clickhouse.instructions.flush.failed-batches"),
+            "clickhouse_instructions_flush_failed_batches"
+        );
+    }
 }
 
 #[cfg(feature = "http-server")]

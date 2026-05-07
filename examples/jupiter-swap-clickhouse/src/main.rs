@@ -1,4 +1,4 @@
-use std::{env, sync::Arc};
+use std::{env, net::SocketAddr, sync::Arc};
 
 use solana_transaction_status::UiTransactionEncoding;
 
@@ -12,6 +12,7 @@ use {
         JupiterSwapDecoder,
     },
     carbon_log_metrics::LogMetrics,
+    carbon_prometheus_metrics::{PrometheusMetrics, PrometheusServerConfig},
     carbon_rpc_block_crawler_datasource::{RpcBlockConfig, RpcBlockCrawler},
     clap::Parser,
 };
@@ -46,6 +47,17 @@ fn env_u64(name: &str) -> CarbonResult<u64> {
     value
         .parse::<u64>()
         .map_err(|err| CarbonError::Custom(format!("Invalid {name}={value:?}: {err}")))
+}
+
+fn prometheus_metrics() -> CarbonResult<PrometheusMetrics> {
+    let listen_addr = env::var("PROMETHEUS_METRICS_ADDR")
+        .unwrap_or_else(|_| "0.0.0.0:9464".to_string())
+        .parse::<SocketAddr>()
+        .map_err(|err| CarbonError::Custom(format!("Invalid PROMETHEUS_METRICS_ADDR: {err}")))?;
+
+    Ok(PrometheusMetrics::with_server(
+        PrometheusServerConfig::new().listen_addr(listen_addr),
+    ))
 }
 
 #[tokio::main]
@@ -90,6 +102,7 @@ pub async fn main() -> CarbonResult<()> {
     carbon_core::pipeline::Pipeline::builder()
         .datasource(rpc_block_ds)
         .metrics(Arc::new(LogMetrics::new_with_flush_interval(3)))
+        .metrics(Arc::new(prometheus_metrics()?))
         .instruction(JupiterSwapDecoder, instruction_processor)
         .shutdown_strategy(ShutdownStrategy::Immediate)
         .build()?
