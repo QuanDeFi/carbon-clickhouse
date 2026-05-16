@@ -47,12 +47,7 @@ pub enum JupiterSwapClickHouseInstructionRow {
     SharedAccountsRouteWithTokenLedger(
         JupiterSwapSharedAccountsRouteWithTokenLedgerInstructionLandingRow,
     ),
-    FeeEvent(JupiterSwapFeeEventLandingRow),
-    SwapEvent(JupiterSwapSwapEventLandingRow),
-    SwapsEvent(JupiterSwapSwapsEventLandingRow),
-    CandidateSwapResultsEvent(JupiterSwapCandidateSwapResultsEventLandingRow),
-    CandidateSwapQuoteErrorEvent(JupiterSwapCandidateSwapQuoteErrorEventLandingRow),
-    BestSwapOutAmountViolationEvent(JupiterSwapBestSwapOutAmountViolationEventLandingRow),
+    CpiEvent(JupiterSwapCpiEventLandingRow),
 }
 
 impl ClickHouseRow for JupiterSwapClickHouseInstructionRow {
@@ -75,12 +70,7 @@ impl ClickHouseRow for JupiterSwapClickHouseInstructionRow {
             Self::SharedAccountsRoute(row) => row.table_name(),
             Self::SharedAccountsRouteV2(row) => row.table_name(),
             Self::SharedAccountsRouteWithTokenLedger(row) => row.table_name(),
-            Self::FeeEvent(row) => row.table_name(),
-            Self::SwapEvent(row) => row.table_name(),
-            Self::SwapsEvent(row) => row.table_name(),
-            Self::CandidateSwapResultsEvent(row) => row.table_name(),
-            Self::CandidateSwapQuoteErrorEvent(row) => row.table_name(),
-            Self::BestSwapOutAmountViolationEvent(row) => row.table_name(),
+            Self::CpiEvent(row) => row.table_name(),
         }
     }
 
@@ -103,12 +93,7 @@ impl ClickHouseRow for JupiterSwapClickHouseInstructionRow {
             Self::SharedAccountsRoute(row) => row.partition_key(),
             Self::SharedAccountsRouteV2(row) => row.partition_key(),
             Self::SharedAccountsRouteWithTokenLedger(row) => row.partition_key(),
-            Self::FeeEvent(row) => row.partition_key(),
-            Self::SwapEvent(row) => row.partition_key(),
-            Self::SwapsEvent(row) => row.partition_key(),
-            Self::CandidateSwapResultsEvent(row) => row.partition_key(),
-            Self::CandidateSwapQuoteErrorEvent(row) => row.partition_key(),
-            Self::BestSwapOutAmountViolationEvent(row) => row.partition_key(),
+            Self::CpiEvent(row) => row.partition_key(),
         }
     }
 }
@@ -175,23 +160,8 @@ impl ClickHouseSchema for JupiterSwapClickHouseInstructionsMigration {
             JupiterSwapSharedAccountsRouteWithTokenLedgerInstructionLandingRow::create_table_sql(
                 JupiterSwapSharedAccountsRouteWithTokenLedgerInstructionLandingRow::DEFAULT_TABLE_NAME,
             ),
-            JupiterSwapFeeEventLandingRow::create_table_sql(
-                JupiterSwapFeeEventLandingRow::DEFAULT_TABLE_NAME,
-            ),
-            JupiterSwapSwapEventLandingRow::create_table_sql(
-                JupiterSwapSwapEventLandingRow::DEFAULT_TABLE_NAME,
-            ),
-            JupiterSwapSwapsEventLandingRow::create_table_sql(
-                JupiterSwapSwapsEventLandingRow::DEFAULT_TABLE_NAME,
-            ),
-            JupiterSwapCandidateSwapResultsEventLandingRow::create_table_sql(
-                JupiterSwapCandidateSwapResultsEventLandingRow::DEFAULT_TABLE_NAME,
-            ),
-            JupiterSwapCandidateSwapQuoteErrorEventLandingRow::create_table_sql(
-                JupiterSwapCandidateSwapQuoteErrorEventLandingRow::DEFAULT_TABLE_NAME,
-            ),
-            JupiterSwapBestSwapOutAmountViolationEventLandingRow::create_table_sql(
-                JupiterSwapBestSwapOutAmountViolationEventLandingRow::DEFAULT_TABLE_NAME,
+            JupiterSwapCpiEventLandingRow::create_table_sql(
+                JupiterSwapCpiEventLandingRow::DEFAULT_TABLE_NAME,
             ),
         ]
     }
@@ -356,46 +326,40 @@ impl ClickHouseRows<JupiterSwapClickHouseInstructionRow>
             }
             JupiterSwapInstruction::CpiEvent { data, .. } => match data {
                 super::CpiEvent::FeeEvent(event) => {
-                    vec![JupiterSwapClickHouseInstructionRow::FeeEvent(
-                        JupiterSwapFeeEventLandingRow::from_parts(metadata, event, context),
+                    vec![JupiterSwapClickHouseInstructionRow::CpiEvent(
+                        JupiterSwapCpiEventLandingRow::from_fee_event(metadata, event, context),
                     )]
                 }
                 super::CpiEvent::SwapEvent(event) => {
-                    vec![JupiterSwapClickHouseInstructionRow::SwapEvent(
-                        JupiterSwapSwapEventLandingRow::from_parts(metadata, event, context),
+                    vec![JupiterSwapClickHouseInstructionRow::CpiEvent(
+                        JupiterSwapCpiEventLandingRow::from_swap_event(metadata, event, context),
                     )]
                 }
                 super::CpiEvent::SwapsEvent(event) => {
-                    vec![JupiterSwapClickHouseInstructionRow::SwapsEvent(
-                        JupiterSwapSwapsEventLandingRow::from_parts(metadata, event, context),
+                    vec![JupiterSwapClickHouseInstructionRow::CpiEvent(
+                        JupiterSwapCpiEventLandingRow::from_swaps_event(metadata, event, context),
                     )]
                 }
                 super::CpiEvent::CandidateSwapResults(event) => {
-                    vec![
-                        JupiterSwapClickHouseInstructionRow::CandidateSwapResultsEvent(
-                            JupiterSwapCandidateSwapResultsEventLandingRow::from_parts(
-                                metadata, event, context,
-                            ),
+                    vec![JupiterSwapClickHouseInstructionRow::CpiEvent(
+                        JupiterSwapCpiEventLandingRow::from_candidate_swap_results(
+                            metadata, event, context,
                         ),
-                    ]
+                    )]
                 }
                 super::CpiEvent::CandidateSwapQuoteError(event) => {
-                    vec![
-                        JupiterSwapClickHouseInstructionRow::CandidateSwapQuoteErrorEvent(
-                            JupiterSwapCandidateSwapQuoteErrorEventLandingRow::from_parts(
-                                metadata, event, context,
-                            ),
+                    vec![JupiterSwapClickHouseInstructionRow::CpiEvent(
+                        JupiterSwapCpiEventLandingRow::from_candidate_swap_quote_error(
+                            metadata, event, context,
                         ),
-                    ]
+                    )]
                 }
                 super::CpiEvent::BestSwapOutAmountViolation(event) => {
-                    vec![
-                        JupiterSwapClickHouseInstructionRow::BestSwapOutAmountViolationEvent(
-                            JupiterSwapBestSwapOutAmountViolationEventLandingRow::from_parts(
-                                metadata, event, context,
-                            ),
+                    vec![JupiterSwapClickHouseInstructionRow::CpiEvent(
+                        JupiterSwapCpiEventLandingRow::from_best_swap_out_amount_violation(
+                            metadata, event, context,
                         ),
-                    ]
+                    )]
                 }
             },
         }
@@ -491,15 +455,17 @@ mod tests {
     fn migration_operations_include_all_instruction_and_event_tables() {
         let operations = JupiterSwapClickHouseInstructionsMigration::operations(&config());
 
-        assert_eq!(operations.len(), 23);
+        assert_eq!(operations.len(), 18);
         assert!(operations
             .iter()
             .any(|sql| sql.contains(JupiterSwapRouteInstructionLandingRow::DEFAULT_TABLE_NAME)));
         assert!(operations
             .iter()
-            .any(|sql| sql.contains(JupiterSwapSwapEventLandingRow::DEFAULT_TABLE_NAME)));
-        assert!(operations.iter().any(|sql| sql
-            .contains(JupiterSwapBestSwapOutAmountViolationEventLandingRow::DEFAULT_TABLE_NAME)));
+            .any(|sql| sql.contains(JupiterSwapCpiEventLandingRow::DEFAULT_TABLE_NAME)));
+        let old_swap_event_table = format!("jupiter_swap_{}", "swap_event_landing");
+        assert!(!operations
+            .iter()
+            .any(|sql| sql.contains(&old_swap_event_table)));
     }
 
     #[test]
@@ -530,7 +496,7 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(
             rows[0].table_name(),
-            JupiterSwapSwapEventLandingRow::DEFAULT_TABLE_NAME
+            JupiterSwapCpiEventLandingRow::DEFAULT_TABLE_NAME
         );
     }
 }

@@ -12,13 +12,13 @@ use carbon_core::{
 };
 use chrono::{DateTime, Utc};
 
-{% for helper in helperDefinitions | default([]) %}
+{% for helper in clickHouseEventHelperDefinitions | default([]) %}
 {{ helper }}
 
 {% endfor %}
 
 #[derive(Debug, Clone, serde::Serialize)]
-pub struct {{ event.name | pascalCase }}EventClickHouseRow {
+pub struct {{ program.name | pascalCase }}CpiEventClickHouseRow {
     pub program_id: String,
     pub family_name: String,
     pub event_type: String,
@@ -37,23 +37,38 @@ pub struct {{ event.name | pascalCase }}EventClickHouseRow {
     pub partition_time: String,
     pub block_hash: Option<String>,
     pub tx_index: Option<u64>,
-{% for field in flatFields %}
+{% for eventPlan in clickHouseEventUnionPlans %}
+{% for field in eventPlan.fields %}
     pub {{ field.column }}: {{ field.rowType }},
+{% endfor %}
 {% endfor %}
 }
 
-impl {{ event.name | pascalCase }}EventClickHouseRow {
-    pub const FAMILY_NAME: &'static str = "{{ program.name | snakeCase }}_{{ event.name | snakeCase }}";
-    pub const EVENT_TYPE: &'static str = "{{ event.name | snakeCase }}";
-    pub const DEFAULT_TABLE_NAME: &'static str = "{{ program.name | snakeCase }}_{{ event.name | snakeCase }}_landing";
+impl {{ program.name | pascalCase }}CpiEventClickHouseRow {
+    pub const FAMILY_NAME: &'static str = "{{ program.name | snakeCase }}_cpi_event";
+    pub const DEFAULT_TABLE_NAME: &'static str = "{{ program.name | snakeCase }}_cpi_event_landing";
 
-    pub fn from_parts(
-        source: crate::events::{{ macros.escapeRustKeyword(event.name | snakeCase) }}::{{ event.name | pascalCase }}Event,
+{% for eventPlan in clickHouseEventUnionPlans %}
+    pub fn from_{{ macros.escapeRustKeyword(eventPlan.name | snakeCase) }}(
+        source: &crate::events::{{ macros.escapeRustKeyword(eventPlan.name | snakeCase) }}::{{ eventPlan.name | pascalCase }}Event,
         metadata: &InstructionMetadata,
         context: &ClickHouseRowContext,
     ) -> Self {
-        let _ = &source;
-        let ingest_ts = Utc::now();
+        let mut row = Self::base("{{ eventPlan.name | snakeCase }}", metadata, context, Utc::now());
+        let _ = &mut row;
+{% for field in eventPlan.fields %}
+        row.{{ field.column }} = {{ field.expr }};
+{% endfor %}
+        row
+    }
+
+{% endfor %}
+    fn base(
+        event_type: &'static str,
+        metadata: &InstructionMetadata,
+        context: &ClickHouseRowContext,
+        ingest_ts: DateTime<Utc>,
+    ) -> Self {
         let chain_time = metadata
             .transaction_metadata
             .block_time
@@ -65,12 +80,12 @@ impl {{ event.name | pascalCase }}EventClickHouseRow {
         Self {
             program_id: crate::PROGRAM_ID.to_string(),
             family_name: Self::FAMILY_NAME.to_string(),
-            event_type: Self::EVENT_TYPE.to_string(),
+            event_type: event_type.to_string(),
             event_id: deterministic_event_id(
                 crate::PROGRAM_ID.as_ref(),
                 &signature,
                 &metadata.absolute_path,
-                Self::EVENT_TYPE,
+                event_type,
                 event_seq,
             ),
             slot: metadata.transaction_metadata.slot,
@@ -87,14 +102,16 @@ impl {{ event.name | pascalCase }}EventClickHouseRow {
             partition_time: format_datetime(partition_time),
             block_hash: metadata.transaction_metadata.block_hash.map(|hash| hash.to_string()),
             tx_index: metadata.transaction_metadata.index,
-{% for field in flatFields %}
-            {{ field.column }}: {{ field.expr }},
+{% for eventPlan in clickHouseEventUnionPlans %}
+{% for field in eventPlan.fields %}
+            {{ field.column }}: {{ field.defaultExpr }},
+{% endfor %}
 {% endfor %}
         }
     }
 }
 
-impl ClickHouseTable for {{ event.name | pascalCase }}EventClickHouseRow {
+impl ClickHouseTable for {{ program.name | pascalCase }}CpiEventClickHouseRow {
     fn table() -> &'static str {
         Self::DEFAULT_TABLE_NAME
     }
@@ -119,8 +136,10 @@ impl ClickHouseTable for {{ event.name | pascalCase }}EventClickHouseRow {
             "partition_time",
             "block_hash",
             "tx_index",
-{% for field in flatFields %}
+{% for eventPlan in clickHouseEventUnionPlans %}
+{% for field in eventPlan.fields %}
             "{{ field.column }}",
+{% endfor %}
 {% endfor %}
         ]
     }
@@ -131,7 +150,7 @@ impl ClickHouseTable for {{ event.name | pascalCase }}EventClickHouseRow {
     }
 }
 
-impl {{ event.name | pascalCase }}EventClickHouseRow {
+impl {{ program.name | pascalCase }}CpiEventClickHouseRow {
     pub fn migration_operations(table_name: &str) -> Vec<String> {
         let mut operations = Vec::new();
 {% if clickHouseDdl.createLocalTable %}
@@ -176,8 +195,10 @@ impl {{ event.name | pascalCase }}EventClickHouseRow {
             format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} ADD COLUMN IF NOT EXISTS partition_time {{ chType('partition_time', "DateTime64(3, 'UTC')") }}"),
             format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} ADD COLUMN IF NOT EXISTS block_hash {{ chType('block_hash', 'Nullable(String)') }}"),
             format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} ADD COLUMN IF NOT EXISTS tx_index {{ chType('tx_index', 'Nullable(UInt64)') }}"),
-{% for field in flatFields %}
+{% for eventPlan in clickHouseEventUnionPlans %}
+{% for field in eventPlan.fields %}
             format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} ADD COLUMN IF NOT EXISTS {{ field.column }} {{ chType(field.column, field.clickHouseColumnType) }}"),
+{% endfor %}
 {% endfor %}
         ]
     }
@@ -219,8 +240,8 @@ impl {{ event.name | pascalCase }}EventClickHouseRow {
             chain_time {{ chType('chain_time', "Nullable(DateTime64(3, 'UTC'))") }},\
             partition_time {{ chType('partition_time', "DateTime64(3, 'UTC')") }},\
             block_hash {{ chType('block_hash', 'Nullable(String)') }},\
-            tx_index {{ chType('tx_index', 'Nullable(UInt64)') }}{% if flatFields.length > 0 %},{% endif %}\
-{% for field in flatFields %}
+            tx_index {{ chType('tx_index', 'Nullable(UInt64)') }}{% if clickHouseEventUnionFields.length > 0 %},{% endif %}\
+{% for field in clickHouseEventUnionFields %}
             {{ field.column }} {{ chType(field.column, field.clickHouseColumnType) }}{% if not loop.last %},{% endif %}\
 {% endfor %}
         ) ENGINE = {engine}{merge_tree_clauses}"
@@ -228,7 +249,7 @@ impl {{ event.name | pascalCase }}EventClickHouseRow {
     }
 }
 
-impl ClickHouseRow for {{ event.name | pascalCase }}EventClickHouseRow {
+impl ClickHouseRow for {{ program.name | pascalCase }}CpiEventClickHouseRow {
     fn table_name(&self) -> &'static str {
         Self::table()
     }
@@ -262,10 +283,6 @@ where
     T: std::fmt::Debug + ?Sized,
 {
     let debug = format!("{value:?}");
-    debug
-        .split(|ch: char| ch == '(' || ch == '{' || ch.is_whitespace())
-        .next()
-        .unwrap_or_default()
-        .to_string()
+    debug.split(['(', ' ', '{']).next().unwrap_or_default().to_string()
 }
 {% endblock %}

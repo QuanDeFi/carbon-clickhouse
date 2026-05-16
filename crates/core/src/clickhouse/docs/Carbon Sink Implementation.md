@@ -336,7 +336,10 @@ The generated row scope is canary-limited and covers account, instruction, and C
 - `withClickHouse: true` for default `MergeTree` DDL.
 - `withClickHouse: { ... }` for renderer-controlled DDL options.
 
-The table model is one typed landing table per generated row family. This avoids the schema, compression, and query-shape problems of one large generic JSON landing table.
+The table model is typed landing tables with Postgres-aligned CPI/event grouping:
+one table per instruction family, one table per account family, and one
+CPI/event table per generated decoder. The CPI/event table uses a discriminator
+plus event-prefixed typed payload columns instead of a generic JSON payload.
 
 Generated row mapping derives structured ClickHouse types from the decoder schema:
 
@@ -358,13 +361,13 @@ The fallback can be enabled either as the top-level renderer option `allowClickH
 Generated table names follow these patterns:
 
 - instruction rows: `{program}_{instruction}_instruction_landing`
-- CPI/event rows: `{program}_{event}_landing`
+- CPI/event rows: `{program}_cpi_event_landing`
 - account rows: `{program}_{account}_account_landing`
 
 Current canary table families include:
 
 - Jupiter instruction tables such as `jupiter_swap_route_instruction_landing`.
-- Jupiter CPI/event tables such as `jupiter_swap_swap_event_landing`.
+- Jupiter CPI/event table: `jupiter_swap_cpi_event_landing`.
 - Token Program account tables: `token_program_mint_account_landing`, `token_program_multisig_account_landing`, and `token_program_token_account_landing`.
 
 Common instruction columns:
@@ -588,7 +591,7 @@ The renderer supports:
 - decoder manifest support for a `clickhouse` feature
 - typed account landing row templates
 - typed instruction landing row templates
-- typed per-event CPI landing row templates
+- typed decoder-level CPI/event landing row templates with event-prefixed union columns
 - generated account `clickhouse/mod.rs`
 - generated instruction `clickhouse/mod.rs`
 - generated Cargo dependencies for ClickHouse, `serde`, and `chrono`
@@ -664,7 +667,7 @@ For that model:
 - The writer flushes independently per `(table, partition)` buffer.
 - Synchronous inserts are the default for backfills and deterministic ingestion.
 - Async-wait inserts are available for live production ingestion with many writers.
-- ClickHouse table design is one typed landing table per generated row family.
+- ClickHouse table design is typed landing tables: one per instruction family, one per account family, and one CPI/event table per generated decoder.
 
 ## Responsibility Split
 

@@ -6,10 +6,18 @@ use carbon_core::{
 };
 use chrono::{DateTime, Utc};
 
-use crate::{events::swap_event::SwapEventEvent, PROGRAM_ID as JUPITER_SWAP_PROGRAM_ID};
+use crate::{
+    events::{
+        best_swap_out_amount_violation::BestSwapOutAmountViolationEvent,
+        candidate_swap_quote_error::CandidateSwapQuoteErrorEvent,
+        candidate_swap_results::CandidateSwapResultsEvent, fee_event::FeeEventEvent,
+        swap_event::SwapEventEvent, swaps_event::SwapsEventEvent,
+    },
+    PROGRAM_ID as JUPITER_SWAP_PROGRAM_ID,
+};
 
-#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
-pub struct JupiterSwapSwapEventLandingRow {
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct JupiterSwapCpiEventLandingRow {
     pub program_id: String,
     pub family_name: String,
     pub event_type: String,
@@ -28,29 +36,123 @@ pub struct JupiterSwapSwapEventLandingRow {
     pub partition_time: String,
     pub block_hash: Option<String>,
     pub tx_index: Option<u64>,
-    pub amm: String,
-    pub input_mint: String,
-    pub input_amount: u64,
-    pub output_mint: String,
-    pub output_amount: u64,
+    pub fee_event_account: Option<String>,
+    pub fee_event_mint: Option<String>,
+    pub fee_event_amount: Option<u64>,
+    pub swap_event_amm: Option<String>,
+    pub swap_event_input_mint: Option<String>,
+    pub swap_event_input_amount: Option<u64>,
+    pub swap_event_output_mint: Option<String>,
+    pub swap_event_output_amount: Option<u64>,
+    pub swaps_event_swap_events_present: bool,
+    pub swaps_event_swap_events: Vec<ClickHouseSwapEventV2>,
+    pub candidate_swap_results_results_present: bool,
+    pub candidate_swap_results_results: Vec<ClickHouseCandidateSwapResult>,
+    pub candidate_swap_quote_error_candidate_index: Option<u64>,
+    pub candidate_swap_quote_error_in_amount: Option<u64>,
+    pub candidate_swap_quote_error_error_code: Option<u64>,
+    pub best_swap_out_amount_violation_expected_out_amount: Option<u64>,
+    pub best_swap_out_amount_violation_out_amount: Option<u64>,
 }
 
-impl JupiterSwapSwapEventLandingRow {
-    pub const FAMILY_NAME: &'static str = "jupiter_swap_swap_event";
-    pub const EVENT_TYPE: &'static str = "swap_event";
-    pub const DEFAULT_TABLE_NAME: &'static str = "jupiter_swap_swap_event_landing";
+impl JupiterSwapCpiEventLandingRow {
+    pub const FAMILY_NAME: &'static str = "jupiter_swap_cpi_event";
+    pub const DEFAULT_TABLE_NAME: &'static str = "jupiter_swap_cpi_event_landing";
 
-    pub fn from_parts(
+    pub fn from_fee_event(
         metadata: &InstructionMetadata,
-        swap_event: &SwapEventEvent,
+        source: &FeeEventEvent,
         context: &ClickHouseRowContext,
     ) -> Self {
-        Self::from_parts_with_ingest_ts(metadata, swap_event, context, Utc::now())
+        let mut row = Self::base("fee_event", metadata, context, Utc::now());
+        row.fee_event_account = Some(source.account.to_string());
+        row.fee_event_mint = Some(source.mint.to_string());
+        row.fee_event_amount = Some(source.amount);
+        row
     }
 
-    pub fn from_parts_with_ingest_ts(
+    pub fn from_swap_event(
         metadata: &InstructionMetadata,
-        swap_event: &SwapEventEvent,
+        source: &SwapEventEvent,
+        context: &ClickHouseRowContext,
+    ) -> Self {
+        let mut row = Self::base("swap_event", metadata, context, Utc::now());
+        row.swap_event_amm = Some(source.amm.to_string());
+        row.swap_event_input_mint = Some(source.input_mint.to_string());
+        row.swap_event_input_amount = Some(source.input_amount);
+        row.swap_event_output_mint = Some(source.output_mint.to_string());
+        row.swap_event_output_amount = Some(source.output_amount);
+        row
+    }
+
+    pub fn from_swaps_event(
+        metadata: &InstructionMetadata,
+        source: &SwapsEventEvent,
+        context: &ClickHouseRowContext,
+    ) -> Self {
+        let mut row = Self::base("swaps_event", metadata, context, Utc::now());
+        row.swaps_event_swap_events_present = true;
+        row.swaps_event_swap_events = clickhouse_swap_events(&source.swap_events);
+        row
+    }
+
+    pub fn from_candidate_swap_results(
+        metadata: &InstructionMetadata,
+        source: &CandidateSwapResultsEvent,
+        context: &ClickHouseRowContext,
+    ) -> Self {
+        let mut row = Self::base("candidate_swap_results", metadata, context, Utc::now());
+        row.candidate_swap_results_results_present = true;
+        row.candidate_swap_results_results = clickhouse_candidate_swap_results(&source.results);
+        row
+    }
+
+    pub fn from_candidate_swap_quote_error(
+        metadata: &InstructionMetadata,
+        source: &CandidateSwapQuoteErrorEvent,
+        context: &ClickHouseRowContext,
+    ) -> Self {
+        let mut row = Self::base("candidate_swap_quote_error", metadata, context, Utc::now());
+        row.candidate_swap_quote_error_candidate_index = Some(source.candidate_index);
+        row.candidate_swap_quote_error_in_amount = Some(source.in_amount);
+        row.candidate_swap_quote_error_error_code = Some(source.error_code);
+        row
+    }
+
+    pub fn from_best_swap_out_amount_violation(
+        metadata: &InstructionMetadata,
+        source: &BestSwapOutAmountViolationEvent,
+        context: &ClickHouseRowContext,
+    ) -> Self {
+        let mut row = Self::base(
+            "best_swap_out_amount_violation",
+            metadata,
+            context,
+            Utc::now(),
+        );
+        row.best_swap_out_amount_violation_expected_out_amount = Some(source.expected_out_amount);
+        row.best_swap_out_amount_violation_out_amount = Some(source.out_amount);
+        row
+    }
+
+    pub fn from_swap_event_with_ingest_ts(
+        metadata: &InstructionMetadata,
+        source: &SwapEventEvent,
+        context: &ClickHouseRowContext,
+        ingest_ts: DateTime<Utc>,
+    ) -> Self {
+        let mut row = Self::base("swap_event", metadata, context, ingest_ts);
+        row.swap_event_amm = Some(source.amm.to_string());
+        row.swap_event_input_mint = Some(source.input_mint.to_string());
+        row.swap_event_input_amount = Some(source.input_amount);
+        row.swap_event_output_mint = Some(source.output_mint.to_string());
+        row.swap_event_output_amount = Some(source.output_amount);
+        row
+    }
+
+    fn base(
+        event_type: &'static str,
+        metadata: &InstructionMetadata,
         context: &ClickHouseRowContext,
         ingest_ts: DateTime<Utc>,
     ) -> Self {
@@ -65,12 +167,12 @@ impl JupiterSwapSwapEventLandingRow {
         Self {
             program_id: JUPITER_SWAP_PROGRAM_ID.to_string(),
             family_name: Self::FAMILY_NAME.to_string(),
-            event_type: Self::EVENT_TYPE.to_string(),
+            event_type: event_type.to_string(),
             event_id: deterministic_event_id(
                 JUPITER_SWAP_PROGRAM_ID.as_ref(),
                 &signature,
                 &metadata.absolute_path,
-                Self::EVENT_TYPE,
+                event_type,
                 event_seq,
             ),
             slot: metadata.transaction_metadata.slot,
@@ -90,16 +192,28 @@ impl JupiterSwapSwapEventLandingRow {
                 .block_hash
                 .map(|hash| hash.to_string()),
             tx_index: metadata.transaction_metadata.index,
-            amm: swap_event.amm.to_string(),
-            input_mint: swap_event.input_mint.to_string(),
-            input_amount: swap_event.input_amount,
-            output_mint: swap_event.output_mint.to_string(),
-            output_amount: swap_event.output_amount,
+            fee_event_account: None,
+            fee_event_mint: None,
+            fee_event_amount: None,
+            swap_event_amm: None,
+            swap_event_input_mint: None,
+            swap_event_input_amount: None,
+            swap_event_output_mint: None,
+            swap_event_output_amount: None,
+            swaps_event_swap_events_present: false,
+            swaps_event_swap_events: Vec::new(),
+            candidate_swap_results_results_present: false,
+            candidate_swap_results_results: Vec::new(),
+            candidate_swap_quote_error_candidate_index: None,
+            candidate_swap_quote_error_in_amount: None,
+            candidate_swap_quote_error_error_code: None,
+            best_swap_out_amount_violation_expected_out_amount: None,
+            best_swap_out_amount_violation_out_amount: None,
         }
     }
 }
 
-impl ClickHouseTable for JupiterSwapSwapEventLandingRow {
+impl ClickHouseTable for JupiterSwapCpiEventLandingRow {
     fn table() -> &'static str {
         Self::DEFAULT_TABLE_NAME
     }
@@ -124,11 +238,23 @@ impl ClickHouseTable for JupiterSwapSwapEventLandingRow {
             "partition_time",
             "block_hash",
             "tx_index",
-            "amm",
-            "input_mint",
-            "input_amount",
-            "output_mint",
-            "output_amount",
+            "fee_event_account",
+            "fee_event_mint",
+            "fee_event_amount",
+            "swap_event_amm",
+            "swap_event_input_mint",
+            "swap_event_input_amount",
+            "swap_event_output_mint",
+            "swap_event_output_amount",
+            "swaps_event_swap_events_present",
+            "swaps_event_swap_events",
+            "candidate_swap_results_results_present",
+            "candidate_swap_results_results",
+            "candidate_swap_quote_error_candidate_index",
+            "candidate_swap_quote_error_in_amount",
+            "candidate_swap_quote_error_error_code",
+            "best_swap_out_amount_violation_expected_out_amount",
+            "best_swap_out_amount_violation_out_amount",
         ]
     }
 
@@ -153,11 +279,23 @@ impl ClickHouseTable for JupiterSwapSwapEventLandingRow {
             partition_time DateTime64(3, 'UTC'),\
             block_hash Nullable(String),\
             tx_index Nullable(UInt64),\
-            amm String,\
-            input_mint String,\
-            input_amount UInt64,\
-            output_mint String,\
-            output_amount UInt64\
+            fee_event_account Nullable(String),\
+            fee_event_mint Nullable(String),\
+            fee_event_amount Nullable(UInt64),\
+            swap_event_amm Nullable(String),\
+            swap_event_input_mint Nullable(String),\
+            swap_event_input_amount Nullable(UInt64),\
+            swap_event_output_mint Nullable(String),\
+            swap_event_output_amount Nullable(UInt64),\
+            swaps_event_swap_events_present Bool,\
+            swaps_event_swap_events Array(Tuple(input_mint String, input_amount UInt64, output_mint String, output_amount UInt64)),\
+            candidate_swap_results_results_present Bool,\
+            candidate_swap_results_results Array(Tuple(variant Enum8('OutAmount' = 0, 'ProgramError' = 1), value_0 Nullable(UInt64))),\
+            candidate_swap_quote_error_candidate_index Nullable(UInt64),\
+            candidate_swap_quote_error_in_amount Nullable(UInt64),\
+            candidate_swap_quote_error_error_code Nullable(UInt64),\
+            best_swap_out_amount_violation_expected_out_amount Nullable(UInt64),\
+            best_swap_out_amount_violation_out_amount Nullable(UInt64)\
         ) ENGINE = MergeTree \
         PARTITION BY toYear(partition_time) \
         ORDER BY (program_id, family_name, event_id, slot)"
@@ -165,7 +303,7 @@ impl ClickHouseTable for JupiterSwapSwapEventLandingRow {
     }
 }
 
-impl ClickHouseRow for JupiterSwapSwapEventLandingRow {
+impl ClickHouseRow for JupiterSwapCpiEventLandingRow {
     fn table_name(&self) -> &'static str {
         Self::table()
     }
@@ -173,66 +311,6 @@ impl ClickHouseRow for JupiterSwapSwapEventLandingRow {
     fn partition_key(&self) -> String {
         self.partition_time[..4].to_string()
     }
-}
-
-const EVENT_METADATA_COLUMNS: &[&str] = &[
-    "program_id",
-    "family_name",
-    "event_type",
-    "event_id",
-    "slot",
-    "signature",
-    "instruction_index",
-    "stack_height",
-    "absolute_path",
-    "event_seq",
-    "source_name",
-    "mode",
-    "decoder_version",
-    "ingest_ts",
-    "chain_time",
-    "partition_time",
-    "block_hash",
-    "tx_index",
-];
-
-fn event_columns(payload_columns: &[&'static str]) -> Vec<&'static str> {
-    let mut columns = EVENT_METADATA_COLUMNS.to_vec();
-    columns.extend(payload_columns);
-    columns
-}
-
-fn create_event_table_sql(table_name: &str, payload_columns: &[&str]) -> String {
-    let payload_sql = if payload_columns.is_empty() {
-        String::new()
-    } else {
-        format!(",{}", payload_columns.join(","))
-    };
-
-    format!(
-        "CREATE TABLE IF NOT EXISTS {table_name} (\
-            program_id String,\
-            family_name String,\
-            event_type String,\
-            event_id String,\
-            slot UInt64,\
-            signature String,\
-            instruction_index UInt32,\
-            stack_height UInt32,\
-            absolute_path Array(UInt8),\
-            event_seq UInt32,\
-            source_name String,\
-            mode String,\
-            decoder_version String,\
-            ingest_ts DateTime64(3, 'UTC'),\
-            chain_time Nullable(DateTime64(3, 'UTC')),\
-            partition_time DateTime64(3, 'UTC'),\
-            block_hash Nullable(String),\
-            tx_index Nullable(UInt64){payload_sql}\
-        ) ENGINE = MergeTree \
-        PARTITION BY toYear(partition_time) \
-        ORDER BY (program_id, family_name, event_id, slot)"
-    )
 }
 
 #[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
@@ -303,183 +381,6 @@ fn clickhouse_candidate_swap_results(
         .collect()
 }
 
-macro_rules! define_event_row {
-    (
-        $row:ident,
-        $source_ty:path,
-        $family_name:literal,
-        $event_type:literal,
-        $table_name:literal,
-        [$(($field:ident: $field_ty:ty = $expr:expr, $column_sql:literal)),* $(,)?]
-    ) => {
-        #[derive(Debug, Clone, serde::Serialize)]
-        pub struct $row {
-            pub program_id: String,
-            pub family_name: String,
-            pub event_type: String,
-            pub event_id: String,
-            pub slot: u64,
-            pub signature: String,
-            pub instruction_index: u32,
-            pub stack_height: u32,
-            pub absolute_path: Vec<u8>,
-            pub event_seq: u32,
-            pub source_name: String,
-            pub mode: String,
-            pub decoder_version: String,
-            pub ingest_ts: String,
-            pub chain_time: Option<String>,
-            pub partition_time: String,
-            pub block_hash: Option<String>,
-            pub tx_index: Option<u64>,
-            $(pub $field: $field_ty,)*
-        }
-
-        impl $row {
-            pub const FAMILY_NAME: &'static str = $family_name;
-            pub const EVENT_TYPE: &'static str = $event_type;
-            pub const DEFAULT_TABLE_NAME: &'static str = $table_name;
-
-            pub fn from_parts(
-                metadata: &InstructionMetadata,
-                source: &$source_ty,
-                context: &ClickHouseRowContext,
-            ) -> Self {
-                Self::from_parts_with_ingest_ts(metadata, source, context, Utc::now())
-            }
-
-            pub fn from_parts_with_ingest_ts(
-                metadata: &InstructionMetadata,
-                source: &$source_ty,
-                context: &ClickHouseRowContext,
-                ingest_ts: DateTime<Utc>,
-            ) -> Self {
-                let chain_time = metadata
-                    .transaction_metadata
-                    .block_time
-                    .and_then(DateTime::<Utc>::from_timestamp_secs);
-                let partition_time = chain_time.unwrap_or(ingest_ts);
-                let signature = metadata.transaction_metadata.signature.to_string();
-                let event_seq = 0u32;
-
-                Self {
-                    program_id: JUPITER_SWAP_PROGRAM_ID.to_string(),
-                    family_name: Self::FAMILY_NAME.to_string(),
-                    event_type: Self::EVENT_TYPE.to_string(),
-                    event_id: deterministic_event_id(
-                        JUPITER_SWAP_PROGRAM_ID.as_ref(),
-                        &signature,
-                        &metadata.absolute_path,
-                        Self::EVENT_TYPE,
-                        event_seq,
-                    ),
-                    slot: metadata.transaction_metadata.slot,
-                    signature,
-                    instruction_index: metadata.index,
-                    stack_height: metadata.stack_height,
-                    absolute_path: metadata.absolute_path.clone(),
-                    event_seq,
-                    source_name: context.source_name.clone(),
-                    mode: context.mode.clone(),
-                    decoder_version: context.decoder_version.clone(),
-                    ingest_ts: format_datetime(ingest_ts),
-                    chain_time: chain_time.map(format_datetime),
-                    partition_time: format_datetime(partition_time),
-                    block_hash: metadata
-                        .transaction_metadata
-                        .block_hash
-                        .map(|hash| hash.to_string()),
-                    tx_index: metadata.transaction_metadata.index,
-                    $($field: ($expr)(source),)*
-                }
-            }
-        }
-
-        impl ClickHouseTable for $row {
-            fn table() -> &'static str {
-                Self::DEFAULT_TABLE_NAME
-            }
-
-            fn columns() -> Vec<&'static str> {
-                event_columns(&[$(stringify!($field)),*])
-            }
-
-            fn create_table_sql(table_name: &str) -> String {
-                create_event_table_sql(
-                    table_name,
-                    &[$(concat!(stringify!($field), " ", $column_sql)),*],
-                )
-            }
-        }
-
-        impl ClickHouseRow for $row {
-            fn table_name(&self) -> &'static str {
-                Self::table()
-            }
-
-            fn partition_key(&self) -> String {
-                self.partition_time[..4].to_string()
-            }
-        }
-    };
-}
-
-define_event_row!(
-    JupiterSwapFeeEventLandingRow,
-    crate::events::fee_event::FeeEventEvent,
-    "jupiter_swap_fee_event",
-    "fee_event",
-    "jupiter_swap_fee_event_landing",
-    [
-        (account: String = |source: &crate::events::fee_event::FeeEventEvent| source.account.to_string(), "String"),
-        (mint: String = |source: &crate::events::fee_event::FeeEventEvent| source.mint.to_string(), "String"),
-        (amount: u64 = |source: &crate::events::fee_event::FeeEventEvent| source.amount, "UInt64"),
-    ]
-);
-
-define_event_row!(
-    JupiterSwapSwapsEventLandingRow,
-    crate::events::swaps_event::SwapsEventEvent,
-    "jupiter_swap_swaps_event",
-    "swaps_event",
-    "jupiter_swap_swaps_event_landing",
-    [(swap_events: Vec<ClickHouseSwapEventV2> = |source: &crate::events::swaps_event::SwapsEventEvent| clickhouse_swap_events(&source.swap_events), "Array(Tuple(input_mint String, input_amount UInt64, output_mint String, output_amount UInt64))")]
-);
-
-define_event_row!(
-    JupiterSwapCandidateSwapResultsEventLandingRow,
-    crate::events::candidate_swap_results::CandidateSwapResultsEvent,
-    "jupiter_swap_candidate_swap_results_event",
-    "candidate_swap_results",
-    "jupiter_swap_candidate_swap_results_event_landing",
-    [(results: Vec<ClickHouseCandidateSwapResult> = |source: &crate::events::candidate_swap_results::CandidateSwapResultsEvent| clickhouse_candidate_swap_results(&source.results), "Array(Tuple(variant Enum8('OutAmount' = 0, 'ProgramError' = 1), value_0 Nullable(UInt64)))")]
-);
-
-define_event_row!(
-    JupiterSwapCandidateSwapQuoteErrorEventLandingRow,
-    crate::events::candidate_swap_quote_error::CandidateSwapQuoteErrorEvent,
-    "jupiter_swap_candidate_swap_quote_error_event",
-    "candidate_swap_quote_error",
-    "jupiter_swap_candidate_swap_quote_error_event_landing",
-    [
-        (candidate_index: u64 = |source: &crate::events::candidate_swap_quote_error::CandidateSwapQuoteErrorEvent| source.candidate_index, "UInt64"),
-        (in_amount: u64 = |source: &crate::events::candidate_swap_quote_error::CandidateSwapQuoteErrorEvent| source.in_amount, "UInt64"),
-        (error_code: u64 = |source: &crate::events::candidate_swap_quote_error::CandidateSwapQuoteErrorEvent| source.error_code, "UInt64"),
-    ]
-);
-
-define_event_row!(
-    JupiterSwapBestSwapOutAmountViolationEventLandingRow,
-    crate::events::best_swap_out_amount_violation::BestSwapOutAmountViolationEvent,
-    "jupiter_swap_best_swap_out_amount_violation_event",
-    "best_swap_out_amount_violation",
-    "jupiter_swap_best_swap_out_amount_violation_event_landing",
-    [
-        (expected_out_amount: u64 = |source: &crate::events::best_swap_out_amount_violation::BestSwapOutAmountViolationEvent| source.expected_out_amount, "UInt64"),
-        (out_amount: u64 = |source: &crate::events::best_swap_out_amount_violation::BestSwapOutAmountViolationEvent| source.out_amount, "UInt64"),
-    ]
-);
-
 fn format_datetime(value: DateTime<Utc>) -> String {
     value.format("%Y-%m-%d %H:%M:%S%.3f").to_string()
 }
@@ -534,7 +435,7 @@ mod tests {
 
     #[test]
     fn event_seq_is_zero() {
-        let row = JupiterSwapSwapEventLandingRow::from_parts_with_ingest_ts(
+        let row = JupiterSwapCpiEventLandingRow::from_swap_event_with_ingest_ts(
             &metadata(Some(1_704_067_200)),
             &swap_event(),
             &context(),
@@ -548,13 +449,13 @@ mod tests {
         let ingest_ts = DateTime::<Utc>::from_timestamp_millis(1_704_067_200_123).unwrap();
         let metadata = metadata(Some(1_704_067_200));
         let swap_event = swap_event();
-        let first = JupiterSwapSwapEventLandingRow::from_parts_with_ingest_ts(
+        let first = JupiterSwapCpiEventLandingRow::from_swap_event_with_ingest_ts(
             &metadata,
             &swap_event,
             &context(),
             ingest_ts,
         );
-        let second = JupiterSwapSwapEventLandingRow::from_parts_with_ingest_ts(
+        let second = JupiterSwapCpiEventLandingRow::from_swap_event_with_ingest_ts(
             &metadata,
             &swap_event,
             &context(),
@@ -564,19 +465,20 @@ mod tests {
         assert_eq!(first.event_id, second.event_id);
         assert_eq!(
             first.family_name,
-            JupiterSwapSwapEventLandingRow::FAMILY_NAME
+            JupiterSwapCpiEventLandingRow::FAMILY_NAME
         );
-        assert_eq!(first.event_type, JupiterSwapSwapEventLandingRow::EVENT_TYPE);
+        assert_eq!(first.event_type, "swap_event");
         assert_eq!(first.slot, 55);
-        assert_eq!(first.input_amount, 12);
-        assert_eq!(first.output_amount, 34);
+        assert_eq!(first.swap_event_input_amount, Some(12));
+        assert_eq!(first.swap_event_output_amount, Some(34));
+        assert!(first.fee_event_amount.is_none());
         assert_eq!(first.partition_key(), "2024");
         assert_eq!(first.ingest_ts, second.ingest_ts);
     }
 
     #[test]
     fn partition_time_falls_back_to_ingest_time() {
-        let row = JupiterSwapSwapEventLandingRow::from_parts_with_ingest_ts(
+        let row = JupiterSwapCpiEventLandingRow::from_swap_event_with_ingest_ts(
             &metadata(None),
             &swap_event(),
             &context(),
@@ -588,15 +490,20 @@ mod tests {
     }
 
     #[test]
-    fn candidate_swap_result_uses_structured_payload_enum_tag() {
-        let ddl = JupiterSwapCandidateSwapResultsEventLandingRow::create_table_sql(
-            "jupiter_swap_candidate_swap_results_test",
-        );
+    fn cpi_event_table_uses_structured_union_columns() {
+        let ddl = JupiterSwapCpiEventLandingRow::create_table_sql("jupiter_swap_cpi_event_test");
 
+        assert!(ddl.contains("event_type String"));
+        assert!(ddl.contains("fee_event_amount Nullable(UInt64)"));
+        assert!(ddl.contains("swap_event_input_amount Nullable(UInt64)"));
+        assert!(ddl.contains("swaps_event_swap_events_present Bool"));
+        assert!(ddl.contains("swaps_event_swap_events Array(Tuple"));
         assert!(ddl.contains("variant Enum8('OutAmount' = 0, 'ProgramError' = 1)"));
-        assert!(ddl.contains("value_0 Nullable(UInt64)"));
-        assert!(!ddl.contains("variant LowCardinality(String)"));
+        assert!(!ddl.contains(&format!("data {}", "JSON")));
+    }
 
+    #[test]
+    fn candidate_swap_result_uses_structured_payload_enum_tag() {
         let result = ClickHouseCandidateSwapResult::from(
             &crate::types::CandidateSwapResult::ProgramError(6001),
         );

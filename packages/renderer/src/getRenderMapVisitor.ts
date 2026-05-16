@@ -33,7 +33,7 @@ import {
 import { formatDocComments } from './utils/render';
 import { PostgresRowMapper, type FlattenedField } from './postgresRowMapper';
 import { checkRequiresBigArray } from './utils/postgresHelpers';
-import { ClickHouseRowMapper } from './clickhouseRowMapper';
+import { ClickHouseFlattenedField, ClickHouseRowMapper } from './clickhouseRowMapper';
 import {
     getClickHouseDdlContext,
     getClickHouseRenderOptions,
@@ -61,6 +61,86 @@ export type GetRenderMapOptions = {
     version?: string;
     versionName?: string;
 };
+
+type ClickHouseEventUnionField = {
+    column: string;
+    rowType: string;
+    clickHouseColumnType: string;
+    expr: string;
+    defaultExpr: string;
+};
+
+type ClickHouseEventUnionPlan = {
+    name: string;
+    fields: ClickHouseEventUnionField[];
+};
+
+function isClickHouseNullableSafeField(field: ClickHouseFlattenedField): boolean {
+    if (field.rowType === 'bool' && field.column.endsWith('_present')) return false;
+    return !field.clickHouseColumnType.startsWith('Array(') && !field.clickHouseColumnType.startsWith('Tuple(');
+}
+
+function isClickHouseNullableField(field: ClickHouseFlattenedField): boolean {
+    return field.rowType.startsWith('Option<') && field.clickHouseColumnType.startsWith('Nullable(');
+}
+
+function clickHouseDefaultExpr(rowType: string): string {
+    if (rowType.startsWith('Option<')) return 'None';
+    if (rowType.startsWith('Vec<')) return 'Vec::new()';
+    if (rowType === 'String') return 'String::new()';
+    if (rowType === 'bool') return 'false';
+    if (rowType === 'f32' || rowType === 'f64') return '0.0';
+    if (/^[ui](8|16|32|64|128)$/.test(rowType)) return '0';
+    return `${rowType}::default()`;
+}
+
+function eventUnionFields(eventName: string, fields: ClickHouseFlattenedField[]): ClickHouseEventUnionField[] {
+    const eventPrefix = snakeCase(eventName);
+    return fields.flatMap(field => {
+        const column = `${eventPrefix}_${field.column}`;
+        if (field.rowType === 'bool' && field.column.endsWith('_present')) {
+            return [
+                {
+                    column,
+                    rowType: field.rowType,
+                    clickHouseColumnType: field.clickHouseColumnType,
+                    expr: field.expr,
+                    defaultExpr: 'false',
+                },
+            ];
+        }
+
+        if (isClickHouseNullableSafeField(field)) {
+            const nullable = isClickHouseNullableField(field);
+            return [
+                {
+                    column,
+                    rowType: nullable ? field.rowType : `Option<${field.rowType}>`,
+                    clickHouseColumnType: nullable ? field.clickHouseColumnType : `Nullable(${field.clickHouseColumnType})`,
+                    expr: nullable ? field.expr : `Some(${field.expr})`,
+                    defaultExpr: 'None',
+                },
+            ];
+        }
+
+        return [
+            {
+                column: `${column}_present`,
+                rowType: 'bool',
+                clickHouseColumnType: 'Bool',
+                expr: 'true',
+                defaultExpr: 'false',
+            },
+            {
+                column,
+                rowType: field.rowType,
+                clickHouseColumnType: field.clickHouseColumnType,
+                expr: field.expr,
+                defaultExpr: clickHouseDefaultExpr(field.rowType),
+            },
+        ];
+    });
+}
 
 export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
     const renderParentInstructions = options.renderParentInstructions ?? false;
@@ -90,6 +170,8 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
         currentProgram ? { ...currentProgram, name: options.packageName || currentProgram.name } : currentProgram;
     // Track which instructions have GraphQL schemas generated
     const instructionsWithGraphQLSchemas = new Set<string>();
+    const clickHouseEventUnionPlans = new Map<string, ClickHouseEventUnionPlan>();
+    const clickHouseEventHelperDefinitions = new Map<string, string>();
 
     // Track if any types require serde-big-array
     let requiresSerdeBigArray = false;
@@ -390,16 +472,13 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
 
                             if (clickHouseEnabled) {
                                 const clickhousePlan = clickhouseRowMapper.planType(node.type, [], [], new Set());
-                                renderMap.add(
-                                    `src/instructions/clickhouse/${snakeCase(node.name)}_event_row.rs`,
-                                    render('eventInstructionClickHouseRowPage.njk', {
-                                        event: node,
-                                        flatFields: clickhousePlan.fields,
-                                        helperDefinitions: clickhousePlan.helperDefinitions,
-                                        program: currentRenderProgram(),
-                                        clickHouseDdl: getClickHouseDdlContext(options.withClickHouse, 'event'),
-                                    }),
-                                );
+                                clickHouseEventUnionPlans.set(node.name, {
+                                    name: node.name,
+                                    fields: eventUnionFields(node.name, clickhousePlan.fields),
+                                });
+                                clickhousePlan.helperDefinitions.forEach(definition => {
+                                    clickHouseEventHelperDefinitions.set(definition, definition);
+                                });
                             }
                         }
                     }
@@ -774,6 +853,14 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                         hasAnchorEvents,
                         hasGraphQLFields,
                         events: options.anchorEvents ?? [],
+                        clickHouseEventUnionPlans: (options.anchorEvents ?? [])
+                            .map(event => clickHouseEventUnionPlans.get(event.name))
+                            .filter((event): event is ClickHouseEventUnionPlan => Boolean(event)),
+                        clickHouseEventUnionFields: (options.anchorEvents ?? [])
+                            .map(event => clickHouseEventUnionPlans.get(event.name))
+                            .filter((event): event is ClickHouseEventUnionPlan => Boolean(event))
+                            .flatMap(event => event.fields),
+                        clickHouseEventHelperDefinitions: [...clickHouseEventHelperDefinitions.values()],
                         postgresMode: options.postgresMode || 'typed',
                         withPostgres: options.withPostgres !== false,
                         withGraphQL: options.withGraphql !== false,
@@ -832,6 +919,9 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                             clickHouseEnabled &&
                             (instructionsToExport.length > 0 || (options.anchorEvents?.length ?? 0) > 0)
                         ) {
+                            if ((options.anchorEvents?.length ?? 0) > 0) {
+                                map.add('src/instructions/clickhouse/cpi_event_row.rs', render('cpiEventClickHouseRowPage.njk', ctx));
+                            }
                             map.add('src/instructions/clickhouse/mod.rs', render('instructionsClickHouseMod.njk', ctx));
                         }
                         if (options.withGraphql !== false) {
