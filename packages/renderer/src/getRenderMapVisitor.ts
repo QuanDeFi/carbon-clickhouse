@@ -472,8 +472,8 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
 
                             if (clickHouseEnabled) {
                                 const clickhousePlan = clickhouseRowMapper.planType(node.type, [], [], new Set());
-                                clickHouseEventUnionPlans.set(node.name, {
-                                    name: node.name,
+                                clickHouseEventUnionPlans.set(event.name, {
+                                    name: event.name,
                                     fields: eventUnionFields(node.name, clickhousePlan.fields),
                                 });
                                 clickhousePlan.helperDefinitions.forEach(definition => {
@@ -920,7 +920,10 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                             (instructionsToExport.length > 0 || (options.anchorEvents?.length ?? 0) > 0)
                         ) {
                             if ((options.anchorEvents?.length ?? 0) > 0) {
-                                map.add('src/instructions/clickhouse/cpi_event_row.rs', render('cpiEventClickHouseRowPage.njk', ctx));
+                                map.add('src/instructions/clickhouse/cpi_event_row.rs', render('cpiEventClickHouseRowPage.njk', {
+                                    ...ctx,
+                                    clickHouseDdl: getClickHouseDdlContext(options.withClickHouse, 'event'),
+                                }));
                             }
                             map.add('src/instructions/clickhouse/mod.rs', render('instructionsClickHouseMod.njk', ctx));
                         }

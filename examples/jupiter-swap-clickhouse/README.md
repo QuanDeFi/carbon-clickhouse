@@ -35,6 +35,17 @@ The example exposes Carbon metrics for Prometheus at
 `PROMETHEUS_METRICS_ADDR` and keeps log metrics enabled. Use
 `monitoring/compose.yaml` to run the local Prometheus/Grafana stack.
 
+To opt into ClickHouse async inserts with `wait_for_async_insert=1`:
+
+```sh
+CLICKHOUSE_ASYNC_INSERT=true \
+CLICKHOUSE_ASYNC_INSERT_BUSY_TIMEOUT_MS=1000 \
+cargo run -p jupiter-swap-clickhouse-carbon-example
+```
+
+This is the production-live ingestion canary path. The default remains
+synchronous inserts for deterministic backfills.
+
 ## ClickHouse Tables
 
 The example bootstraps one typed landing table per generated Jupiter Swap

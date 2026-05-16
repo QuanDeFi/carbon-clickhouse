@@ -8,7 +8,7 @@ use {
         pipeline::ShutdownStrategy,
     },
     carbon_jupiter_swap_decoder::{
-        instructions::clickhouse::setup_clickhouse as setup_instruction_clickhouse,
+        instructions::clickhouse::{bootstrap_clickhouse_from_database_url, clickhouse_processor},
         JupiterSwapDecoder,
     },
     carbon_log_metrics::LogMetrics,
@@ -60,6 +60,43 @@ fn prometheus_metrics() -> CarbonResult<PrometheusMetrics> {
     ))
 }
 
+fn optional_env_u64(name: &str) -> CarbonResult<Option<u64>> {
+    env::var(name)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| {
+            value
+                .parse::<u64>()
+                .map_err(|err| CarbonError::Custom(format!("Invalid {name}={value:?}: {err}")))
+        })
+        .transpose()
+}
+
+fn optional_env_bool(name: &str) -> CarbonResult<Option<bool>> {
+    env::var(name)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| parse_bool(name, &value))
+        .transpose()
+}
+
+fn env_bool(name: &str, default: bool) -> CarbonResult<bool> {
+    match env::var(name) {
+        Ok(value) if !value.trim().is_empty() => parse_bool(name, &value),
+        _ => Ok(default),
+    }
+}
+
+fn parse_bool(name: &str, value: &str) -> CarbonResult<bool> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "y" | "on" => Ok(true),
+        "0" | "false" | "no" | "n" | "off" => Ok(false),
+        _ => Err(CarbonError::Custom(format!(
+            "Invalid {name}={value:?}: expected true/false"
+        ))),
+    }
+}
+
 #[tokio::main]
 pub async fn main() -> CarbonResult<()> {
     dotenv::dotenv().ok();
@@ -83,7 +120,20 @@ pub async fn main() -> CarbonResult<()> {
 
     let database_url = env::var("DATABASE_URL")
         .map_err(|err| CarbonError::Custom(format!("DATABASE_URL must be set ({err})")))?;
-    let instruction_processor = setup_instruction_clickhouse(&database_url).await?;
+    let mut clickhouse_config = bootstrap_clickhouse_from_database_url(&database_url).await?;
+    if env_bool("CLICKHOUSE_ASYNC_INSERT", false)? {
+        clickhouse_config = clickhouse_config.with_insert_settings(
+            carbon_core::clickhouse::ClickHouseInsertSettings::AsyncWait(
+                carbon_core::clickhouse::ClickHouseAsyncInsertSettings {
+                    busy_timeout_ms: optional_env_u64("CLICKHOUSE_ASYNC_INSERT_BUSY_TIMEOUT_MS")?,
+                    max_data_size: optional_env_u64("CLICKHOUSE_ASYNC_INSERT_MAX_DATA_SIZE")?,
+                    max_query_number: optional_env_u64("CLICKHOUSE_ASYNC_INSERT_MAX_QUERY_NUMBER")?,
+                    deduplicate: optional_env_bool("CLICKHOUSE_ASYNC_INSERT_DEDUPLICATE")?,
+                },
+            ),
+        );
+    }
+    let instruction_processor = clickhouse_processor(clickhouse_config);
 
     let rpc_block_ds = RpcBlockCrawler::new(
         env::var("RPC_URL").unwrap_or_default(),

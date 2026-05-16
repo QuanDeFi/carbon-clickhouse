@@ -100,6 +100,7 @@ carbon-cli scaffold [OPTIONS]
 - `--event-hints <csv>`: Comma-separated names of defined types to parse as CPI Events (Codama only)
 - `-u, --url <rpcUrl>`: RPC URL for fetching IDL when using a program address
 - `--with-clickhouse <boolean>`: Include ClickHouse wiring and deps (default: false)
+- `--clickhouse-options <jsonOrFile>`: Renderer ClickHouse options as a JSON object or path to a JSON file
 - `--no-clean`: Do not delete output directory before rendering
 
 #### Scaffold Options
@@ -116,6 +117,7 @@ carbon-cli scaffold [OPTIONS]
 - `--with-postgres <boolean>`: Include Postgres wiring and deps (default: true)
 - `--with-graphql <boolean>`: Include GraphQL wiring and deps (default: true)
 - `--with-clickhouse <boolean>`: Include ClickHouse wiring and deps (default: false)
+- `--clickhouse-options <jsonOrFile>`: Renderer ClickHouse options as a JSON object or path to a JSON file
 - `--with-serde <boolean>`: Include serde feature for decoder (default: false)
 - `--force`: Overwrite output directory if it exists
 
@@ -131,6 +133,16 @@ carbon-cli parse --idl my_program.json --out-dir ./src/decoders
 
 ```sh
 carbon-cli parse --idl LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo -u mainnet-beta --out-dir ./desired-folder
+```
+
+**Generate decoder with ClickHouse production DDL options:**
+
+```sh
+carbon-cli parse \
+  --idl my_program.json \
+  --out-dir ./src/decoders \
+  --with-clickhouse true \
+  --clickhouse-options '{"ddlMode":"replicated-merge-tree","onCluster":"main","ttl":{"instruction":"partition_time + INTERVAL 30 DAY"}}'
 ```
 
 **Scaffold project using IDL file:**

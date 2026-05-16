@@ -1,10 +1,11 @@
 import { Command } from 'commander';
+import { existsSync, readFileSync } from 'fs';
 import { resolve, join } from 'path';
 import { promptForParse, promptForScaffold } from './lib/prompts';
 import { generateDecoder, parseIdlSource, getIdlMetadata } from './lib/decoder';
-import type { PackageMetadata } from '@sevenlabs-hq/carbon-codama-renderer';
+import { isClickHouseEnabled, type ClickHouseRenderOptions, type PackageMetadata } from '@sevenlabs-hq/carbon-codama-renderer';
 import { validateDataSource, validateMetrics } from './lib/validation';
-import { parseBoolOpt, resolveRpcUrl, runCargoFmt } from './lib/utils';
+import { exitWithError, parseBoolOpt, resolveRpcUrl, runCargoFmt } from './lib/utils';
 import { logger, showBanner } from './lib/logger';
 
 const program = new Command();
@@ -20,6 +21,54 @@ const cargoFmtOptions: Record<string, string | number | boolean> = {
     imports_granularity: 'One',
     wrap_comments: true,
 };
+
+type ClickHouseCliOption = boolean | ClickHouseRenderOptions;
+
+function parseClickHouseOptions(raw: unknown): ClickHouseRenderOptions | undefined {
+    if (raw === undefined || raw === null) return undefined;
+
+    const value = String(raw).trim();
+    if (!value) return undefined;
+
+    const maybePath = resolve(process.cwd(), value);
+    const json = existsSync(maybePath) ? readFileSync(maybePath, 'utf8') : value;
+    let parsed: unknown;
+
+    try {
+        parsed = JSON.parse(json);
+    } catch (error) {
+        exitWithError(
+            `Invalid --clickhouse-options value. Pass a JSON object or path to a JSON file: ${
+                error instanceof Error ? error.message : String(error)
+            }`,
+        );
+    }
+
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        exitWithError('--clickhouse-options must resolve to a JSON object');
+    }
+
+    return parsed as ClickHouseRenderOptions;
+}
+
+function resolveClickHouseOption(withClickhouse: unknown, clickhouseOptions: unknown): ClickHouseCliOption {
+    const flagProvided = withClickhouse !== undefined && withClickhouse !== null;
+    const flagEnabled = parseBoolOpt(withClickhouse, false);
+    const options = parseClickHouseOptions(clickhouseOptions);
+
+    if (!options) return flagEnabled;
+
+    if (flagProvided && !flagEnabled && options.enabled !== false) {
+        exitWithError(
+            'Cannot combine --with-clickhouse false with enabled --clickhouse-options. Omit --clickhouse-options or set {"enabled": false}.',
+        );
+    }
+
+    return {
+        ...options,
+        enabled: options.enabled ?? (flagProvided ? flagEnabled : true),
+    };
+}
 
 program
     .name('carbon-cli')
@@ -65,6 +114,10 @@ program
     .option('--with-postgres <boolean>', 'Include Postgres wiring and deps (default: true)')
     .option('--with-graphql <boolean>', 'Include GraphQL wiring and deps (default: true)')
     .option('--with-clickhouse <boolean>', 'Include ClickHouse wiring and deps (default: false)')
+    .option(
+        '--clickhouse-options <jsonOrFile>',
+        'Renderer ClickHouse DDL options as a JSON object or path to a JSON file',
+    )
     .option('--with-serde <boolean>', 'Include serde feature for decoder (default: false)')
     .option('--with-base58 <boolean>', 'Include base58 feature for decoder (default: false)')
     .option(
@@ -90,8 +143,9 @@ program
         // Normalize boolean options
         const withPostgres = parseBoolOpt(opts.withPostgres, true);
         const withGraphql = parseBoolOpt(opts.withGraphql, true);
-        const withClickHouse = parseBoolOpt(opts.withClickhouse, false);
-        const withSerdeDefault = !withPostgres && !withGraphql && !withClickHouse;
+        const withClickHouse = resolveClickHouseOption(opts.withClickhouse, opts.clickhouseOptions);
+        const clickHouseEnabled = isClickHouseEnabled(withClickHouse);
+        const withSerdeDefault = !withPostgres && !withGraphql && !clickHouseEnabled;
         const withSerde = parseBoolOpt(opts.withSerde, withSerdeDefault);
         const withBase58 = parseBoolOpt(opts.withBase58, false);
         const standalone = parseBoolOpt(opts.standalone, true);
@@ -191,6 +245,10 @@ program
     .option('--with-postgres <boolean>', 'Include Postgres wiring and deps (default: true)')
     .option('--with-graphql <boolean>', 'Include GraphQL wiring and deps (default: true)')
     .option('--with-clickhouse <boolean>', 'Include ClickHouse wiring and deps (default: false)')
+    .option(
+        '--clickhouse-options <jsonOrFile>',
+        'Renderer ClickHouse DDL options as a JSON object or path to a JSON file',
+    )
     .option('--with-serde <boolean>', 'Include serde feature for decoder (default: false)')
     .option('--with-base58 <boolean>', 'Include base58 feature for decoder (default: false)')
     .option('--package-version <string>', 'Package version in Cargo.toml (default: 0.1.0)')
@@ -216,10 +274,11 @@ program
         const metrics = String(opts.metrics || 'log').toLowerCase();
         const withPostgres = parseBoolOpt(opts.withPostgres, true);
         const withGraphql = parseBoolOpt(opts.withGraphql, true);
-        const withClickHouse = parseBoolOpt(opts.withClickhouse, false);
+        const withClickHouse = resolveClickHouseOption(opts.withClickhouse, opts.clickhouseOptions);
+        const clickHouseEnabled = isClickHouseEnabled(withClickHouse);
         // Default serde to true if both postgres and graphql are disabled (since generated code always includes serde attributes)
         // Otherwise, serde will be auto-enabled by postgres/graphql, so default to false
-        const withSerdeDefault = !withPostgres && !withGraphql && !withClickHouse;
+        const withSerdeDefault = !withPostgres && !withGraphql && !clickHouseEnabled;
         const withSerde = parseBoolOpt(opts.withSerde, withSerdeDefault);
         const withBase58 = parseBoolOpt(opts.withBase58, false);
         const force = Boolean(opts.force);
@@ -258,7 +317,7 @@ program
                 metrics,
                 withPostgres,
                 withGraphql,
-                withClickHouse,
+                withClickHouse: clickHouseEnabled,
                 withSerde,
                 withBase58,
                 force,

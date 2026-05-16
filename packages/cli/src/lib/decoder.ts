@@ -2,7 +2,12 @@ import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { createFromJson, createFromRoot } from 'codama';
 import { rootNodeFromAnchorWithoutDefaultVisitor, rootNodeFromAnchor } from '@codama/nodes-from-anchor';
-import { renderVisitor, extractStructArrayItems, type PackageMetadata } from '@sevenlabs-hq/carbon-codama-renderer';
+import {
+    renderVisitor,
+    extractStructArrayItems,
+    type ClickHouseRenderOptions,
+    type PackageMetadata,
+} from '@sevenlabs-hq/carbon-codama-renderer';
 import {
     deduplicateIdenticalDefinedTypesVisitor,
     setFixedAccountSizesVisitor,
@@ -74,7 +79,7 @@ export type DecoderGenerationOptions = {
     postgresMode?: 'generic' | 'typed';
     withPostgres?: boolean;
     withGraphql?: boolean;
-    withClickHouse?: boolean;
+    withClickHouse?: boolean | ClickHouseRenderOptions;
     withSerde?: boolean;
     withBase58?: boolean;
     standalone?: boolean;
