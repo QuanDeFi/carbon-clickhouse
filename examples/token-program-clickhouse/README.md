@@ -21,12 +21,15 @@ Create `.env` from `.env.example`:
 
 ```env
 DATABASE_URL=http://carbon:carbon@localhost:8123
-RPC_URL=https://api.mainnet-beta.solana.com
+RPC_URL=<provider-rpc-url>
 TOKEN_ACCOUNT_OWNER=<wallet-pubkey>
 # TOKEN_MINT=<mint-pubkey>
 LOG_LEVEL=info
 PROMETHEUS_METRICS_ADDR=0.0.0.0:9464
 ```
+
+Use the production/provider RPC URL from the local `.env`. The public
+mainnet-beta endpoint is not reliable enough for bounded account smoke tests.
 
 At least one of these filters must be set:
 

@@ -1,6 +1,8 @@
-## Carbon ClickHouse Sink
+## Carbon ClickHouse Sink Implementation
 
-The ClickHouse sink is a generator-backed landing-table backend that fits Carbon's existing processor architecture.
+The ClickHouse sink is a generator-backed landing-table backend that fits Carbon's existing processor architecture. This document describes the current implementation, configuration, generated output, examples, validation commands, and operational checks.
+
+For design rationale, architectural invariants, responsibility boundaries, and non-goals, see `ClickHouse Sink Architecture.md`.
 
 The implementation is landing-only. It is not a warehouse serving layer, replay convergence system, or online deduplication system.
 
@@ -37,6 +39,23 @@ That keeps the ClickHouse path aligned with Carbon's existing model:
 - Processors own side effects.
 - Decoder crates own schema and storage-specific row mapping.
 
+## Solana Schema And Validation Boundary
+
+The ClickHouse sink derives typed landing rows from decoder-owned Solana schema, not from observed live payloads.
+
+Decoder-owned row families map to Solana program artifacts:
+
+- account layouts
+- instruction layouts
+- CPI/event layouts
+- shared IDL/Codama-defined types
+
+IDL/Codama schema is the source of truth for known program shapes. This keeps ClickHouse aligned with Carbon's generator model and avoids hand-maintained Borsh layouts or one-off per-decoder payload mappings.
+
+Live RPC, Geyser, account, transaction, and log data are untrusted until decoded. Owner checks, data length checks, discriminators, instruction account arrangement, and event discriminator handling remain part of the decoder boundary before the sink can create typed rows.
+
+CPI/event rows are generated through the instruction path because reliable indexer events can be emitted as CPI instruction data. Logs can truncate, so the ClickHouse event path is based on decoded event instruction data rather than assuming logs are complete event storage.
+
 ## Processor Finalization
 
 Buffered ClickHouse writes require processor finalization. A processor can process rows that remain in memory until a batch threshold, timer, explicit flush, or shutdown drain fires.
@@ -58,7 +77,7 @@ The generic ClickHouse runtime in `carbon-core` is split by responsibility:
 - `admin.rs` - explicit schema/bootstrap execution
 - `rows/mod.rs` - row/table traits, row context, multi-row contract, and deterministic ID helpers
 - `writer.rs` - per-buffer batch writer, byte backpressure, retry loop, and background flush worker
-- `processors.rs` - ClickHouse instruction and account processors
+- `processors.rs` - `ClickHouseInstructionProcessor` and `ClickHouseAccountProcessor`
 - `metrics.rs` - shared ClickHouse metrics for all ClickHouse processor families
 
 Important boundary:
@@ -67,6 +86,57 @@ Important boundary:
 - Core knows how to buffer, flush, retry in memory, and shut down rows.
 - Core does not know decoder-specific schema details.
 
+Rows receive sink metadata through `ClickHouseRowContext`, which contains `source_name`, `mode`, and `decoder_version`.
+
+Schema/bootstrap execution uses:
+
+- `ClickHouseSchema::operations(config) -> Vec<String>` for ordered schema operations.
+- `ClickHouseAdmin::execute_query(...)` for a single query.
+- `ClickHouseAdmin::execute_queries(...)` for explicit ordered query lists.
+- `ClickHouseAdmin::execute_schema::<S>()` for schema bundles that implement `ClickHouseSchema`.
+
+Schema execution uses the same `ClickHouseConfig` endpoint, database, auth, and HTTP client settings as data inserts. Schema queries include `date_time_input_format=best_effort`.
+
+## What Lives In Decoder Crates
+
+Decoder crates own concrete ClickHouse schemas and row mapping. The current committed generated output is canary-limited.
+
+Jupiter swap instruction and CPI/event canary modules:
+
+- `decoders/jupiter-swap-decoder/src/instructions/clickhouse/mod.rs`
+- `decoders/jupiter-swap-decoder/src/instructions/clickhouse/instruction_rows.rs`
+- `decoders/jupiter-swap-decoder/src/instructions/clickhouse/cpi_event_row.rs`
+
+Token Program account canary modules:
+
+- `decoders/token-program-decoder/src/accounts/clickhouse/mod.rs`
+- `decoders/token-program-decoder/src/accounts/clickhouse/mint_row.rs`
+- `decoders/token-program-decoder/src/accounts/clickhouse/multisig_row.rs`
+- `decoders/token-program-decoder/src/accounts/clickhouse/token_row.rs`
+
+Those modules provide:
+
+- typed row structs
+- table names and DDL
+- decoder-family wrapper types
+- `ClickHouseRows` implementations
+- setup helpers used by examples
+
+The committed Jupiter and Token Program canary modules bootstrap tables with their row types' `create_table_sql(...)` operations. The renderer templates generate the newer `migration_operations(...)` helper that includes additive `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` operations for regenerated decoders.
+
+Examples should call these generated helpers. They should not duplicate decoder-specific schema or row mapping logic.
+
+Generated setup helpers use decoder defaults:
+
+- `clickhouse_config_from_database_url(...)` builds a `ClickHouseConfig` from `DATABASE_URL`.
+- `bootstrap_clickhouse_from_database_url(...)` executes the decoder's generated schema operations and returns the config.
+- `clickhouse_processor(config)` constructs the generated processor alias.
+- `setup_clickhouse(...)` bootstraps schema and returns the generated processor in one call.
+
+Callers that need production settings should use `bootstrap_clickhouse_from_database_url(...)`, then apply `ClickHouseConfig` builders before constructing the processor.
+
+`DATABASE_URL` provides the HTTP endpoint and optional auth credentials. Generated helpers pass their own database default, currently `DEFAULT_DATABASE = "default"`, instead of deriving the database from the URL path.
+
 ## Write Path And Insert Model
 
 The sink uses client-side batching and HTTP `JSONEachRow` inserts.
@@ -74,6 +144,7 @@ The sink uses client-side batching and HTTP `JSONEachRow` inserts.
 Writer behavior:
 
 - Rows are serialized before buffering so row and byte limits match the exact HTTP body.
+- Insert targets come from each row's `ClickHouseRow::table_name()`, so generated multi-table wrappers choose the concrete landing table per row.
 - Buffers are keyed by `(table, partition_key())`.
 - Row-count and byte-threshold flushes happen per buffer, not globally across all buffered rows.
 - Global buffered row and byte caps can reject new rows after one local drain attempt over stale and largest buffers.
@@ -86,8 +157,25 @@ Writer behavior:
 - Failed batches are reinserted into the same buffer after the final retry and surfaced on the next writer operation or shutdown.
 - Rows are serialized with `serde::Serialize`.
 - Inserts go through ClickHouse HTTP, not the native protocol.
+- Insert SQL is `INSERT INTO {table} FORMAT JSONEachRow`; the writer does not send an explicit column list.
 
 This matters for typed landing tables because one decoder wrapper can emit rows for many tables. A hot table does not force unrelated cold buffers to flush early, and a cold table still flushes when idle.
+
+Writer APIs exposed by `carbon-core::clickhouse`:
+
+- `ClickHouseBatchWriter::buffer_row(...)` returns `ClickHouseBufferOutcome::Buffered` or `ClickHouseBufferOutcome::Flushed`.
+- `ClickHouseBatchWriter::flush()` explicitly drains all buffers and returns `ClickHouseFlushOutcome`.
+- `ClickHouseBatchWriter::shutdown()` stops the background worker and drains all buffers.
+- `ClickHouseBatchWriter::snapshot()` returns `ClickHouseWriterSnapshot` with buffered rows, buffered bytes, active buffers, and any retained background error.
+
+The snapshot API is for debugging and tests. Production monitoring should use Carbon metrics and ClickHouse server-side system tables.
+
+Runtime buffer partition keys are generated by each row's `partition_key()` method:
+
+- instruction and CPI/event rows use the year extracted from `partition_time`
+- account rows use `partition_slot`, computed as `slot / 1_000_000`
+
+This key controls in-process buffer grouping. It is related to, but not the same API as, renderer-controlled ClickHouse `PARTITION BY` DDL. Production DDL can override ClickHouse table partitioning while the writer still groups buffered rows by the row's generated runtime partition key.
 
 ## Insert Settings
 
@@ -123,6 +211,22 @@ Async mode always sends:
 The public sink API does not expose `wait_for_async_insert=0`. Fire-and-forget inserts hide server-side insert failures from the Carbon process, which does not match this sink's delivery model.
 
 All insert requests include `date_time_input_format=best_effort`; async settings are merged into the same query-setting path.
+
+Each insert attempt also includes a generated `query_id`:
+
+```text
+carbon-clickhouse-{table}-{sha256(table + body + attempt)}
+```
+
+The query ID is for ClickHouse query-log traceability only. It is not used for deduplication.
+
+When `ClickHouseDeduplicationSettings::ExactBatchHash` is enabled, each exact batch includes:
+
+```text
+insert_deduplication_token = sha256(table + "\n" + insert_query + "\n" + exact_body)
+```
+
+Retry behavior is controlled by `ClickHouseRetrySettings`. The sink retries network errors, request timeouts, HTTP `408`, `429`, `5xx`, and ClickHouse "too many parts" / "too many inactive parts" responses. Schema errors, auth errors, malformed requests, and most other `4xx` responses are treated as permanent.
 
 ## Production Config Examples
 
@@ -245,6 +349,71 @@ Generated row mapping derives structured ClickHouse types from the decoder schem
 
 Known decoder-owned enum payloads are not stringified. JSON remains only as an explicit fallback for unsupported dynamic shapes.
 
+Unsupported known decoder schema should fail generation unless `allowClickHouseJsonFallback` is explicitly enabled. This keeps accidental type loss visible during renderer validation instead of hiding it behind a generic JSON column.
+
+The fallback can be enabled either as the top-level renderer option `allowClickHouseJsonFallback: true` or as `withClickHouse: { allowJsonFallback: true }`. The committed canary decoder output is generated without JSON fallback.
+
+## Generated Landing Row Contract
+
+Generated table names follow these patterns:
+
+- instruction rows: `{program}_{instruction}_instruction_landing`
+- CPI/event rows: `{program}_{event}_landing`
+- account rows: `{program}_{account}_account_landing`
+
+Current canary table families include:
+
+- Jupiter instruction tables such as `jupiter_swap_route_instruction_landing`.
+- Jupiter CPI/event tables such as `jupiter_swap_swap_event_landing`.
+- Token Program account tables: `token_program_mint_account_landing`, `token_program_multisig_account_landing`, and `token_program_token_account_landing`.
+
+Common instruction columns:
+
+- `program_id`
+- `family_name`
+- `instruction_type`
+- `instruction_id`
+- `slot`
+- `signature`
+- `instruction_index`
+- `stack_height`
+- `absolute_path`
+- `source_name`
+- `mode`
+- `decoder_version`
+- `ingest_ts`
+- `chain_time`
+- `partition_time`
+- `block_hash`
+- `tx_index`
+
+Common CPI/event columns are the instruction metadata above, replacing instruction identity fields with:
+
+- `event_type`
+- `event_id`
+- `event_seq`
+
+Common account columns:
+
+- `program_id`
+- `family_name`
+- `account_type`
+- `account_id`
+- `slot`
+- `pubkey`
+- `transaction_signature`
+- `lamports`
+- `owner`
+- `executable`
+- `rent_epoch`
+- `source_name`
+- `mode`
+- `decoder_version`
+- `ingest_ts`
+- `partition_slot`
+
+Payload columns are appended after the common columns and are generated from decoder-owned schema through the ClickHouse row mapper.
+
 ## Renderer DDL Modes
 
 Generated row families support these DDL modes:
@@ -260,6 +429,8 @@ renderVisitor(outputDir, {
     withClickHouse: true,
 });
 ```
+
+The renderer also accepts `withClickHouse: { enabled: false }` to keep object-shaped configuration while disabling ClickHouse generation.
 
 Production DDL options use an object:
 
@@ -294,7 +465,27 @@ renderVisitor(outputDir, {
 });
 ```
 
-Generated migrations create tables and then emit additive `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` operations for generated columns. The renderer does not generate destructive type-change migrations.
+Renderer-generated migrations create tables and then emit additive `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` operations for generated columns. The committed Jupiter and Token Program canaries predate that helper shape and currently bootstrap with `create_table_sql(...)` statements only. The renderer does not generate destructive type-change migrations.
+
+For `distributed` DDL mode, generated migration operations create and alter the local table first, then create and alter the distributed table. The distributed table omits local `MergeTree` clauses because storage lives in the generated local table. Additive column operations are emitted for both local and distributed tables.
+
+Column codecs are applied by column name to both common metadata columns and payload columns wherever the name matches `columnCodecs`.
+
+Default DDL option values:
+
+- `ddlMode`: `merge-tree`
+- account `PARTITION BY`: `partition_slot`
+- instruction/event `PARTITION BY`: `toYear(partition_time)`
+- account `ORDER BY`: `(program_id, family_name, account_id, slot)`
+- instruction `ORDER BY`: `(program_id, family_name, instruction_id, slot)`
+- event `ORDER BY`: `(program_id, family_name, event_id, slot)`
+- replicated table path: `/clickhouse/tables/{shard}/{database}/{table_name}`
+- replicated replica name: `{replica}`
+- distributed local table suffix: `_local`
+- distributed local table engine: `replicated-merge-tree`
+- distributed sharding key: `rand()`
+
+The TypeScript renderer API supports the object form above. The current CLI flag is still boolean-only: `--with-clickhouse <boolean>`.
 
 ## Jupiter Example
 
@@ -309,6 +500,8 @@ It validates:
 - typed ClickHouse row dispatch
 - structured CPI-event payloads such as `route_plan.swap`
 - core writer batching and shutdown drain
+- `ShutdownStrategy::Immediate` with a bounded block range
+- `BLOCK_CRAWLER_MAX_CONCURRENT_REQUESTS` and `BLOCK_CRAWLER_CHANNEL_BUFFER_SIZE` for local RPC pressure control
 
 It does not validate:
 
@@ -331,6 +524,10 @@ It validates:
 - `ClickHouseAccountProcessor`
 - account-family metrics
 - per-buffer writer flushing and shutdown drain
+- `ShutdownStrategy::ProcessPending` for finite account snapshots
+- RPC `getProgramAccounts` with token-account data-size/memcmp filters
+- Helius gPA v2 through `--source helius-gpa-v2`
+- optional `CLICKHOUSE_ASYNC_INSERT*` environment variables
 
 The example requires a token-account owner and/or mint filter so it does not accidentally fetch the entire Token Program account set. By default it focuses on token accounts because those can be bounded safely. The generated mint and multisig account rows are covered by compile/tests and schema generation, but they are not the default real-world query path.
 
@@ -432,6 +629,8 @@ scripts/validate-clickhouse-decoder-rollout.sh \
   --regenerate-idl-dir examples/versioned-decoders/idls \
   --regenerate-limit 2
 ```
+
+Use `--regenerate-standard anchor` or `--regenerate-standard codama` to select the IDL standard for those temporary regeneration checks. Use `--skip-regenerated-compile` only when the goal is to inspect generated files without compiling the temporary crates.
 
 Regeneration checks run the built Carbon CLI and require Node 20+ because current CLI dependencies require it. In environments where `node` is older, set `NODE_BIN`:
 

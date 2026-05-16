@@ -9,12 +9,15 @@ Create `.env` from `.env.example`:
 
 ```env
 DATABASE_URL=http://carbon:carbon@localhost:8123
-RPC_URL=https://api.mainnet-beta.solana.com
+RPC_URL=<provider-rpc-url>
 BLOCK_CRAWLER_START_SLOT=<start-slot>
 BLOCK_CRAWLER_END_SLOT=<end-slot>
 PROMETHEUS_METRICS_ADDR=0.0.0.0:9464
 LOG_LEVEL=info
 ```
+
+Use the production/provider RPC URL from the local `.env`. The public
+mainnet-beta endpoint is not reliable enough for this smoke test.
 
 ## Run
 
