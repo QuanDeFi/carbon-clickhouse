@@ -1,7 +1,8 @@
 # Jupiter Swap ClickHouse Example
 
-This example runs a bounded real RPC block range through the generated Jupiter
-Swap ClickHouse instruction and CPI-event landing tables.
+This example runs real RPC blocks through the generated Jupiter Swap
+ClickHouse instruction and CPI-event landing tables. It supports bounded
+backfill ranges and a near-head live mode.
 
 ## Required Environment
 
@@ -11,7 +12,8 @@ Create `.env` from `.env.example`:
 DATABASE_URL=http://carbon:carbon@localhost:8123
 RPC_URL=<provider-rpc-url>
 BLOCK_CRAWLER_START_SLOT=<start-slot>
-BLOCK_CRAWLER_END_SLOT=<end-slot>
+BLOCK_CRAWLER_END_SLOT=<end-slot-or-empty>
+BLOCK_CRAWLER_HEAD_LAG_SLOTS=3
 PROMETHEUS_METRICS_ADDR=0.0.0.0:9464
 LOG_LEVEL=info
 ```
@@ -25,11 +27,25 @@ mainnet-beta endpoint is not reliable enough for this smoke test.
 cargo run -p jupiter-swap-clickhouse-carbon-example
 ```
 
-Or pass the slot range explicitly:
+Mode is inferred from the slot env:
 
-```sh
-cargo run -p jupiter-swap-clickhouse-carbon-example -- --start-slot 417942118 --end-slot 417942119
-```
+- Set both `BLOCK_CRAWLER_START_SLOT` and `BLOCK_CRAWLER_END_SLOT` for a
+  bounded backfill.
+- Set `BLOCK_CRAWLER_START_SLOT` and leave `BLOCK_CRAWLER_END_SLOT` empty to
+  catch up from that slot and then keep following head.
+- Leave both `BLOCK_CRAWLER_START_SLOT` and `BLOCK_CRAWLER_END_SLOT` empty for
+  pure head-follow mode. The example starts near the current confirmed slot
+  using `BLOCK_CRAWLER_HEAD_LAG_SLOTS`.
+
+TokenLedger account fetching is intentionally live-only in this example. The
+RPC account read returns the current confirmed account state at fetch time, not
+the historical account state at an old swap slot. Reconstructing exact
+historical account state requires account-update ingestion or ledger replay and
+is outside this thin example. Because of that, the generated TokenLedger
+account processor is attached only in pure head-follow mode, when both
+`BLOCK_CRAWLER_START_SLOT` and `BLOCK_CRAWLER_END_SLOT` are empty. It is not
+attached for bounded backfills or catch-up/tailing runs from an explicit start
+slot.
 
 The example exposes Carbon metrics for Prometheus at
 `PROMETHEUS_METRICS_ADDR` and keeps log metrics enabled. Use
@@ -38,9 +54,7 @@ The example exposes Carbon metrics for Prometheus at
 To opt into ClickHouse async inserts with `wait_for_async_insert=1`:
 
 ```sh
-CLICKHOUSE_ASYNC_INSERT=true \
-CLICKHOUSE_ASYNC_INSERT_BUSY_TIMEOUT_MS=1000 \
-cargo run -p jupiter-swap-clickhouse-carbon-example
+CLICKHOUSE_ASYNC_INSERT=true cargo run -p jupiter-swap-clickhouse-carbon-example
 ```
 
 This is the production-live ingestion canary path. The default remains
@@ -49,11 +63,13 @@ synchronous inserts for deterministic backfills.
 ## ClickHouse Tables
 
 The example bootstraps one typed landing table per generated Jupiter Swap
-instruction family plus one typed CPI/event landing table. These tables are
-append-only landing records of decoded Jupiter activity, with enough Solana
-context to replay, trace, and analyze the decoded instruction or event later.
-Empty instruction tables are expected when the selected slot range does not
-contain that instruction type.
+instruction family plus one typed CPI/event landing table. In pure head-follow
+TokenLedger mode, it also bootstraps the generated TokenLedger account landing
+table.
+These tables are append-only landing records of decoded Jupiter activity, with
+enough Solana context to replay, trace, and analyze the decoded instruction,
+event, or fetched account snapshot later. Empty instruction tables are expected
+when the selected slot range does not contain that instruction type.
 
 In Jupiter terms, a route is the swap path Jupiter chose after comparing Solana
 liquidity sources. It can be a direct swap or a split/multi-hop path. Exact-out
@@ -168,6 +184,27 @@ CPI/event landing tables:
     <tr>
       <td><code>jupiter_swap_<wbr>cpi_event_<wbr>landing</code></td>
       <td>Jupiter execution events. This table records what happened inside the route after execution starts: fees, individual swap legs, grouped swap legs, quote candidates, quote errors, and cases where the best available output missed the expected threshold.</td>
+    </tr>
+  </tbody>
+</table>
+
+Account landing tables:
+
+<table>
+  <colgroup>
+    <col width="34%" />
+    <col width="66%" />
+  </colgroup>
+  <thead>
+    <tr>
+      <th>Table</th>
+      <th>What it stores</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>jupiter_swap_<wbr>token_ledger_<wbr>account_landing</code></td>
+      <td>Current confirmed snapshots of Jupiter TokenLedger accounts discovered while following live blocks. These rows help inspect the ledger account state that ledger-backed routes refer to, but they are not historical account-state reconstruction for bounded backfills.</td>
     </tr>
   </tbody>
 </table>

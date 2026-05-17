@@ -34,7 +34,7 @@ const TOKEN_ACCOUNT_OWNER_OFFSET: usize = 32;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(long, value_enum, default_value_t = Source::Rpc)]
+    #[arg(long, value_enum, default_value_t = Source::HeliusGpaV2)]
     source: Source,
 
     #[arg(long)]

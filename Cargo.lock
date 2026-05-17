@@ -5547,7 +5547,6 @@ dependencies = [
  "carbon-log-metrics",
  "carbon-prometheus-metrics",
  "carbon-rpc-block-crawler-datasource",
- "clap 4.5.53",
  "dotenv",
  "env_logger",
  "log",

@@ -13,6 +13,7 @@ Create `.env` from `.env.example`:
 ```env
 DATABASE_URL=http://carbon:carbon@localhost:8123
 RPC_URL=<provider-rpc-url>
+HELIUS_RPC_URL=https://mainnet.helius-rpc.com/?api-key=<key>
 TOKEN_ACCOUNT_OWNER=<wallet-pubkey>
 # TOKEN_MINT=<mint-pubkey>
 LOG_LEVEL=info
@@ -42,8 +43,13 @@ The example also exposes Carbon metrics for Prometheus at
 To use Helius gPA v2 instead:
 
 ```sh
-HELIUS_RPC_URL='https://mainnet.helius-rpc.com/?api-key=YOUR_KEY' \
-cargo run -p token-program-clickhouse-carbon-example -- --source helius-gpa-v2
+cargo run -p token-program-clickhouse-carbon-example
+```
+
+To force standard Solana JSON-RPC `getProgramAccounts` instead:
+
+```sh
+cargo run -p token-program-clickhouse-carbon-example -- --source rpc
 ```
 
 To opt into ClickHouse async inserts with `wait_for_async_insert=1`:
@@ -98,11 +104,13 @@ context.
 
 ## RPC Source Notes
 
-The default `--source rpc` path calls standard Solana JSON-RPC
+The default `--source helius-gpa-v2` path calls Helius
+`getProgramAccountsV2` via `HELIUS_RPC_URL` and supports pagination through
+`--helius-page-limit` and `--helius-changed-since-slot`. This is the preferred
+default for Helius free/trial testing because it is paginated and costs fewer
+credits than standard `getProgramAccounts`.
+
+The explicit `--source rpc` path calls standard Solana JSON-RPC
 `getProgramAccounts` via `RPC_URL`. Free/trial RPC tiers vary by provider and
 method. Some providers rate-limit or disable bounded `getProgramAccounts`; this
 is an RPC-provider capability issue, not a ClickHouse sink issue.
-
-The `--source helius-gpa-v2` path calls Helius `getProgramAccountsV2` via
-`HELIUS_RPC_URL` and supports pagination through `--helius-page-limit` and
-`--helius-changed-since-slot`.
