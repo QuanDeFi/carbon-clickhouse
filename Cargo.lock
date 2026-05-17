@@ -5551,6 +5551,9 @@ dependencies = [
  "dotenv",
  "env_logger",
  "log",
+ "solana-client",
+ "solana-commitment-config",
+ "solana-pubkey 3.0.0",
  "solana-transaction-status",
  "tokio",
 ]

@@ -504,7 +504,7 @@ It validates:
 - structured CPI-event payloads such as `route_plan.swap`
 - core writer batching and shutdown drain
 - `ShutdownStrategy::Immediate` with a bounded block range
-- `BLOCK_CRAWLER_MAX_CONCURRENT_REQUESTS` and `BLOCK_CRAWLER_CHANNEL_BUFFER_SIZE` for local RPC pressure control
+- conservative block fetch concurrency while leaving Carbon and block-crawler channels at their upstream default size of `1_000`
 
 It does not validate:
 

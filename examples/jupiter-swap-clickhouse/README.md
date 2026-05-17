@@ -49,134 +49,131 @@ synchronous inserts for deterministic backfills.
 ## ClickHouse Tables
 
 The example bootstraps one typed landing table per generated Jupiter Swap
-instruction family plus one typed CPI/event landing table. Every table stores
-common landing metadata plus the typed payload fields owned by the decoded
-instruction or event families. Empty instruction tables are expected when the
-selected slot range does not contain that instruction type.
+instruction family plus one typed CPI/event landing table. These tables are
+append-only landing records of decoded Jupiter activity, with enough Solana
+context to replay, trace, and analyze the decoded instruction or event later.
+Empty instruction tables are expected when the selected slot range does not
+contain that instruction type.
+
+In Jupiter terms, a route is the swap path Jupiter chose after comparing Solana
+liquidity sources. It can be a direct swap or a split/multi-hop path. Exact-out
+tables cover payment-style swaps where the receiver gets a fixed output amount
+and Jupiter works out the required input amount. Shared-account tables cover
+routes where Jupiter uses its own intermediate token accounts for complex paths,
+so the user does not need to create every temporary account.
 
 A few Jupiter instruction structs are payload-free. Those rows are not missing
-data; the decoded instruction has no instruction-data fields, so the row records
-the occurrence, identity, slot/signature/path metadata, and sink metadata.
+data; the decoded instruction has no instruction-data fields, so the table
+exists to record that the instruction occurred in the selected transaction path.
 
 Instruction landing tables:
 
-| Table | What it stores | Payload fields | Postgres equivalent |
-| --- | --- | --- | --- |
-| `jupiter_swap_claim_instruction_landing` | Claim instruction rows. | `id` | `claim_instruction` |
-| `jupiter_swap_claim_token_instruction_landing` | Claim-token instruction rows. | `id` | `claim_token_instruction` |
-| `jupiter_swap_close_token_instruction_landing` | Close-token instruction rows. | `id`, `burn_all` | `close_token_instruction` |
-| `jupiter_swap_close_wsol_token_account_instruction_landing` | Close wrapped-SOL token account instruction rows. The decoded instruction payload is empty. | Metadata only | `close_wsol_token_account_instruction` |
-| `jupiter_swap_create_token_account_instruction_landing` | Create Jupiter token account instruction rows. | `bump` | `create_token_account_instruction` |
-| `jupiter_swap_create_token_ledger_instruction_landing` | Create token ledger instruction rows. The decoded instruction payload is empty. | Metadata only | `create_token_ledger_instruction` |
-| `jupiter_swap_exact_out_route_instruction_landing` | Exact-out route instruction rows. | `route_plan`, `out_amount`, `quoted_in_amount`, `slippage_bps`, `platform_fee_bps` | `exact_out_route_instruction` |
-| `jupiter_swap_exact_out_route_v2_instruction_landing` | Exact-out route V2 instruction rows. | `out_amount`, `quoted_in_amount`, `slippage_bps`, `platform_fee_bps`, `positive_slippage_bps`, `route_plan` | `exact_out_route_v2_instruction` |
-| `jupiter_swap_route_instruction_landing` | Standard route instruction rows. | `route_plan`, `in_amount`, `quoted_out_amount`, `slippage_bps`, `platform_fee_bps` | `route_instruction` |
-| `jupiter_swap_route_v2_instruction_landing` | Standard route V2 instruction rows. | `in_amount`, `quoted_out_amount`, `slippage_bps`, `platform_fee_bps`, `positive_slippage_bps`, `route_plan` | `route_v2_instruction` |
-| `jupiter_swap_route_with_token_ledger_instruction_landing` | Route instruction rows that source the input amount from token ledger state. | `route_plan`, `quoted_out_amount`, `slippage_bps`, `platform_fee_bps` | `route_with_token_ledger_instruction` |
-| `jupiter_swap_set_token_ledger_instruction_landing` | Set token ledger instruction rows. The decoded instruction payload is empty. | Metadata only | `set_token_ledger_instruction` |
-| `jupiter_swap_shared_accounts_exact_out_route_instruction_landing` | Shared-accounts exact-out route instruction rows. | `id`, `route_plan`, `out_amount`, `quoted_in_amount`, `slippage_bps`, `platform_fee_bps` | `shared_accounts_exact_out_route_instruction` |
-| `jupiter_swap_shared_accounts_exact_out_route_v2_instruction_landing` | Shared-accounts exact-out route V2 instruction rows. | `id`, `out_amount`, `quoted_in_amount`, `slippage_bps`, `platform_fee_bps`, `positive_slippage_bps`, `route_plan` | `shared_accounts_exact_out_route_v2_instruction` |
-| `jupiter_swap_shared_accounts_route_instruction_landing` | Shared-accounts route instruction rows. | `id`, `route_plan`, `in_amount`, `quoted_out_amount`, `slippage_bps`, `platform_fee_bps` | `shared_accounts_route_instruction` |
-| `jupiter_swap_shared_accounts_route_v2_instruction_landing` | Shared-accounts route V2 instruction rows. | `id`, `in_amount`, `quoted_out_amount`, `slippage_bps`, `platform_fee_bps`, `positive_slippage_bps`, `route_plan` | `shared_accounts_route_v2_instruction` |
-| `jupiter_swap_shared_accounts_route_with_token_ledger_instruction_landing` | Shared-accounts route rows that source the input amount from token ledger state. | `id`, `route_plan`, `quoted_out_amount`, `slippage_bps`, `platform_fee_bps` | `shared_accounts_route_with_token_ledger_instruction` |
+<table>
+  <colgroup>
+    <col width="34%" />
+    <col width="66%" />
+  </colgroup>
+  <thead>
+    <tr>
+      <th>Table</th>
+      <th>What it stores</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>jupiter_swap_<wbr>claim_instruction_<wbr>landing</code></td>
+      <td>Jupiter program claim steps. These rows mark transactions where the Jupiter program performs a claim action around program-managed state rather than executing a user-facing swap route.</td>
+    </tr>
+    <tr>
+      <td><code>jupiter_swap_<wbr>claim_token_instruction_<wbr>landing</code></td>
+      <td>Token claim steps. These rows show tokens being claimed from Jupiter-controlled state into a destination token account, separate from the swap route itself.</td>
+    </tr>
+    <tr>
+      <td><code>jupiter_swap_<wbr>close_token_instruction_<wbr>landing</code></td>
+      <td>Token-account cleanup after Jupiter activity. These rows explain transaction tails where a temporary or program-managed token account is closed and, when requested by the instruction, leftover token balance is burned first.</td>
+    </tr>
+    <tr>
+      <td><code>jupiter_swap_<wbr>close_wsol_token_account_<wbr>instruction_landing</code></td>
+      <td>Wrapped SOL cleanup. Jupiter may wrap native SOL during a swap and then unwrap it at the end; this table marks the close step for that temporary wrapped-SOL account.</td>
+    </tr>
+    <tr>
+      <td><code>jupiter_swap_<wbr>create_token_account_<wbr>instruction_landing</code></td>
+      <td>Token-account setup before or during a swap. These rows show Jupiter creating a supporting token account needed to hold input, output, or intermediate swap funds.</td>
+    </tr>
+    <tr>
+      <td><code>jupiter_swap_<wbr>create_token_ledger_<wbr>instruction_landing</code></td>
+      <td>Token-ledger setup. A token ledger lets a later swap step use the actual token amount observed in the transaction instead of a hard-coded input amount.</td>
+    </tr>
+    <tr>
+      <td><code>jupiter_swap_<wbr>exact_out_route_<wbr>instruction_landing</code></td>
+      <td>Fixed-output Jupiter swaps. These rows represent trades where the destination amount is fixed first, such as a payment flow, and Jupiter calculates how much source token is needed.</td>
+    </tr>
+    <tr>
+      <td><code>jupiter_swap_<wbr>exact_out_route_v2_<wbr>instruction_landing</code></td>
+      <td>Newer fixed-output swap format. It serves the same payment-style purpose as exact-out routing while using Jupiter's newer instruction layout and recording whether the final price moved in the user's favor.</td>
+    </tr>
+    <tr>
+      <td><code>jupiter_swap_<wbr>route_instruction_<wbr>landing</code></td>
+      <td>Standard fixed-input Jupiter swaps. These rows show the path Jupiter executed for a known input amount, including the chosen liquidity venues, expected output, slippage guard, and optional platform fee.</td>
+    </tr>
+    <tr>
+      <td><code>jupiter_swap_<wbr>route_v2_instruction_<wbr>landing</code></td>
+      <td>Newer fixed-input swap format. It captures the same user-facing trade as the standard route table while using Jupiter's newer route instruction layout.</td>
+    </tr>
+    <tr>
+      <td><code>jupiter_swap_<wbr>route_with_token_ledger_<wbr>instruction_landing</code></td>
+      <td>Fixed-input style routes that read their input amount from token-ledger state. These rows are useful when the amount to swap is determined by an earlier step in the same transaction.</td>
+    </tr>
+    <tr>
+      <td><code>jupiter_swap_<wbr>set_token_ledger_<wbr>instruction_landing</code></td>
+      <td>Token-ledger update step. This records the token account state that a later ledger-backed Jupiter route uses to determine the actual amount to swap.</td>
+    </tr>
+    <tr>
+      <td><code>jupiter_swap_<wbr>shared_accounts_<wbr>exact_out_route_<wbr>instruction_landing</code></td>
+      <td>Fixed-output swaps executed through Jupiter shared accounts. These rows combine payment-style routing with Jupiter-managed intermediate accounts for complex paths.</td>
+    </tr>
+    <tr>
+      <td><code>jupiter_swap_<wbr>shared_accounts_<wbr>exact_out_route_v2_<wbr>instruction_landing</code></td>
+      <td>Newer fixed-output shared-account swap format. It records the same kind of payment-style route while using Jupiter's newer shared-account instruction layout.</td>
+    </tr>
+    <tr>
+      <td><code>jupiter_swap_<wbr>shared_accounts_<wbr>route_instruction_<wbr>landing</code></td>
+      <td>Standard fixed-input swaps executed through Jupiter shared accounts. These rows are useful for analyzing complex multi-hop trades where Jupiter handles intermediate token accounts.</td>
+    </tr>
+    <tr>
+      <td><code>jupiter_swap_<wbr>shared_accounts_<wbr>route_v2_instruction_<wbr>landing</code></td>
+      <td>Newer shared-account fixed-input swap format. It captures the same user-facing shared-account trade while using Jupiter's newer route instruction layout.</td>
+    </tr>
+    <tr>
+      <td><code>jupiter_swap_<wbr>shared_accounts_<wbr>route_with_token_ledger_<wbr>instruction_landing</code></td>
+      <td>Shared-account routes that also use token-ledger state. These rows appear when Jupiter combines managed intermediate accounts with an input amount determined earlier in the transaction.</td>
+    </tr>
+  </tbody>
+</table>
 
 CPI/event landing tables:
 
-| Table | What it stores | Payload fields | Postgres equivalent |
-| --- | --- | --- | --- |
-| `jupiter_swap_cpi_event_landing` | All generated Jupiter CPI/event rows, with `event_type` as the discriminator. | Event-prefixed typed columns for fee, single swap, batched swaps, candidate results, quote errors, and best-swap output violations. Array/composite event payloads use `*_present` markers plus non-null structured arrays. | `cpi_events` |
+<table>
+  <colgroup>
+    <col width="34%" />
+    <col width="66%" />
+  </colgroup>
+  <thead>
+    <tr>
+      <th>Table</th>
+      <th>What it stores</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>jupiter_swap_<wbr>cpi_event_<wbr>landing</code></td>
+      <td>Jupiter execution events. This table records what happened inside the route after execution starts: fees, individual swap legs, grouped swap legs, quote candidates, quote errors, and cases where the best available output missed the expected threshold.</td>
+    </tr>
+  </tbody>
+</table>
 
-Instruction tables share these metadata columns:
-
-```text
-program_id, family_name, instruction_type, instruction_id, slot, signature,
-instruction_index, stack_height, absolute_path, source_name, mode,
-decoder_version, ingest_ts, chain_time, partition_time, block_hash, tx_index
-```
-
-The CPI/event table uses the same transaction/instruction metadata and adds
-`event_type`, `event_id`, and `event_seq`. `instruction_id` and `event_id` are
-deterministic landing identifiers. Landing tables are append-only; repeated
-backfills can produce multiple rows for the same logical instruction/event if a
-slot range is replayed.
-
-`event_type = 'swap_event'` rows store a single swap event in the
-`swap_event_*` columns. `event_type = 'swaps_event'` rows store an event that
-contains an array of swap events in `swaps_event_swap_events`.
-
-## Postgres Parity
-
-The generated ClickHouse output mirrors the generated Postgres table count for
-Jupiter Swap: 17 instruction tables plus one CPI/event table.
-
-CPI/event coverage is complete and now lands in one table, like Postgres.
-Postgres uses `cpi_events.name` as the discriminator and `data JSONB` as the
-payload. ClickHouse uses `jupiter_swap_cpi_event_landing.event_type` as the
-discriminator and stores each known event payload in native typed columns.
-
-The current ClickHouse rows are not exact column-for-column copies of Postgres:
-
-- Postgres instruction/event tables include raw `__accounts` JSON.
-- ClickHouse instruction/event landing tables currently store
-  `absolute_path`, transaction metadata, deterministic landing IDs, sink
-  metadata, and typed payload columns, but not raw account-meta JSON.
-- Postgres `route_plan` is `JSONB`; ClickHouse `route_plan` is
-  `Array(Tuple(...))`.
-- Postgres CPI/event payloads are `data JSONB`; ClickHouse CPI/event payloads
-  are event-prefixed typed columns in `jupiter_swap_cpi_event_landing`.
-- Postgres rows support generated upsert/delete/lookup operations; ClickHouse
-  landing tables are append-only.
-
-There is no generated ClickHouse transaction table in this example. That matches
-the current Postgres-aligned generated decoder surface. Any old
-`jupiter_swap_transaction_landing` table is stale local state from an older
-transaction-aggregation experiment and is not produced by current code.
-
-## Inspecting `route_plan`
-
-`route_plan` is a structured ClickHouse value:
-
-```text
-Array(Tuple(swap Tuple(...), percent/bps, input_index, output_index))
-```
-
-Query it as JSON when browsing rows:
-
-```sql
-SELECT
-  signature,
-  instruction_index,
-  toJSONString(route_plan) AS route_plan_json
-FROM jupiter_swap_route_instruction_landing
-LIMIT 10;
-```
-
-For analysis, extract only the fields you need:
-
-```sql
-SELECT
-  signature,
-  arrayMap(
-    x -> tupleElement(tupleElement(x, 'swap'), 'variant'),
-    route_plan
-  ) AS swap_variants,
-  arrayMap(x -> tupleElement(x, 'percent'), route_plan) AS percents,
-  arrayMap(x -> tupleElement(x, 'input_index'), route_plan) AS input_indexes,
-  arrayMap(x -> tupleElement(x, 'output_index'), route_plan) AS output_indexes
-FROM jupiter_swap_route_instruction_landing
-LIMIT 10;
-```
-
-For V2 route tables, use `bps` instead of `percent`:
-
-```sql
-SELECT
-  signature,
-  arrayMap(
-    x -> tupleElement(tupleElement(x, 'swap'), 'variant'),
-    route_plan
-  ) AS swap_variants,
-  arrayMap(x -> tupleElement(x, 'bps'), route_plan) AS bps
-FROM jupiter_swap_route_v2_instruction_landing
-LIMIT 10;
-```
+Rows include deterministic landing identifiers and common Solana context such
+as slot, signature, instruction path, block timing, source name, mode, decoder
+version, and ingest time. Landing tables are append-only; repeated backfills can
+produce multiple rows for the same logical instruction/event if a slot range is
+replayed.

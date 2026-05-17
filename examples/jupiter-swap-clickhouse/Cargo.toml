@@ -15,5 +15,8 @@ clap = { workspace = true, features = ["derive"] }
 dotenv = { workspace = true }
 env_logger = { workspace = true }
 log = { workspace = true }
+solana-client = { workspace = true }
+solana-commitment-config = { workspace = true }
+solana-pubkey = { workspace = true }
 solana-transaction-status = { workspace = true }
 tokio = { workspace = true, features = ["rt", "macros"] }

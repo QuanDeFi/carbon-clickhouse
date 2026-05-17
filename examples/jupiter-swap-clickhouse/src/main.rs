@@ -1,163 +1,198 @@
-use std::{env, net::SocketAddr, sync::Arc};
+use std::{collections::HashSet, env, net::SocketAddr, sync::{Arc, Mutex}};
 
+use carbon_core::{account::{AccountDecoder, AccountMetadata, AccountProcessorInputType}, clickhouse::{ClickHouseAsyncInsertSettings, ClickHouseConfig, ClickHouseInsertSettings}, error::{CarbonResult, Error as CarbonError}, instruction::InstructionProcessorInputType, pipeline::ShutdownStrategy, processor::Processor};
+use carbon_jupiter_swap_decoder::{accounts::clickhouse::{bootstrap_clickhouse_from_database_url as bootstrap_accounts_clickhouse, clickhouse_processor as account_processor}, instructions::{clickhouse::{bootstrap_clickhouse_from_database_url, clickhouse_processor}, JupiterSwapInstruction}, JupiterSwapDecoder};
+use carbon_log_metrics::LogMetrics;
+use carbon_prometheus_metrics::{PrometheusMetrics, PrometheusServerConfig};
+use carbon_rpc_block_crawler_datasource::{RpcBlockConfig, RpcBlockCrawler};
+use clap::Parser;
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_commitment_config::CommitmentConfig;
+use solana_pubkey::Pubkey;
 use solana_transaction_status::UiTransactionEncoding;
-
-use {
-    carbon_core::{
-        error::{CarbonResult, Error as CarbonError},
-        pipeline::ShutdownStrategy,
-    },
-    carbon_jupiter_swap_decoder::{
-        instructions::clickhouse::{bootstrap_clickhouse_from_database_url, clickhouse_processor},
-        JupiterSwapDecoder,
-    },
-    carbon_log_metrics::LogMetrics,
-    carbon_prometheus_metrics::{PrometheusMetrics, PrometheusServerConfig},
-    carbon_rpc_block_crawler_datasource::{RpcBlockConfig, RpcBlockCrawler},
-    clap::Parser,
-};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(short, long)]
-    start_slot: Option<u64>,
-
-    #[arg(short, long)]
-    end_slot: Option<u64>,
+    #[arg(short, long)] start_slot: Option<u64>,
+    #[arg(short, long)] end_slot: Option<u64>,
+    #[arg(long)] include_token_ledger_accounts: bool,
 }
 
-fn env_usize(name: &str, default: usize) -> usize {
-    match env::var(name) {
-        Ok(value) => match value.parse::<usize>() {
-            Ok(parsed) => parsed,
-            Err(err) => {
-                log::warn!("Invalid {name}={value:?}: {err}. Using default {default}.");
-                default
-            }
-        },
-        Err(_) => default,
+#[derive(Clone, Default)]
+struct TokenLedgerPubkeys(Arc<Mutex<HashSet<Pubkey>>>);
+
+impl TokenLedgerPubkeys {
+    fn sorted(&self) -> CarbonResult<Vec<Pubkey>> {
+        let mut pubkeys = self.0.lock()
+            .map_err(|_| err("TokenLedger pubkey mutex was poisoned"))?
+            .iter().copied().collect::<Vec<_>>();
+        pubkeys.sort_by_key(|pubkey| pubkey.to_string());
+        Ok(pubkeys)
     }
 }
 
-fn env_u64(name: &str) -> CarbonResult<u64> {
-    let value =
-        env::var(name).map_err(|err| CarbonError::Custom(format!("{name} must be set ({err})")))?;
-
-    value
-        .parse::<u64>()
-        .map_err(|err| CarbonError::Custom(format!("Invalid {name}={value:?}: {err}")))
-}
-
-fn prometheus_metrics() -> CarbonResult<PrometheusMetrics> {
-    let listen_addr = env::var("PROMETHEUS_METRICS_ADDR")
-        .unwrap_or_else(|_| "0.0.0.0:9464".to_string())
-        .parse::<SocketAddr>()
-        .map_err(|err| CarbonError::Custom(format!("Invalid PROMETHEUS_METRICS_ADDR: {err}")))?;
-
-    Ok(PrometheusMetrics::with_server(
-        PrometheusServerConfig::new().listen_addr(listen_addr),
-    ))
-}
-
-fn optional_env_u64(name: &str) -> CarbonResult<Option<u64>> {
-    env::var(name)
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .map(|value| {
-            value
-                .parse::<u64>()
-                .map_err(|err| CarbonError::Custom(format!("Invalid {name}={value:?}: {err}")))
-        })
-        .transpose()
-}
-
-fn optional_env_bool(name: &str) -> CarbonResult<Option<bool>> {
-    env::var(name)
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .map(|value| parse_bool(name, &value))
-        .transpose()
-}
-
-fn env_bool(name: &str, default: bool) -> CarbonResult<bool> {
-    match env::var(name) {
-        Ok(value) if !value.trim().is_empty() => parse_bool(name, &value),
-        _ => Ok(default),
-    }
-}
-
-fn parse_bool(name: &str, value: &str) -> CarbonResult<bool> {
-    match value.trim().to_ascii_lowercase().as_str() {
-        "1" | "true" | "yes" | "y" | "on" => Ok(true),
-        "0" | "false" | "no" | "n" | "off" => Ok(false),
-        _ => Err(CarbonError::Custom(format!(
-            "Invalid {name}={value:?}: expected true/false"
-        ))),
+impl Processor<InstructionProcessorInputType<'_, JupiterSwapInstruction>> for TokenLedgerPubkeys {
+    async fn process(
+        &mut self,
+        input: &InstructionProcessorInputType<'_, JupiterSwapInstruction>,
+    ) -> CarbonResult<()> {
+        if let Some(pubkey) = token_ledger_pubkey(input.decoded_instruction) {
+            self.0.lock()
+                .map_err(|_| err("TokenLedger pubkey mutex was poisoned"))?
+                .insert(pubkey);
+        }
+        Ok(())
     }
 }
 
 #[tokio::main]
 pub async fn main() -> CarbonResult<()> {
     dotenv::dotenv().ok();
-    let mut logger = env_logger::Builder::new();
-    logger.filter_level(log::LevelFilter::Info);
-    if let Ok(log_level) = env::var("LOG_LEVEL") {
-        logger.parse_filters(&log_level);
-    }
-    logger.init();
+    init_logger();
 
     let args = Args::parse();
-    let start_slot = match args.start_slot {
-        Some(start_slot) => start_slot,
-        None => env_u64("BLOCK_CRAWLER_START_SLOT")?,
-    };
-    let end_slot = args.end_slot.or_else(|| {
-        env::var("BLOCK_CRAWLER_END_SLOT")
-            .ok()
-            .and_then(|value| value.parse().ok())
-    });
-
-    let database_url = env::var("DATABASE_URL")
-        .map_err(|err| CarbonError::Custom(format!("DATABASE_URL must be set ({err})")))?;
-    let mut clickhouse_config = bootstrap_clickhouse_from_database_url(&database_url).await?;
-    if env_bool("CLICKHOUSE_ASYNC_INSERT", false)? {
-        clickhouse_config = clickhouse_config.with_insert_settings(
-            carbon_core::clickhouse::ClickHouseInsertSettings::AsyncWait(
-                carbon_core::clickhouse::ClickHouseAsyncInsertSettings {
-                    busy_timeout_ms: optional_env_u64("CLICKHOUSE_ASYNC_INSERT_BUSY_TIMEOUT_MS")?,
-                    max_data_size: optional_env_u64("CLICKHOUSE_ASYNC_INSERT_MAX_DATA_SIZE")?,
-                    max_query_number: optional_env_u64("CLICKHOUSE_ASYNC_INSERT_MAX_QUERY_NUMBER")?,
-                    deduplicate: optional_env_bool("CLICKHOUSE_ASYNC_INSERT_DEDUPLICATE")?,
-                },
-            ),
-        );
-    }
-    let instruction_processor = clickhouse_processor(clickhouse_config);
-
-    let rpc_block_ds = RpcBlockCrawler::new(
-        env::var("RPC_URL").unwrap_or_default(),
-        start_slot,
-        end_slot,
-        None,
-        RpcBlockConfig {
-            encoding: Some(UiTransactionEncoding::Binary),
-            max_supported_transaction_version: Some(0),
-            ..Default::default()
-        },
-        Some(env_usize("BLOCK_CRAWLER_MAX_CONCURRENT_REQUESTS", 1)),
-        Some(env_usize("BLOCK_CRAWLER_CHANNEL_BUFFER_SIZE", 10)),
-    );
+    let database_url = required_env("DATABASE_URL")?;
+    let rpc_url = required_env("RPC_URL")?;
+    let token_ledger_pubkeys = TokenLedgerPubkeys::default();
+    let instruction_config = clickhouse_config(bootstrap_clickhouse_from_database_url(&database_url).await?);
 
     carbon_core::pipeline::Pipeline::builder()
-        .datasource(rpc_block_ds)
+        .datasource(block_crawler(&args, rpc_url.clone())?)
         .metrics(Arc::new(LogMetrics::new_with_flush_interval(3)))
         .metrics(Arc::new(prometheus_metrics()?))
-        .instruction(JupiterSwapDecoder, instruction_processor)
+        .instruction(JupiterSwapDecoder, clickhouse_processor(instruction_config))
+        .instruction(JupiterSwapDecoder, token_ledger_pubkeys.clone())
         .shutdown_strategy(ShutdownStrategy::Immediate)
         .build()?
         .run()
         .await?;
 
+    let pubkeys = token_ledger_pubkeys.sorted()?;
+    log::info!("TokenLedger pubkeys collected: {}", pubkeys.len());
+    if args.include_token_ledger_accounts {
+        write_token_ledger_accounts(&database_url, &rpc_url, &pubkeys).await?;
+    }
     Ok(())
+}
+
+async fn write_token_ledger_accounts(
+    database_url: &str,
+    rpc_url: &str,
+    pubkeys: &[Pubkey],
+) -> CarbonResult<()> {
+    if pubkeys.is_empty() {
+        log::warn!("TokenLedger account smoke requested, but no pubkeys were collected.");
+        return Ok(());
+    }
+
+    let mut config = clickhouse_config(bootstrap_accounts_clickhouse(database_url).await?);
+    config.source_name = "exact_token_ledger_accounts".to_string();
+
+    let rpc = RpcClient::new_with_commitment(rpc_url.to_string(), CommitmentConfig::confirmed());
+    let mut processor = account_processor(config);
+    let mut processed = 0usize;
+
+    for chunk in pubkeys.chunks(100) {
+        let response = rpc
+            .get_multiple_accounts_with_commitment(chunk, CommitmentConfig::confirmed())
+            .await
+            .map_err(|error| {
+                CarbonError::FailedToConsumeDatasource(format!(
+                    "Failed to fetch TokenLedger accounts: {error}"
+                ))
+            })?;
+
+        for (pubkey, account) in chunk.iter().copied().zip(response.value).filter_map(|(p, a)| Some((p, a?))) {
+            let Some(decoded_account) = JupiterSwapDecoder.decode_account(&account) else { continue };
+            let metadata = AccountMetadata {
+                slot: response.context.slot,
+                pubkey,
+                transaction_signature: None,
+            };
+            processor
+                .process(&AccountProcessorInputType {
+                    metadata: &metadata,
+                    decoded_account: &decoded_account,
+                    raw_account: &account,
+                })
+                .await?;
+            processed += 1;
+        }
+    }
+
+    processor.finalize().await?;
+    log::info!(
+        "TokenLedger account smoke complete. requested: {}, processed: {}",
+        pubkeys.len(),
+        processed
+    );
+    Ok(())
+}
+
+fn token_ledger_pubkey(instruction: &JupiterSwapInstruction) -> Option<Pubkey> {
+    match instruction {
+        JupiterSwapInstruction::CreateTokenLedger { accounts, .. } => Some(accounts.token_ledger),
+        JupiterSwapInstruction::SetTokenLedger { accounts, .. } => Some(accounts.token_ledger),
+        JupiterSwapInstruction::RouteWithTokenLedger { accounts, .. } => Some(accounts.token_ledger),
+        JupiterSwapInstruction::SharedAccountsRouteWithTokenLedger { accounts, .. } => {
+            Some(accounts.token_ledger)
+        }
+        _ => None,
+    }
+}
+
+fn block_crawler(args: &Args, rpc_url: String) -> CarbonResult<RpcBlockCrawler> {
+    Ok(RpcBlockCrawler::new(
+        rpc_url,
+        slot_arg(args.start_slot, "BLOCK_CRAWLER_START_SLOT")?,
+        args.end_slot
+            .or_else(|| env::var("BLOCK_CRAWLER_END_SLOT").ok()?.parse().ok()),
+        None,
+        RpcBlockConfig { encoding: Some(UiTransactionEncoding::Binary), max_supported_transaction_version: Some(0), ..Default::default() },
+        Some(1),
+        None,
+    ))
+}
+
+fn clickhouse_config(config: ClickHouseConfig) -> ClickHouseConfig {
+    if enabled("CLICKHOUSE_ASYNC_INSERT") {
+        config.with_insert_settings(ClickHouseInsertSettings::AsyncWait(ClickHouseAsyncInsertSettings::default()))
+    } else {
+        config
+    }
+}
+
+fn prometheus_metrics() -> CarbonResult<PrometheusMetrics> {
+    let addr = env::var("PROMETHEUS_METRICS_ADDR").unwrap_or_else(|_| "0.0.0.0:9464".to_string())
+        .parse::<SocketAddr>().map_err(err)?;
+    Ok(PrometheusMetrics::with_server(PrometheusServerConfig::new().listen_addr(addr)))
+}
+
+fn slot_arg(value: Option<u64>, env_name: &str) -> CarbonResult<u64> {
+    value
+        .or_else(|| env::var(env_name).ok()?.parse().ok())
+        .ok_or_else(|| err(format!("{env_name} is required")))
+}
+
+fn enabled(name: &str) -> bool {
+    matches!(
+        env::var(name).unwrap_or_default().to_ascii_lowercase().as_str(),
+        "1" | "true" | "yes" | "y" | "on"
+    )
+}
+
+fn init_logger() {
+    let mut logger = env_logger::Builder::new();
+    logger.filter_level(log::LevelFilter::Debug);
+    if let Ok(log_level) = env::var("LOG_LEVEL") { logger.parse_filters(&log_level); }
+    logger.init();
+}
+
+fn required_env(name: &str) -> CarbonResult<String> {
+    env::var(name).map_err(err)
+}
+
+fn err(error: impl std::fmt::Display) -> CarbonError {
+    CarbonError::Custom(error.to_string())
 }
