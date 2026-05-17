@@ -516,7 +516,7 @@ Postgres metrics are account/instruction upsert counters and duration histograms
 
 The renderer's typed Postgres mapper flattens straightforward fields to SQL columns, but it intentionally stores many complex shapes as `JSONB`, including defined types, maps, sets, non-singleton tuples, and arrays of complex items. This is why upstream Postgres can tolerate many schema shapes without requiring a fully structured SQL representation for every nested type.
 
-Postgres operation traits include `Insert`, `Upsert`, `Delete`, and `LookUp`; generated typed rows and generic rows implement these operations. The provided processors use `Upsert`.
+Postgres operation traits include `Insert`, `Upsert`, `Delete`, and `Lookup`; generated typed rows and generic rows implement these operations. The provided processors use `Upsert`.
 
 Important persistence caveat: neither generic nor generated Postgres instruction rows include `absolute_path` in the primary key. The key is signature, outer instruction index, and stack height. Multiple sibling inner instructions can share those three values and differ only by absolute path, so upstream Postgres can overwrite/collide in those cases.
 
@@ -668,19 +668,21 @@ Computed comparison against `upstream/v1.0-rc`:
 | `upstream/nd/arranged-accounts-refactor` | 249 | 16 | `efe023190` on 2025-12-05 | Older decoder/account-arranging branch; far behind v1. |
 | `upstream/nd/reference-refactor` | 201 | 16 | `58eb3c874` on 2026-01-12 | Older reference/refactor branch; far behind v1. |
 
-`upstream/refactor/core-consistency` touches the areas most likely to conflict with local ClickHouse additions:
+`upstream/refactor/core-consistency` was merged into `clickhouse-upstream-v1`
+during the 2026-05-18 WIB maintenance pass. The branch touched the areas most
+likely to conflict with local ClickHouse additions:
 
 - Core pipe structs get private fields plus `new(...)` constructors.
 - `Filter` object bounds drop redundant `Send + Sync` annotations in several builder and pipe signatures.
 - `Datasource` dyn types similarly drop redundant `Send + Sync` object annotations.
 - `solana-program` is removed from core in favor of narrower Solana crates such as `solana_hash`.
 - Metrics lock poisoning paths use `.expect(...)` instead of `unwrap()`.
-- `postgres::operations::LookUp` is renamed to `Lookup`, requiring generated Postgres template and generated decoder updates.
+- `postgres::operations::LookUp` was renamed to `Lookup`, requiring generated Postgres template and generated decoder updates.
 - The branch reformats a large number of generated Postgres/GraphQL files due to the trait rename and formatting changes.
 
 The `refactor/core-consistency` diff over scanned core/renderer/datasource/decoder/example/metrics paths is 2,261 files, 3,261 insertions, and 2,735 deletions. Most changes are comments, formatting, constructor encapsulation, and the Postgres trait rename rather than a new pipeline abstraction. For the ClickHouse branch, the practical merge-risk areas are `pipeline.rs`, pipe structs, metrics registry, Postgres operation names in templates, and any generated ClickHouse code that mirrors upstream pipe-constructor patterns.
 
-### Dry Merge Scan Against ClickHouse Branch
+### Merge Scan And Resolution Against ClickHouse Branch
 
 A dry merge was run in a disposable worktree at `2026-05-16 09:11:05 WIB (+0700)`:
 
@@ -716,6 +718,15 @@ Practical resolution direction for a future merge:
 - Keep upstream's private pipe fields and `new(...)` constructors; the dry merge already auto-applies these in `PipelineBuilder`.
 - Re-run core ClickHouse tests after resolving the six core conflicts because the conflicts are exactly in the processor lifecycle path used by buffered ClickHouse writers.
 - Re-run renderer checks because upstream's Postgres template rename touches generated-output templates even though ClickHouse templates do not conflict directly.
+
+Actual merge resolution on `2026-05-18 01:18:01 WIB (+0700)` used that plan:
+
+- Merge target before merge: `clickhouse-upstream-v1` at `a834ed91f`.
+- Merge source: `upstream/refactor/core-consistency` at `940ca846f`.
+- Kept `Processor::finalize()` and `Pipeline::finalize_pipes()` for buffered ClickHouse shutdown drain.
+- Adopted upstream's simplified `Box<dyn Filter + 'static>` object bounds and pipe constructor encapsulation.
+- Resolved the Jupiter GraphQL conflict to upstream's `postgres::operations::Lookup` spelling.
+- Kept README ClickHouse CLI option docs while incorporating upstream's refreshed README structure.
 
 ## Architectural Implications For Sink Work
 

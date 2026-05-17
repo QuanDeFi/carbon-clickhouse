@@ -1,19 +1,36 @@
-use crate::datasource::BlockDetails;
-use crate::error::CarbonResult;
-use crate::filter::Filter;
-use crate::processor::Processor;
-use async_trait::async_trait;
+//! Block-details pipe wiring.
+//!
+//! # Components
+//!
+//! - [`BlockDetailsPipe`] — internal pipe wrapping the user processor and
+//!   filters for `Update::BlockDetails`. Constructed by
+//!   `PipelineBuilder::block_details(...)` and
+//!   `block_details_with_filters(...)`.
+//! - [`BlockDetailsPipes`] — dyn-dispatch trait the pipeline holds as `Box<dyn
+//!   BlockDetailsPipes>`.
+
+use {
+    crate::{datasource::BlockDetails, error::CarbonResult, filter::Filter, processor::Processor},
+    async_trait::async_trait,
+};
 
 pub struct BlockDetailsPipe<P> {
-    pub processor: P,
-    pub filters: Vec<Box<dyn Filter + Send + Sync + 'static>>,
+    processor: P,
+    filters: Vec<Box<dyn Filter + 'static>>,
+}
+
+impl<P> BlockDetailsPipe<P> {
+    pub fn new(processor: P, filters: Vec<Box<dyn Filter + 'static>>) -> Self {
+        Self { processor, filters }
+    }
 }
 
 #[async_trait]
 pub trait BlockDetailsPipes: Send + Sync {
     async fn run(&mut self, block_details: BlockDetails) -> CarbonResult<()>;
     async fn finalize(&mut self) -> CarbonResult<()>;
-    fn filters(&self) -> &[Box<dyn Filter + Send + Sync + 'static>];
+
+    fn filters(&self) -> &[Box<dyn Filter + 'static>];
 }
 
 #[async_trait]
@@ -31,7 +48,7 @@ where
         self.processor.finalize().await
     }
 
-    fn filters(&self) -> &[Box<dyn Filter + Send + Sync + 'static>] {
+    fn filters(&self) -> &[Box<dyn Filter + 'static>] {
         &self.filters
     }
 }

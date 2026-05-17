@@ -21,6 +21,7 @@ The current architectural scope is:
 - synchronous inserts by default
 - optional async-wait inserts for live multi-writer deployments
 - renderer-controlled production DDL modes
+- CLI parity for renderer DDL options through `--clickhouse-options`
 
 The sink is not a warehouse serving layer. Serving tables, canonicalization, durable replay control, slot/range coverage, finality policy, DLQs, and APIs belong above or around the sink.
 
@@ -246,9 +247,12 @@ The architecture supports broader decoder generation, but committed output remai
 The current canary boundary validates:
 
 - Jupiter swap instruction and CPI/event rows
+- Jupiter swap TokenLedger account rows in the live head-follow example path
 - Token Program account rows
 
-That boundary is a release-risk decision, not a limitation of the architecture.
+The committed canaries are renderer-generated and use generated migration
+operations. That boundary is a release-risk decision, not a limitation of the
+architecture.
 
 ## Non-Goals
 

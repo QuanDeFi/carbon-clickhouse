@@ -141,6 +141,41 @@ impl ClickHouseTable for MintAccountClickHouseRow {
     }
 }
 
+impl MintAccountClickHouseRow {
+    pub fn migration_operations(table_name: &str) -> Vec<String> {
+        let mut operations = Vec::new();
+        operations.push(Self::create_table_sql(table_name));
+        operations.extend(Self::add_column_sql(table_name));
+        operations
+    }
+
+    pub fn add_column_sql(table_name: &str) -> Vec<String> {
+        vec![
+            format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS program_id String"),
+            format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS family_name String"),
+            format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS account_type String"),
+            format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS account_id String"),
+            format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS slot UInt64"),
+            format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS pubkey String"),
+            format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS transaction_signature Nullable(String)"),
+            format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS lamports UInt64"),
+            format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS owner String"),
+            format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS executable Bool"),
+            format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS rent_epoch UInt64"),
+            format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS source_name String"),
+            format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS mode String"),
+            format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS decoder_version String"),
+            format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS ingest_ts DateTime64(3, 'UTC')"),
+            format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS partition_slot UInt64"),
+            format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS mint_authority Nullable(String)"),
+            format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS supply UInt64"),
+            format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS decimals UInt8"),
+            format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS is_initialized Bool"),
+            format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS freeze_authority Nullable(String)"),
+        ]
+    }
+}
+
 impl ClickHouseRow for MintAccountClickHouseRow {
     fn table_name(&self) -> &'static str {
         Self::table()

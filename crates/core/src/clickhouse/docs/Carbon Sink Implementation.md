@@ -13,12 +13,13 @@ The ClickHouse path includes:
 1. A generic ClickHouse runtime inside `carbon-core`.
 2. Processor finalization so buffered processors drain on shutdown.
 3. Typed instruction and CPI-event ClickHouse coverage for `jupiter-swap-decoder`.
-4. Typed account ClickHouse coverage for `token-program-decoder`.
+4. Typed account ClickHouse coverage for `jupiter-swap-decoder` TokenLedger and `token-program-decoder`.
 5. Renderer support for generated typed account, instruction, and CPI-event landing rows.
 6. A per-buffer ClickHouse writer for independent Carbon processes writing into the same table families.
 7. Explicit synchronous and async-wait insert settings, with synchronous inserts as the default.
 8. Runtime controls for byte-aware batching, global backpressure, transport timeouts, gzip, retries, and optional exact-batch insert deduplication tokens.
 9. Renderer-controlled landing-table DDL modes for `MergeTree`, `ReplicatedMergeTree`, and `Distributed` deployments.
+10. CLI parity for ClickHouse renderer options through `--clickhouse-options`.
 
 ## How It Fits Into Carbon
 
@@ -104,8 +105,13 @@ Decoder crates own concrete ClickHouse schemas and row mapping. The current comm
 Jupiter swap instruction and CPI/event canary modules:
 
 - `decoders/jupiter-swap-decoder/src/instructions/clickhouse/mod.rs`
-- `decoders/jupiter-swap-decoder/src/instructions/clickhouse/instruction_rows.rs`
+- `decoders/jupiter-swap-decoder/src/instructions/clickhouse/*_row.rs`
 - `decoders/jupiter-swap-decoder/src/instructions/clickhouse/cpi_event_row.rs`
+
+Jupiter swap account canary modules:
+
+- `decoders/jupiter-swap-decoder/src/accounts/clickhouse/mod.rs`
+- `decoders/jupiter-swap-decoder/src/accounts/clickhouse/token_ledger_row.rs`
 
 Token Program account canary modules:
 
@@ -122,7 +128,11 @@ Those modules provide:
 - `ClickHouseRows` implementations
 - setup helpers used by examples
 
-The committed Jupiter and Token Program canary modules bootstrap tables with their row types' `create_table_sql(...)` operations. The renderer templates generate the newer `migration_operations(...)` helper that includes additive `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` operations for regenerated decoders.
+The committed Jupiter and Token Program canary modules bootstrap tables with
+their row types' `migration_operations(...)` helpers. Each helper creates the
+landing table when missing and then emits additive
+`ALTER TABLE ... ADD COLUMN IF NOT EXISTS` operations for generated columns.
+The renderer does not generate destructive type-change migrations.
 
 Examples should call these generated helpers. They should not duplicate decoder-specific schema or row mapping logic.
 
@@ -330,6 +340,7 @@ The generated row scope is canary-limited and covers account, instruction, and C
 
 - Jupiter swap typed instruction landing rows.
 - Jupiter swap typed CPI-event landing rows.
+- Jupiter swap typed TokenLedger account landing rows.
 - Token Program typed account landing rows for mint, token, and multisig.
 - Renderer templates for typed account, instruction, and CPI-event ClickHouse generation.
 - `withClickHouse` feature-gated generated modules.
@@ -468,7 +479,10 @@ renderVisitor(outputDir, {
 });
 ```
 
-Renderer-generated migrations create tables and then emit additive `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` operations for generated columns. The committed Jupiter and Token Program canaries predate that helper shape and currently bootstrap with `create_table_sql(...)` statements only. The renderer does not generate destructive type-change migrations.
+Renderer-generated migrations create tables and then emit additive
+`ALTER TABLE ... ADD COLUMN IF NOT EXISTS` operations for generated columns.
+The committed Jupiter and Token Program canaries use this same helper shape.
+The renderer does not generate destructive type-change migrations.
 
 For `distributed` DDL mode, generated migration operations create and alter the local table first, then create and alter the distributed table. The distributed table omits local `MergeTree` clauses because storage lives in the generated local table. Additive column operations are emitted for both local and distributed tables.
 
@@ -488,23 +502,40 @@ Default DDL option values:
 - distributed local table engine: `replicated-merge-tree`
 - distributed sharding key: `rand()`
 
-The TypeScript renderer API supports the object form above. The current CLI flag is still boolean-only: `--with-clickhouse <boolean>`.
+The TypeScript renderer API supports the object form above. The CLI supports
+the same options through `--clickhouse-options <jsonOrFile>` on both `parse`
+and `scaffold`, while preserving `--with-clickhouse <boolean>` for the simple
+default path.
 
 ## Jupiter Example
 
-`examples/jupiter-swap-clickhouse` is the real-world smoke test for the Jupiter instruction and CPI-event path.
+`examples/jupiter-swap-clickhouse` is the real-world smoke test for the Jupiter
+instruction, CPI-event, and live TokenLedger account path.
 
 It validates:
 
 - `RpcBlockCrawler` datasource
 - production RPC URL loading through `.env`
-- ClickHouse bootstrap through generated Jupiter migration helpers
+- ClickHouse bootstrap through generated Jupiter instruction/event and account migration helpers
 - Jupiter instruction and CPI-event decoding
+- Jupiter TokenLedger account decoding in pure head-follow mode
 - typed ClickHouse row dispatch
 - structured CPI-event payloads such as `route_plan.swap`
 - core writer batching and shutdown drain
 - `ShutdownStrategy::Immediate` with a bounded block range
 - conservative block fetch concurrency while leaving Carbon and block-crawler channels at their upstream default size of `1_000`
+
+Mode is inferred from slot environment variables:
+
+- `BLOCK_CRAWLER_START_SLOT` and `BLOCK_CRAWLER_END_SLOT` set: bounded backfill, instruction/CPI-event path only.
+- `BLOCK_CRAWLER_START_SLOT` set and `BLOCK_CRAWLER_END_SLOT` empty: catch-up then tail head, instruction/CPI-event path only.
+- both slot envs empty: pure head-follow mode, instruction/CPI-event path plus live TokenLedger account fetching.
+
+The TokenLedger account path fetches current confirmed account state with
+`getAccountInfo` when a first-seen TokenLedger pubkey appears in live decoded
+Jupiter instructions. It is intentionally disabled for historical backfills
+because standard Solana RPC does not provide historical account state at an
+arbitrary old slot.
 
 It does not validate:
 
@@ -520,7 +551,7 @@ Use a bounded slot range when testing the example against production RPC.
 
 It validates:
 
-- filtered RPC `getProgramAccounts` or Helius gPA v2
+- Helius gPA v2 by default, or filtered RPC `getProgramAccounts` through explicit `--source rpc`
 - generated Token Program ClickHouse account table bootstrap
 - Token Program account decoding from real mainnet account data
 - generated token account landing rows
@@ -532,7 +563,14 @@ It validates:
 - Helius gPA v2 through `--source helius-gpa-v2`
 - optional `CLICKHOUSE_ASYNC_INSERT*` environment variables
 
-The example requires a token-account owner and/or mint filter so it does not accidentally fetch the entire Token Program account set. By default it focuses on token accounts because those can be bounded safely. The generated mint and multisig account rows are covered by compile/tests and schema generation, but they are not the default real-world query path.
+The example requires a token-account owner and/or mint filter so it does not
+accidentally fetch the entire Token Program account set. By default it uses
+Helius gPA v2 because that path is paginated and safer for free/trial-tier
+bounded snapshots. Use `--source rpc` only when intentionally testing a
+provider's standard JSON-RPC `getProgramAccounts` support. By default the
+example focuses on token accounts because those can be bounded safely. The
+generated mint and multisig account rows are covered by compile/tests and
+schema generation, but they are not the default real-world query path.
 
 ## Identity, Replay, And Table Semantics
 
@@ -597,6 +635,7 @@ The renderer supports:
 - generated Cargo dependencies for ClickHouse, `serde`, and `chrono`
 - strict-by-default ClickHouse schema mapping with explicit `allowClickHouseJsonFallback`
 - renderer-controlled DDL planning in `packages/renderer/src/clickhouseDdl.ts`
+- CLI option forwarding for `--clickhouse-options <jsonOrFile>`
 
 The repository keeps ClickHouse decoder output canary-limited; it has not regenerated every decoder with ClickHouse output.
 

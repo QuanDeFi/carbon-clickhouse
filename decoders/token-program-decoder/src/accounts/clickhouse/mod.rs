@@ -9,7 +9,7 @@ use std::time::Duration;
 use carbon_core::{
     account::{AccountMetadata, DecodedAccount},
     clickhouse::{
-        rows::{ClickHouseRow, ClickHouseRowContext, ClickHouseRows, ClickHouseTable},
+        rows::{ClickHouseRow, ClickHouseRowContext, ClickHouseRows},
         ClickHouseAccountProcessor, ClickHouseAdmin, ClickHouseConfig, ClickHouseSchema,
     },
     error::CarbonResult,
@@ -60,17 +60,17 @@ pub struct TokenProgramClickHouseAccountsMigration;
 
 impl ClickHouseSchema for TokenProgramClickHouseAccountsMigration {
     fn operations(_config: &ClickHouseConfig) -> Vec<String> {
-        vec![
-            MintAccountClickHouseRow::create_table_sql(
-                MintAccountClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-            MultisigAccountClickHouseRow::create_table_sql(
-                MultisigAccountClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-            TokenAccountClickHouseRow::create_table_sql(
-                TokenAccountClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        ]
+        let mut operations = Vec::new();
+        operations.extend(MintAccountClickHouseRow::migration_operations(
+            MintAccountClickHouseRow::DEFAULT_TABLE_NAME,
+        ));
+        operations.extend(MultisigAccountClickHouseRow::migration_operations(
+            MultisigAccountClickHouseRow::DEFAULT_TABLE_NAME,
+        ));
+        operations.extend(TokenAccountClickHouseRow::migration_operations(
+            TokenAccountClickHouseRow::DEFAULT_TABLE_NAME,
+        ));
+        operations
     }
 }
 
