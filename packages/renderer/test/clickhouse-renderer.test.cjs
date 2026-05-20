@@ -222,6 +222,52 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
 }
 
 {
+    const tokenProgramAccountsMod = render('accountsMod.njk', {
+        program: { name: 'tokenProgram' },
+        originalProgramName: 'token-program',
+        accountsToExport: [{ name: 'mint' }, { name: 'token' }, { name: 'multisig' }],
+        withPostgres: true,
+        withGraphQL: true,
+        withClickHouse: true,
+        postgresMode: 'typed',
+        imports: 'use { crate::{TokenProgramDecoder, PROGRAM_ID}, solana_program_pack::Pack };',
+    });
+
+    assert.match(tokenProgramAccountsMod, /spl_token_interface::state::Mint::unpack\(&account\.data\)/);
+    assert.match(tokenProgramAccountsMod, /spl_token_interface::state::Account::unpack\(&account\.data\)/);
+    assert.match(tokenProgramAccountsMod, /spl_token_interface::state::Multisig::unpack\(&account\.data\)/);
+    assert.match(tokenProgramAccountsMod, /decode_token_account_uses_spl_token_pack_layout/);
+    assert.doesNotMatch(tokenProgramAccountsMod, /::decode\(data\)/);
+
+    const tokenProgramTokenPage = render('accountsPage.njk', {
+        account: { name: 'token' },
+        originalProgramName: 'token-program',
+        imports: 'use { crate::types::AccountState, solana_pubkey::Pubkey };',
+        typeManifest: {
+            type: `{
+    pub mint: Pubkey,
+    pub owner: Pubkey,
+    pub amount: u64,
+    pub delegate: Option<Pubkey>,
+    pub state: AccountState,
+    pub is_native: Option<u64>,
+    pub delegated_amount: u64,
+    pub close_authority: Option<Pubkey>,
+}`,
+        },
+    });
+
+    assert.match(tokenProgramTokenPage, /impl From<spl_token_interface::state::Account> for Token/);
+    assert.match(tokenProgramTokenPage, /value\.delegate\.into\(\)/);
+    assert.match(tokenProgramTokenPage, /spl_token_interface::state::AccountState::Initialized/);
+    assert.doesNotMatch(tokenProgramTokenPage, /BorshDeserialize::deserialize/);
+
+    const cargoTomlGenerator = fs.readFileSync('src/cargoTomlGenerator.ts', 'utf8');
+    assert.match(cargoTomlGenerator, /isTokenProgram/);
+    assert.match(cargoTomlGenerator, /'spl-token-interface'/);
+}
+
+{
     const number = format => ({ kind: 'numberTypeNode', format, endian: 'le' });
     const bool = { kind: 'booleanTypeNode', size: number('u8') };
     const field = (name, type) => ({ kind: 'structFieldTypeNode', name, type });

@@ -21,7 +21,7 @@ import { DiscriminatorManifest, getDiscriminatorManifest, getTypeManifestVisitor
 import { getGraphQLTypeManifestVisitor } from './getGraphQLTypeManifestVisitor';
 import { ImportMap } from './ImportMap';
 import { partition, render } from './utils';
-import { isToken2022Program } from './utils/helpers';
+import { isToken2022Program, isTokenProgram } from './utils/helpers';
 import { getPostgresTypeManifestVisitor } from './getPostgresTypeManifestVisitor';
 import { FlattenedGraphQLField, flattenTypeForGraphQL } from './utils/flattenGraphqlFields';
 import {
@@ -793,6 +793,9 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                     if (isToken2022Program(program, originalProgramName)) {
                         accountsModImports.add('solana_program_pack::Pack');
                         // StateWithExtensions is used directly in unpack() calls, no import needed
+                    }
+                    if (isTokenProgram(program, originalProgramName)) {
+                        accountsModImports.add('solana_program_pack::Pack');
                     }
 
                     map.add(

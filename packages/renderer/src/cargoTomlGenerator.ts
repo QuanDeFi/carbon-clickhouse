@@ -1,6 +1,6 @@
 import { kebabCase } from '@codama/nodes';
 import { VERSIONS, getCrateDependencyString } from '@sevenlabs-hq/carbon-versions';
-import { isToken2022Program } from './utils/helpers';
+import { isToken2022Program, isTokenProgram } from './utils/helpers';
 
 export type PackageMetadata = {
     description?: string;
@@ -252,6 +252,29 @@ export function generateDecoderCargoToml(options: DecoderCargoTomlOptions): stri
     if (withGraphQL) {
         dependencies.push('');
         dependencies.push(juniperDep);
+    }
+
+    // Add SPL Token dependencies for token-program.
+    if (isTokenProgram(undefined, originalProgramName, packageName)) {
+        dependencies.push('');
+        dependencies.push(
+            getCrateDependencyString(
+                'solana-program-pack',
+                VERSIONS['solana-program-pack'],
+                undefined,
+                undefined,
+                useWorkspace,
+            ),
+        );
+        dependencies.push(
+            getCrateDependencyString(
+                'spl-token-interface',
+                VERSIONS['spl-token-interface'],
+                undefined,
+                undefined,
+                useWorkspace,
+            ),
+        );
     }
 
     // Add SPL Token 2022 dependencies for token-2022 program
