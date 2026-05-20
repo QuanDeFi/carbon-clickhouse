@@ -20,7 +20,7 @@ pub struct Mint {
 
 impl From<spl_token_interface::state::Mint> for Mint {
     fn from(value: spl_token_interface::state::Mint) -> Self {
-        Self {
+        Mint {
             mint_authority: value.mint_authority.into(),
             supply: value.supply,
             decimals: value.decimals,

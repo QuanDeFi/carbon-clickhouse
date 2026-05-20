@@ -1,5 +1,7 @@
 {% extends "layout.njk" %}
 {% import "macros.njk" as macros %}
+{% set isTokenProgram = originalProgramName === 'token-program' or program.name === 'token-program' or packageName === 'token-program' %}
+{% set isToken2022Program = originalProgramName === 'token-2022' or program.name === 'token-2022' or packageName === 'token-2022' %}
 
 {% block main %}
 {{ imports }}
@@ -41,7 +43,7 @@ impl<'a> carbon_core::account::AccountDecoder<'a> for {{ program.name | pascalCa
             return None;
         }
 
-{% if originalProgramName === 'token-program' %}
+{% if isTokenProgram %}
         {% for account in accountsToExport %}
         {% if account.name | lower === 'mint' %}
         if let Ok(data) = spl_token_interface::state::Mint::unpack(&account.data) {
@@ -75,7 +77,7 @@ impl<'a> carbon_core::account::AccountDecoder<'a> for {{ program.name | pascalCa
         }
         {% endif %}
         {% endfor %}
-{% elif originalProgramName === 'token-2022' %}
+{% elif isToken2022Program %}
         {% for account in accountsToExport %}
         {% if account.name | lower === 'mint' %}
         // Try Mint (base or with extensions) - StateWithExtensions::unpack handles both
@@ -138,7 +140,7 @@ impl<'a> carbon_core::account::AccountDecoder<'a> for {{ program.name | pascalCa
     }
 }
 
-{% if originalProgramName === 'token-program' %}
+{% if isTokenProgram %}
 #[cfg(test)]
 mod tests {
     use {
@@ -188,7 +190,7 @@ mod tests {
         }
     }
 }
-{% elif originalProgramName === 'token-2022' %}
+{% elif isToken2022Program %}
 #[cfg(test)]
 mod tests {
     use {super::*, carbon_core::account::AccountDecoder, solana_pubkey::Pubkey};

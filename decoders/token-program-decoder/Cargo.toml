@@ -17,6 +17,12 @@ default = []
 
 serde = ["dep:serde"]
 
+clickhouse = [
+    "carbon-core/clickhouse",
+    "serde",
+    "dep:chrono",
+]
+
 postgres = [
     "carbon-core/postgres",
     "dep:sqlx",
@@ -31,23 +37,16 @@ graphql = [
     "serde",
 ]
 
-clickhouse = [
-    "carbon-core/clickhouse",
-    "serde",
-    "dep:chrono",
-]
-
 [dependencies]
 carbon-core = { workspace = true, features = ["macros"] }
 borsh = { workspace = true, features = ["derive"] }
 solana-pubkey = { workspace = true, features = ["borsh"] }
 solana-account = { workspace = true }
 solana-instruction = { workspace = true }
-solana-program-pack = { workspace = true }
 serde_json = { workspace = true }
-spl-token-interface = { workspace = true }
 
 serde = { workspace = true, features = ["derive"], optional = true }
+
 chrono = { workspace = true, features = ["serde"], optional = true }
 
 sqlx = { workspace = true, features = ["postgres", "rust_decimal"], optional = true }
@@ -55,6 +54,9 @@ async-trait = { workspace = true, optional = true }
 sqlx_migrator = { workspace = true, optional = true }
 
 juniper = { workspace = true, optional = true }
+
+solana-program-pack = { workspace = true }
+spl-token-interface = { workspace = true }
 
 
 [dev-dependencies]

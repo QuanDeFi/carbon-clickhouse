@@ -28,17 +28,21 @@ pub struct Token {
 
 impl From<spl_token_interface::state::Account> for Token {
     fn from(value: spl_token_interface::state::Account) -> Self {
-        Self {
+        Token {
             mint: value.mint,
             owner: value.owner,
             amount: value.amount,
             delegate: value.delegate.into(),
             state: match value.state {
                 spl_token_interface::state::AccountState::Uninitialized => {
-                    AccountState::Uninitialized
+                    crate::types::AccountState::Uninitialized
                 }
-                spl_token_interface::state::AccountState::Initialized => AccountState::Initialized,
-                spl_token_interface::state::AccountState::Frozen => AccountState::Frozen,
+                spl_token_interface::state::AccountState::Initialized => {
+                    crate::types::AccountState::Initialized
+                }
+                spl_token_interface::state::AccountState::Frozen => {
+                    crate::types::AccountState::Frozen
+                }
             },
             is_native: value.is_native.into(),
             delegated_amount: value.delegated_amount,

@@ -273,6 +273,46 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
     const cargoTomlGenerator = fs.readFileSync('src/cargoTomlGenerator.ts', 'utf8');
     assert.match(cargoTomlGenerator, /isTokenProgram/);
     assert.match(cargoTomlGenerator, /'spl-token-interface'/);
+
+    const tokenProgramAccountsModFromPackageName = render('accountsMod.njk', {
+        program: { name: 'token-program' },
+        originalProgramName: 'token',
+        packageName: 'token-program',
+        accountsToExport: [{ name: 'mint' }, { name: 'token' }, { name: 'multisig' }],
+        withPostgres: true,
+        withGraphQL: true,
+        withClickHouse: true,
+        postgresMode: 'typed',
+        imports: 'use { crate::{TokenProgramDecoder, PROGRAM_ID}, solana_program_pack::Pack };',
+    });
+
+    assert.match(tokenProgramAccountsModFromPackageName, /spl_token_interface::state::Account::unpack\(&account\.data\)/);
+    assert.doesNotMatch(tokenProgramAccountsModFromPackageName, /::decode\(data\)/);
+}
+
+{
+    const mapper = new ClickHouseRowMapper({ getDefinedTypesMap: () => new Map() });
+    const plan = mapper.planType(
+        {
+            kind: 'structTypeNode',
+            fields: [
+                {
+                    name: 'owner',
+                    type: { kind: 'publicKeyTypeNode' },
+                },
+            ],
+        },
+        [],
+        [],
+        new Set(),
+        {
+            reservedNames: ['owner'],
+            collisionPrefix: 'token',
+        },
+    );
+
+    assert.equal(plan.fields.length, 1);
+    assert.equal(plan.fields[0].column, 'token_owner');
 }
 
 {

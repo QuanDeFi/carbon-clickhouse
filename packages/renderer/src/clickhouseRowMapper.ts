@@ -40,6 +40,11 @@ export type ClickHouseRowMapperOptions = {
     allowJsonFallback?: boolean;
 };
 
+export type ClickHouseRowPlanOptions = {
+    reservedNames?: readonly string[];
+    collisionPrefix?: string;
+};
+
 type PayloadField = {
     variantName: string;
     variantRustName: string;
@@ -62,9 +67,15 @@ const SIGNED_ORDER = ['i8', 'i16', 'i32', 'i64', 'i128'];
 export class ClickHouseRowMapper {
     constructor(private ctx: ClickHouseRowMapperOptions) {}
 
-    planType(typeNode: TypeNode, prefix: string[], docsPrefix: string[], seen: Set<string>): ClickHouseRowPlan {
+    planType(
+        typeNode: TypeNode,
+        prefix: string[],
+        docsPrefix: string[],
+        seen: Set<string>,
+        options: ClickHouseRowPlanOptions = {},
+    ): ClickHouseRowPlan {
         const helperContext: HelperContext = { helpers: new Map(), emitting: new Set() };
-        const fields = this.flattenTypeWithContext(typeNode, prefix, docsPrefix, seen, helperContext);
+        const fields = this.flattenTypeWithContext(typeNode, prefix, docsPrefix, seen, helperContext, options);
         return {
             fields,
             helperDefinitions: [...helperContext.helpers.values()],
@@ -81,15 +92,24 @@ export class ClickHouseRowMapper {
         docsPrefix: string[],
         seen: Set<string>,
         helperContext: HelperContext,
+        options: ClickHouseRowPlanOptions,
     ): ClickHouseFlattenedField[] {
         const out: ClickHouseFlattenedField[] = [];
+        const reservedNames = new Set(options.reservedNames ?? []);
+        const collisionPrefix = options.collisionPrefix ? snakeCase(options.collisionPrefix) : 'payload';
 
         const makeName = (nameParts: string[]): string => {
-            let col = snakeCase(nameParts.join('_'));
-            if (seen.has(col)) {
+            const base = snakeCase(nameParts.join('_'));
+            let col = base;
+            let preferredBase = base;
+            if (reservedNames.has(col)) {
+                preferredBase = snakeCase(`${collisionPrefix}_${base}`);
+                col = preferredBase;
+            }
+            if (seen.has(col) || reservedNames.has(col)) {
                 let i = 1;
-                while (seen.has(`${col}_${i}`)) i++;
-                col = `${col}_${i}` as SnakeCaseString;
+                while (seen.has(`${preferredBase}_${i}`) || reservedNames.has(`${preferredBase}_${i}`)) i++;
+                col = `${preferredBase}_${i}` as SnakeCaseString;
             }
             seen.add(col);
             return col;
@@ -106,6 +126,7 @@ export class ClickHouseRowMapper {
                         [],
                         seen,
                         helperContext,
+                        options,
                     ),
                 );
             }

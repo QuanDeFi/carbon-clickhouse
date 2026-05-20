@@ -1,5 +1,7 @@
 {% extends "layout.njk" %}
 {% import "macros.njk" as macros %}
+{% set isTokenProgram = originalProgramName === 'token-program' or program.name === 'token-program' or packageName === 'token-program' %}
+{% set isToken2022Program = originalProgramName === 'token-2022' or program.name === 'token-2022' or packageName === 'token-2022' %}
 
 {% block main %}
 {{ imports }}
@@ -7,7 +9,7 @@
 {% if account.formattedDocs %}
 {{ account.formattedDocs }}
 {% endif %}
-{% if originalProgramName == 'token-program' and (account.name | lower == 'mint' or account.name | lower == 'token' or account.name | lower == 'multisig') %}
+{% if isTokenProgram and (account.name | lower == 'mint' or account.name | lower == 'token' or account.name | lower == 'multisig') %}
 {# Token Program accounts use the official SPL Token Pack layout, not Borsh account layout. #}
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize, PartialEq)]
@@ -56,7 +58,7 @@ impl From<spl_token_interface::state::Multisig> for {{ account.name | pascalCase
     }
 }
 {% endif %}
-{% elif originalProgramName == 'token-2022' and (account.name | lower == 'mint' or account.name | lower == 'token' or account.name | lower == 'multisig') %}
+{% elif isToken2022Program and (account.name | lower == 'mint' or account.name | lower == 'token' or account.name | lower == 'multisig') %}
 {# Token-2022 accounts use BorshDeserialize but rely on From implementations for extension handling #}
 {# Note: decode() method is not provided for token-2022 accounts; StateWithExtensions::unpack() is used in accounts/mod.rs instead #}
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

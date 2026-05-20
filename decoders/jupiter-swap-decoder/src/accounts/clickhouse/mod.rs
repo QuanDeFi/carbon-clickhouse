@@ -2,19 +2,18 @@
 pub mod token_ledger_row;
 
 pub use self::token_ledger_row::TokenLedgerAccountClickHouseRow;
-
-use std::time::Duration;
-
-use carbon_core::{
-    account::{AccountMetadata, DecodedAccount},
-    clickhouse::{
-        rows::{ClickHouseRow, ClickHouseRowContext, ClickHouseRows},
-        ClickHouseAccountProcessor, ClickHouseAdmin, ClickHouseConfig, ClickHouseSchema,
+use {
+    super::JupiterSwapAccount,
+    carbon_core::{
+        account::{AccountMetadata, DecodedAccount},
+        clickhouse::{
+            rows::{ClickHouseRow, ClickHouseRowContext, ClickHouseRows},
+            ClickHouseAccountProcessor, ClickHouseAdmin, ClickHouseConfig, ClickHouseSchema,
+        },
+        error::CarbonResult,
     },
-    error::CarbonResult,
+    std::time::Duration,
 };
-
-use super::JupiterSwapAccount;
 
 pub const DEFAULT_DATABASE: &str = "default";
 pub const DEFAULT_SOURCE_NAME: &str = "block_crawler";

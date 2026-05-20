@@ -62,6 +62,66 @@ export type GetRenderMapOptions = {
     versionName?: string;
 };
 
+const CLICKHOUSE_ACCOUNT_COMMON_COLUMNS = [
+    'program_id',
+    'family_name',
+    'account_type',
+    'account_id',
+    'slot',
+    'pubkey',
+    'transaction_signature',
+    'lamports',
+    'owner',
+    'executable',
+    'rent_epoch',
+    'source_name',
+    'mode',
+    'decoder_version',
+    'ingest_ts',
+    'partition_slot',
+];
+
+const CLICKHOUSE_INSTRUCTION_COMMON_COLUMNS = [
+    'program_id',
+    'family_name',
+    'instruction_type',
+    'instruction_id',
+    'slot',
+    'signature',
+    'instruction_index',
+    'stack_height',
+    'absolute_path',
+    'source_name',
+    'mode',
+    'decoder_version',
+    'ingest_ts',
+    'chain_time',
+    'partition_time',
+    'block_hash',
+    'tx_index',
+];
+
+const CLICKHOUSE_EVENT_COMMON_COLUMNS = [
+    'program_id',
+    'family_name',
+    'event_type',
+    'event_id',
+    'slot',
+    'signature',
+    'instruction_index',
+    'stack_height',
+    'absolute_path',
+    'event_seq',
+    'source_name',
+    'mode',
+    'decoder_version',
+    'ingest_ts',
+    'chain_time',
+    'partition_time',
+    'block_hash',
+    'tx_index',
+];
+
 export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
     const renderParentInstructions = options.renderParentInstructions ?? false;
     const clickHouseEnabled = isClickHouseEnabled(options.withClickHouse);
@@ -196,6 +256,7 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                             imports: imports.toString(),
                             program: currentProgram,
                             originalProgramName: currentProgram?.name,
+                            packageName: options.packageName,
                             discriminatorManifest,
                             typeManifest,
                         }),
@@ -216,7 +277,10 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                     }
 
                     if (clickHouseEnabled) {
-                        const clickhousePlan = clickhouseRowMapper.planType(newNode.data, [], [], new Set());
+                        const clickhousePlan = clickhouseRowMapper.planType(newNode.data, [], [], new Set(), {
+                            reservedNames: CLICKHOUSE_ACCOUNT_COMMON_COLUMNS,
+                            collisionPrefix: node.name,
+                        });
                         renderMap.add(
                             `src/accounts/clickhouse/${snakeCase(node.name)}_row.rs`,
                             render('clickhouseRowPage.njk', {
@@ -388,7 +452,10 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                             );
 
                             if (clickHouseEnabled) {
-                                const clickhousePlan = clickhouseRowMapper.planType(node.type, [], [], new Set());
+                                const clickhousePlan = clickhouseRowMapper.planType(node.type, [], [], new Set(), {
+                                    reservedNames: CLICKHOUSE_EVENT_COMMON_COLUMNS,
+                                    collisionPrefix: node.name,
+                                });
                                 renderMap.add(
                                     `src/instructions/clickhouse/${snakeCase(node.name)}_event_row.rs`,
                                     render('eventInstructionClickHouseRowPage.njk', {
@@ -634,6 +701,10 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                             [],
                             [],
                             new Set(),
+                            {
+                                reservedNames: CLICKHOUSE_INSTRUCTION_COMMON_COLUMNS,
+                                collisionPrefix: node.name,
+                            },
                         );
                         renderMap.add(
                             `src/instructions/clickhouse/${snakeCase(node.name)}_row.rs`,
@@ -790,11 +861,11 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                         .add(`crate::${pascalCase(programName)}Decoder`);
 
                     // Add token-2022 specific imports for StateWithExtensions unpacking
-                    if (isToken2022Program(program, originalProgramName)) {
+                    if (isToken2022Program(program, originalProgramName, options.packageName)) {
                         accountsModImports.add('solana_program_pack::Pack');
                         // StateWithExtensions is used directly in unpack() calls, no import needed
                     }
-                    if (isTokenProgram(program, originalProgramName)) {
+                    if (isTokenProgram(program, originalProgramName, options.packageName)) {
                         accountsModImports.add('solana_program_pack::Pack');
                     }
 

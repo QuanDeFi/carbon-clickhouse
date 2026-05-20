@@ -16,7 +16,7 @@ pub struct Multisig {
 
 impl From<spl_token_interface::state::Multisig> for Multisig {
     fn from(value: spl_token_interface::state::Multisig) -> Self {
-        Self {
+        Multisig {
             m: value.m,
             n: value.n,
             is_initialized: value.is_initialized,

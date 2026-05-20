@@ -7,6 +7,9 @@ pub mod postgres;
 #[cfg(feature = "graphql")]
 pub mod graphql;
 
+#[cfg(feature = "clickhouse")]
+pub mod clickhouse;
+
 pub mod amount_to_ui_amount;
 pub mod approve;
 pub mod approve_checked;
