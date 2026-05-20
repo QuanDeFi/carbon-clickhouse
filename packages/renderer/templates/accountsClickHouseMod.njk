@@ -7,7 +7,7 @@ pub mod {{ macros.escapeRustKeyword(account.name | snakeCase) }}_row;
 {% endfor %}
 
 {% for account in accountsToExport | sort(false, false, 'name') %}
-pub use self::{{ macros.escapeRustKeyword(account.name | snakeCase) }}_row::*;
+pub use self::{{ macros.escapeRustKeyword(account.name | snakeCase) }}_row::{{ account.name | pascalCase }}AccountClickHouseRow;
 {% endfor %}
 
 use std::time::Duration;

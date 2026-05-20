@@ -12,11 +12,11 @@ pub mod {{ macros.escapeRustKeyword(event.name | snakeCase) }}_event_row;
 {% endif %}
 
 {% for instruction in instructionsToExport | sort(false, false, 'name') %}
-pub use self::{{ macros.escapeRustKeyword(instruction.name | snakeCase) }}_row::*;
+pub use self::{{ macros.escapeRustKeyword(instruction.name | snakeCase) }}_row::{{ instruction.name | pascalCase }}InstructionClickHouseRow;
 {% endfor %}
 {% if hasAnchorEvents %}
 {% for event in events | sort(false, false, 'name') %}
-pub use self::{{ macros.escapeRustKeyword(event.name | snakeCase) }}_event_row::*;
+pub use self::{{ macros.escapeRustKeyword(event.name | snakeCase) }}_event_row::{{ event.name | pascalCase }}EventClickHouseRow;
 {% endfor %}
 {% endif %}
 

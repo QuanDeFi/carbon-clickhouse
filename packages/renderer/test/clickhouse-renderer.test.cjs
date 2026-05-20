@@ -74,6 +74,10 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
     assert.match(output, /pub mod swap_row;/);
     assert.match(output, /pub mod swap_event_event_row;/);
     assert.doesNotMatch(output, /pub mod cpi_event_row;/);
+    assert.match(output, /pub use self::swap_row::SwapInstructionClickHouseRow;/);
+    assert.match(output, /pub use self::swap_event_event_row::SwapEventEventClickHouseRow;/);
+    assert.doesNotMatch(output, /pub use self::swap_row::\*/);
+    assert.doesNotMatch(output, /pub use self::swap_event_event_row::\*/);
     assert.match(output, /SwapInstructionClickHouseRow/);
     assert.match(output, /SwapEventEventClickHouseRow/);
     assert.match(output, /ClickHouseRows<DemoProgramClickHouseInstructionRow>/);
@@ -94,6 +98,10 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
 
     assert.match(output, /pub mod mint_row;/);
     assert.match(output, /pub mod token_row;/);
+    assert.match(output, /pub use self::mint_row::MintAccountClickHouseRow;/);
+    assert.match(output, /pub use self::token_row::TokenAccountClickHouseRow;/);
+    assert.doesNotMatch(output, /pub use self::mint_row::\*/);
+    assert.doesNotMatch(output, /pub use self::token_row::\*/);
     assert.match(output, /MintAccountClickHouseRow::migration_operations/);
     assert.match(output, /TokenAccountClickHouseRow::migration_operations/);
     assert.match(output, /ClickHouseAccountProcessor</);

@@ -2,7 +2,10 @@ pub mod mint_row;
 pub mod multisig_row;
 pub mod token_row;
 
-pub use self::{mint_row::*, multisig_row::*, token_row::*};
+pub use self::{
+    mint_row::MintAccountClickHouseRow, multisig_row::MultisigAccountClickHouseRow,
+    token_row::TokenAccountClickHouseRow,
+};
 
 use std::time::Duration;
 
