@@ -114,6 +114,16 @@ pub(crate) async fn post_query(
     query: &str,
     settings: &[ClickHouseQuerySetting],
 ) -> Result<(), ClickHouseHttpError> {
+    post_query_text(client, config, query, settings).await?;
+    Ok(())
+}
+
+pub(crate) async fn post_query_text(
+    client: &reqwest::Client,
+    config: &ClickHouseConfig,
+    query: &str,
+    settings: &[ClickHouseQuerySetting],
+) -> Result<String, ClickHouseHttpError> {
     let request = client
         .post(&config.endpoint)
         .query(&[("database", config.database.as_str())]);
@@ -125,16 +135,16 @@ pub(crate) async fn post_query(
         .await
         .map_err(ClickHouseHttpError::request)?;
 
-    if response.status().is_success() {
-        return Ok(());
-    }
-
     let status = response.status();
     let body = response
         .text()
         .await
         .unwrap_or_else(|_| "<failed to read response body>".to_string());
-    Err(ClickHouseHttpError::response(status, body))
+    if status.is_success() {
+        Ok(body)
+    } else {
+        Err(ClickHouseHttpError::response(status, body))
+    }
 }
 
 pub(crate) async fn post_query_with_data(

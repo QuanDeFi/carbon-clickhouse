@@ -13,7 +13,8 @@ use {
         account::{AccountMetadata, DecodedAccount},
         clickhouse::{
             rows::{ClickHouseRow, ClickHouseRowContext, ClickHouseRows},
-            ClickHouseAccountProcessor, ClickHouseAdmin, ClickHouseConfig, ClickHouseSchema,
+            ClickHouseAccountProcessor, ClickHouseAdmin, ClickHouseConfig, ClickHouseManagedTable,
+            ClickHouseSchema,
         },
         error::CarbonResult,
     },
@@ -76,6 +77,20 @@ impl ClickHouseSchema for TokenProgramClickHouseAccountsMigration {
             token_row::TokenAccountClickHouseRow::DEFAULT_TABLE_NAME,
         ));
         operations
+    }
+
+    fn managed_tables(_config: &ClickHouseConfig) -> Vec<ClickHouseManagedTable> {
+        let mut tables = Vec::new();
+        tables.extend(mint_row::MintAccountClickHouseRow::managed_tables(
+            mint_row::MintAccountClickHouseRow::DEFAULT_TABLE_NAME,
+        ));
+        tables.extend(multisig_row::MultisigAccountClickHouseRow::managed_tables(
+            multisig_row::MultisigAccountClickHouseRow::DEFAULT_TABLE_NAME,
+        ));
+        tables.extend(token_row::TokenAccountClickHouseRow::managed_tables(
+            token_row::TokenAccountClickHouseRow::DEFAULT_TABLE_NAME,
+        ));
+        tables
     }
 }
 

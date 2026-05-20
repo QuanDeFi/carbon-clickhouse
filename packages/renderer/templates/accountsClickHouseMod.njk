@@ -16,7 +16,8 @@ use carbon_core::{
     account::{AccountMetadata, DecodedAccount},
     clickhouse::{
         rows::{ClickHouseRow, ClickHouseRowContext, ClickHouseRows},
-        ClickHouseAccountProcessor, ClickHouseAdmin, ClickHouseConfig, ClickHouseSchema,
+        ClickHouseAccountProcessor, ClickHouseAdmin, ClickHouseConfig, ClickHouseManagedTable,
+        ClickHouseSchema,
     },
     error::CarbonResult,
 };
@@ -71,6 +72,14 @@ impl ClickHouseSchema for {{ program.name | pascalCase }}ClickHouseAccountsMigra
         operations.extend({{ macros.escapeRustKeyword(account.name | snakeCase) }}_row::{{ account.name | pascalCase }}AccountClickHouseRow::migration_operations({{ macros.escapeRustKeyword(account.name | snakeCase) }}_row::{{ account.name | pascalCase }}AccountClickHouseRow::DEFAULT_TABLE_NAME));
 {% endfor %}
         operations
+    }
+
+    fn managed_tables(_config: &ClickHouseConfig) -> Vec<ClickHouseManagedTable> {
+        let mut tables = Vec::new();
+{% for account in accountsToExport | sort(false, false, 'name') %}
+        tables.extend({{ macros.escapeRustKeyword(account.name | snakeCase) }}_row::{{ account.name | pascalCase }}AccountClickHouseRow::managed_tables({{ macros.escapeRustKeyword(account.name | snakeCase) }}_row::{{ account.name | pascalCase }}AccountClickHouseRow::DEFAULT_TABLE_NAME));
+{% endfor %}
+        tables
     }
 }
 

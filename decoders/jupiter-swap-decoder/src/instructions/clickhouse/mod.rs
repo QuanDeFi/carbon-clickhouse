@@ -51,7 +51,8 @@ use {
     carbon_core::{
         clickhouse::{
             rows::{ClickHouseRow, ClickHouseRowContext, ClickHouseRows},
-            ClickHouseAdmin, ClickHouseConfig, ClickHouseInstructionProcessor, ClickHouseSchema,
+            ClickHouseAdmin, ClickHouseConfig, ClickHouseInstructionProcessor,
+            ClickHouseManagedTable, ClickHouseSchema,
         },
         error::CarbonResult,
         instruction::InstructionMetadata,
@@ -232,6 +233,74 @@ impl ClickHouseSchema for JupiterSwapClickHouseInstructionsMigration {
             ),
         );
         operations
+    }
+
+    fn managed_tables(_config: &ClickHouseConfig) -> Vec<ClickHouseManagedTable> {
+        let mut tables = Vec::new();
+        tables.extend(claim_row::ClaimInstructionClickHouseRow::managed_tables(
+            claim_row::ClaimInstructionClickHouseRow::DEFAULT_TABLE_NAME,
+        ));
+        tables.extend(
+            claim_token_row::ClaimTokenInstructionClickHouseRow::managed_tables(
+                claim_token_row::ClaimTokenInstructionClickHouseRow::DEFAULT_TABLE_NAME,
+            ),
+        );
+        tables.extend(
+            close_token_row::CloseTokenInstructionClickHouseRow::managed_tables(
+                close_token_row::CloseTokenInstructionClickHouseRow::DEFAULT_TABLE_NAME,
+            ),
+        );
+        tables.extend(close_wsol_token_account_row::CloseWsolTokenAccountInstructionClickHouseRow::managed_tables(close_wsol_token_account_row::CloseWsolTokenAccountInstructionClickHouseRow::DEFAULT_TABLE_NAME));
+        tables.extend(create_token_account_row::CreateTokenAccountInstructionClickHouseRow::managed_tables(create_token_account_row::CreateTokenAccountInstructionClickHouseRow::DEFAULT_TABLE_NAME));
+        tables.extend(create_token_ledger_row::CreateTokenLedgerInstructionClickHouseRow::managed_tables(create_token_ledger_row::CreateTokenLedgerInstructionClickHouseRow::DEFAULT_TABLE_NAME));
+        tables.extend(
+            exact_out_route_row::ExactOutRouteInstructionClickHouseRow::managed_tables(
+                exact_out_route_row::ExactOutRouteInstructionClickHouseRow::DEFAULT_TABLE_NAME,
+            ),
+        );
+        tables.extend(
+            exact_out_route_v2_row::ExactOutRouteV2InstructionClickHouseRow::managed_tables(
+                exact_out_route_v2_row::ExactOutRouteV2InstructionClickHouseRow::DEFAULT_TABLE_NAME,
+            ),
+        );
+        tables.extend(route_row::RouteInstructionClickHouseRow::managed_tables(
+            route_row::RouteInstructionClickHouseRow::DEFAULT_TABLE_NAME,
+        ));
+        tables.extend(
+            route_v2_row::RouteV2InstructionClickHouseRow::managed_tables(
+                route_v2_row::RouteV2InstructionClickHouseRow::DEFAULT_TABLE_NAME,
+            ),
+        );
+        tables.extend(route_with_token_ledger_row::RouteWithTokenLedgerInstructionClickHouseRow::managed_tables(route_with_token_ledger_row::RouteWithTokenLedgerInstructionClickHouseRow::DEFAULT_TABLE_NAME));
+        tables.extend(
+            set_token_ledger_row::SetTokenLedgerInstructionClickHouseRow::managed_tables(
+                set_token_ledger_row::SetTokenLedgerInstructionClickHouseRow::DEFAULT_TABLE_NAME,
+            ),
+        );
+        tables.extend(shared_accounts_exact_out_route_row::SharedAccountsExactOutRouteInstructionClickHouseRow::managed_tables(shared_accounts_exact_out_route_row::SharedAccountsExactOutRouteInstructionClickHouseRow::DEFAULT_TABLE_NAME));
+        tables.extend(shared_accounts_exact_out_route_v2_row::SharedAccountsExactOutRouteV2InstructionClickHouseRow::managed_tables(shared_accounts_exact_out_route_v2_row::SharedAccountsExactOutRouteV2InstructionClickHouseRow::DEFAULT_TABLE_NAME));
+        tables.extend(shared_accounts_route_row::SharedAccountsRouteInstructionClickHouseRow::managed_tables(shared_accounts_route_row::SharedAccountsRouteInstructionClickHouseRow::DEFAULT_TABLE_NAME));
+        tables.extend(shared_accounts_route_v2_row::SharedAccountsRouteV2InstructionClickHouseRow::managed_tables(shared_accounts_route_v2_row::SharedAccountsRouteV2InstructionClickHouseRow::DEFAULT_TABLE_NAME));
+        tables.extend(shared_accounts_route_with_token_ledger_row::SharedAccountsRouteWithTokenLedgerInstructionClickHouseRow::managed_tables(shared_accounts_route_with_token_ledger_row::SharedAccountsRouteWithTokenLedgerInstructionClickHouseRow::DEFAULT_TABLE_NAME));
+        tables.extend(best_swap_out_amount_violation_event_row::BestSwapOutAmountViolationEventClickHouseRow::managed_tables(best_swap_out_amount_violation_event_row::BestSwapOutAmountViolationEventClickHouseRow::DEFAULT_TABLE_NAME));
+        tables.extend(candidate_swap_quote_error_event_row::CandidateSwapQuoteErrorEventClickHouseRow::managed_tables(candidate_swap_quote_error_event_row::CandidateSwapQuoteErrorEventClickHouseRow::DEFAULT_TABLE_NAME));
+        tables.extend(candidate_swap_results_event_row::CandidateSwapResultsEventClickHouseRow::managed_tables(candidate_swap_results_event_row::CandidateSwapResultsEventClickHouseRow::DEFAULT_TABLE_NAME));
+        tables.extend(
+            fee_event_event_row::FeeEventEventClickHouseRow::managed_tables(
+                fee_event_event_row::FeeEventEventClickHouseRow::DEFAULT_TABLE_NAME,
+            ),
+        );
+        tables.extend(
+            swap_event_event_row::SwapEventEventClickHouseRow::managed_tables(
+                swap_event_event_row::SwapEventEventClickHouseRow::DEFAULT_TABLE_NAME,
+            ),
+        );
+        tables.extend(
+            swaps_event_event_row::SwapsEventEventClickHouseRow::managed_tables(
+                swaps_event_event_row::SwapsEventEventClickHouseRow::DEFAULT_TABLE_NAME,
+            ),
+        );
+        tables
     }
 }
 

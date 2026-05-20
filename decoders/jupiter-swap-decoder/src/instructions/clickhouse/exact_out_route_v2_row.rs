@@ -2,8 +2,11 @@
 
 use {
     carbon_core::{
-        clickhouse::rows::{
-            deterministic_instruction_id, ClickHouseRow, ClickHouseRowContext, ClickHouseTable,
+        clickhouse::{
+            rows::{
+                deterministic_instruction_id, ClickHouseRow, ClickHouseRowContext, ClickHouseTable,
+            },
+            ClickHouseColumnDefinition, ClickHouseManagedTable,
         },
         instruction::InstructionMetadata,
     },
@@ -1074,6 +1077,35 @@ impl ExactOutRouteV2InstructionClickHouseRow {
         operations
     }
 
+    pub fn managed_tables(table_name: &str) -> Vec<ClickHouseManagedTable> {
+        let engine = Self::clickhouse_engine(table_name);
+        vec![Self::managed_table_for(
+            table_name,
+            Self::create_table_sql(table_name),
+            engine,
+            true,
+        )]
+    }
+
+    fn managed_table_for(
+        table_name: &str,
+        create_table_sql: String,
+        engine: String,
+        include_merge_tree_layout: bool,
+    ) -> ClickHouseManagedTable {
+        ClickHouseManagedTable {
+            name: table_name.to_string(),
+            create_table_sql,
+            drop_table_sql: format!("DROP TABLE IF EXISTS {table_name}"),
+            engine: Some(Self::clickhouse_engine_name(&engine)),
+            partition_by: include_merge_tree_layout
+                .then(|| r#"toYear(partition_time)"#.to_string()),
+            order_by: include_merge_tree_layout
+                .then(|| r#"(program_id, family_name, instruction_id, slot)"#.to_string()),
+            columns: Self::column_definitions(table_name),
+        }
+    }
+
     pub fn add_column_sql(table_name: &str) -> Vec<String> {
         vec![
             format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS program_id String"),
@@ -1102,9 +1134,160 @@ impl ExactOutRouteV2InstructionClickHouseRow {
         ]
     }
 
+    pub fn column_definitions(table_name: &str) -> Vec<ClickHouseColumnDefinition> {
+        vec![
+            ClickHouseColumnDefinition {
+                name: "program_id".to_string(),
+                clickhouse_type: r#"String"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS program_id String"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN program_id String"),
+            },
+            ClickHouseColumnDefinition {
+                name: "family_name".to_string(),
+                clickhouse_type: r#"String"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS family_name String"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN family_name String"),
+            },
+            ClickHouseColumnDefinition {
+                name: "instruction_type".to_string(),
+                clickhouse_type: r#"String"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS instruction_type String"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN instruction_type String"),
+            },
+            ClickHouseColumnDefinition {
+                name: "instruction_id".to_string(),
+                clickhouse_type: r#"String"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS instruction_id String"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN instruction_id String"),
+            },
+            ClickHouseColumnDefinition {
+                name: "slot".to_string(),
+                clickhouse_type: r#"UInt64"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS slot UInt64"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN slot UInt64"),
+            },
+            ClickHouseColumnDefinition {
+                name: "signature".to_string(),
+                clickhouse_type: r#"String"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS signature String"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN signature String"),
+            },
+            ClickHouseColumnDefinition {
+                name: "instruction_index".to_string(),
+                clickhouse_type: r#"UInt32"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS instruction_index UInt32"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN instruction_index UInt32"),
+            },
+            ClickHouseColumnDefinition {
+                name: "stack_height".to_string(),
+                clickhouse_type: r#"UInt32"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS stack_height UInt32"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN stack_height UInt32"),
+            },
+            ClickHouseColumnDefinition {
+                name: "absolute_path".to_string(),
+                clickhouse_type: r#"Array(UInt8)"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS absolute_path Array(UInt8)"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN absolute_path Array(UInt8)"),
+            },
+            ClickHouseColumnDefinition {
+                name: "source_name".to_string(),
+                clickhouse_type: r#"String"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS source_name String"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN source_name String"),
+            },
+            ClickHouseColumnDefinition {
+                name: "mode".to_string(),
+                clickhouse_type: r#"String"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS mode String"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN mode String"),
+            },
+            ClickHouseColumnDefinition {
+                name: "decoder_version".to_string(),
+                clickhouse_type: r#"String"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS decoder_version String"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN decoder_version String"),
+            },
+            ClickHouseColumnDefinition {
+                name: "ingest_ts".to_string(),
+                clickhouse_type: r#"DateTime64(3, 'UTC')"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS ingest_ts DateTime64(3, 'UTC')"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN ingest_ts DateTime64(3, 'UTC')"),
+            },
+            ClickHouseColumnDefinition {
+                name: "chain_time".to_string(),
+                clickhouse_type: r#"Nullable(DateTime64(3, 'UTC'))"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS chain_time Nullable(DateTime64(3, 'UTC'))"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN chain_time Nullable(DateTime64(3, 'UTC'))"),
+            },
+            ClickHouseColumnDefinition {
+                name: "partition_time".to_string(),
+                clickhouse_type: r#"DateTime64(3, 'UTC')"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS partition_time DateTime64(3, 'UTC')"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN partition_time DateTime64(3, 'UTC')"),
+            },
+            ClickHouseColumnDefinition {
+                name: "block_hash".to_string(),
+                clickhouse_type: r#"Nullable(String)"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS block_hash Nullable(String)"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN block_hash Nullable(String)"),
+            },
+            ClickHouseColumnDefinition {
+                name: "tx_index".to_string(),
+                clickhouse_type: r#"Nullable(UInt64)"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS tx_index Nullable(UInt64)"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN tx_index Nullable(UInt64)"),
+            },
+            ClickHouseColumnDefinition {
+                name: "out_amount".to_string(),
+                clickhouse_type: r#"UInt64"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS out_amount UInt64"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN out_amount UInt64"),
+            },
+            ClickHouseColumnDefinition {
+                name: "quoted_in_amount".to_string(),
+                clickhouse_type: r#"UInt64"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS quoted_in_amount UInt64"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN quoted_in_amount UInt64"),
+            },
+            ClickHouseColumnDefinition {
+                name: "slippage_bps".to_string(),
+                clickhouse_type: r#"UInt16"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS slippage_bps UInt16"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN slippage_bps UInt16"),
+            },
+            ClickHouseColumnDefinition {
+                name: "platform_fee_bps".to_string(),
+                clickhouse_type: r#"UInt16"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS platform_fee_bps UInt16"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN platform_fee_bps UInt16"),
+            },
+            ClickHouseColumnDefinition {
+                name: "positive_slippage_bps".to_string(),
+                clickhouse_type: r#"UInt16"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS positive_slippage_bps UInt16"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN positive_slippage_bps UInt16"),
+            },
+            ClickHouseColumnDefinition {
+                name: "route_plan".to_string(),
+                clickhouse_type: r#"Array(Tuple(swap Tuple(variant Enum16('Saber' = 0, 'SaberAddDecimalsDeposit' = 1, 'SaberAddDecimalsWithdraw' = 2, 'TokenSwap' = 3, 'Sencha' = 4, 'Step' = 5, 'Cropper' = 6, 'Raydium' = 7, 'Crema' = 8, 'Lifinity' = 9, 'Mercurial' = 10, 'Cykura' = 11, 'Serum' = 12, 'MarinadeDeposit' = 13, 'MarinadeUnstake' = 14, 'Aldrin' = 15, 'AldrinV2' = 16, 'Whirlpool' = 17, 'Invariant' = 18, 'Meteora' = 19, 'GooseFX' = 20, 'DeltaFi' = 21, 'Balansol' = 22, 'MarcoPolo' = 23, 'Dradex' = 24, 'LifinityV2' = 25, 'RaydiumClmm' = 26, 'Openbook' = 27, 'Phoenix' = 28, 'Symmetry' = 29, 'TokenSwapV2' = 30, 'HeliumTreasuryManagementRedeemV0' = 31, 'StakeDexStakeWrappedSol' = 32, 'StakeDexSwapViaStake' = 33, 'GooseFXV2' = 34, 'Perps' = 35, 'PerpsAddLiquidity' = 36, 'PerpsRemoveLiquidity' = 37, 'MeteoraDlmm' = 38, 'OpenBookV2' = 39, 'RaydiumClmmV2' = 40, 'StakeDexPrefundWithdrawStakeAndDepositStake' = 41, 'Clone' = 42, 'SanctumS' = 43, 'SanctumSAddLiquidity' = 44, 'SanctumSRemoveLiquidity' = 45, 'RaydiumCP' = 46, 'WhirlpoolSwapV2' = 47, 'OneIntro' = 48, 'PumpWrappedBuy' = 49, 'PumpWrappedSell' = 50, 'PerpsV2' = 51, 'PerpsV2AddLiquidity' = 52, 'PerpsV2RemoveLiquidity' = 53, 'MoonshotWrappedBuy' = 54, 'MoonshotWrappedSell' = 55, 'StabbleStableSwap' = 56, 'StabbleWeightedSwap' = 57, 'Obric' = 58, 'FoxBuyFromEstimatedCost' = 59, 'FoxClaimPartial' = 60, 'SolFi' = 61, 'SolayerDelegateNoInit' = 62, 'SolayerUndelegateNoInit' = 63, 'TokenMill' = 64, 'DaosFunBuy' = 65, 'DaosFunSell' = 66, 'ZeroFi' = 67, 'StakeDexWithdrawWrappedSol' = 68, 'VirtualsBuy' = 69, 'VirtualsSell' = 70, 'Perena' = 71, 'PumpSwapBuy' = 72, 'PumpSwapSell' = 73, 'Gamma' = 74, 'MeteoraDlmmSwapV2' = 75, 'Woofi' = 76, 'MeteoraDammV2' = 77, 'MeteoraDynamicBondingCurveSwap' = 78, 'StabbleStableSwapV2' = 79, 'StabbleWeightedSwapV2' = 80, 'RaydiumLaunchlabBuy' = 81, 'RaydiumLaunchlabSell' = 82, 'BoopdotfunWrappedBuy' = 83, 'BoopdotfunWrappedSell' = 84, 'Plasma' = 85, 'GoonFi' = 86, 'HumidiFi' = 87, 'MeteoraDynamicBondingCurveSwapWithRemainingAccounts' = 88, 'TesseraV' = 89, 'PumpWrappedBuyV2' = 90, 'PumpWrappedSellV2' = 91, 'PumpSwapBuyV2' = 92, 'PumpSwapSellV2' = 93, 'Heaven' = 94, 'SolFiV2' = 95, 'Aquifer' = 96, 'PumpWrappedBuyV3' = 97, 'PumpWrappedSellV3' = 98, 'PumpSwapBuyV3' = 99, 'PumpSwapSellV3' = 100, 'JupiterLendDeposit' = 101, 'JupiterLendRedeem' = 102, 'DefiTuna' = 103, 'AlphaQ' = 104, 'RaydiumV2' = 105, 'SarosDlmm' = 106, 'Futarchy' = 107, 'MeteoraDammV2WithRemainingAccounts' = 108, 'Obsidian' = 109, 'WhaleStreet' = 110, 'DynamicV1' = 111, 'PumpWrappedBuyV4' = 112, 'PumpWrappedSellV4' = 113, 'CarrotIssue' = 114, 'CarrotRedeem' = 115, 'Manifest' = 116, 'BisonFi' = 117, 'HumidiFiV2' = 118, 'PerenaStar' = 119, 'JupiterRfqV2' = 120, 'GoonFiV2' = 121, 'Scorch' = 122, 'VaultLiquidUnstake' = 123, 'XOrca' = 124, 'Quantum' = 125, 'WhaleStreetV2' = 126, 'Riptide' = 127, 'RunnerRodeo' = 128, 'TaurusFi' = 129, 'Omnipair' = 130, 'MSwap' = 131, 'Hylo' = 132, 'VoltrDeposit' = 133, 'VoltrWithdraw' = 134, 'SanctumSV2' = 135, 'LemmingsFi' = 136, 'ScaleVmmBuy' = 137, 'ScaleVmmSell' = 138, 'ScaleAmmBuy' = 139, 'ScaleAmmSell' = 140, 'BisonFiV2' = 141, 'Trends' = 142, 'HumaDeposit' = 143, 'HumaInstantWithdraw' = 144, 'Kipseli' = 145, 'DynamicV2' = 146, 'PumpSwapBuyV3WithCashbackClaim' = 147, 'PumpSwapSellV3WithCashbackClaim' = 148, 'PumpWrappedBuyV4WithCashbackClaim' = 149, 'PumpWrappedSellV4WithCashbackClaim' = 150, 'GoonFiV3' = 151, 'PumpWrappedBuyV5' = 152, 'PumpWrappedSellV5' = 153, 'ZeroFiSwapV2' = 154), a_to_b Nullable(Bool), side Nullable(Enum8('Bid' = 0, 'Ask' = 1)), x_to_y Nullable(Bool), stable Nullable(Bool), from_token_id Nullable(UInt64), to_token_id Nullable(UInt64), bridge_stake_seed Nullable(UInt32), pool_index Nullable(UInt8), quantity_is_input Nullable(Bool), quantity_is_collateral Nullable(Bool), src_lst_value_calc_accs Nullable(UInt8), dst_lst_value_calc_accs Nullable(UInt8), src_lst_index Nullable(UInt32), dst_lst_index Nullable(UInt32), lst_value_calc_accs Nullable(UInt8), lst_index Nullable(UInt32), remaining_accounts_info_present Bool, remaining_accounts_info Tuple(slices Array(Tuple(accounts_type UInt8, length UInt8))), is_y Nullable(Bool), is_quote_to_base Nullable(Bool), in_index Nullable(UInt8), out_index Nullable(UInt8), share_fee_rate Nullable(UInt64), is_bid Nullable(Bool), blacklist_bump Nullable(UInt8), swap_id Nullable(UInt128), is_base_to_quote Nullable(Bool), swap_for_y Nullable(Bool), dynamic_v1_candidate_swaps_present Bool, dynamic_v1_candidate_swaps Array(Tuple(variant Enum8('HumidiFi' = 0, 'TesseraV' = 1, 'HumidiFiV2' = 2, 'RaydiumV2' = 3, 'RaydiumClmm' = 4, 'Whirlpool' = 5, 'ZeroFi' = 6, 'BisonFiV2' = 7, 'GoonFiV2' = 8, 'GoonFiV3' = 9, 'WhirlpoolV2' = 10, 'ZeroFiSwapV2' = 11), swap_id Nullable(UInt64), is_base_to_quote Nullable(Bool), side Nullable(Enum8('Bid' = 0, 'Ask' = 1)), a_to_b Nullable(Bool), is_bid Nullable(Bool), remaining_accounts_info_present Bool, remaining_accounts_info Tuple(slices Array(Tuple(accounts_type UInt8, length UInt8))))), dynamic_v2_candidate_swaps_present Bool, dynamic_v2_candidate_swaps Array(Tuple(candidate_swap Tuple(variant Enum8('HumidiFi' = 0, 'TesseraV' = 1, 'HumidiFiV2' = 2, 'RaydiumV2' = 3, 'RaydiumClmm' = 4, 'Whirlpool' = 5, 'ZeroFi' = 6, 'BisonFiV2' = 7, 'GoonFiV2' = 8, 'GoonFiV3' = 9, 'WhirlpoolV2' = 10, 'ZeroFiSwapV2' = 11), swap_id Nullable(UInt64), is_base_to_quote Nullable(Bool), side Nullable(Enum8('Bid' = 0, 'Ask' = 1)), a_to_b Nullable(Bool), is_bid Nullable(Bool), remaining_accounts_info_present Bool, remaining_accounts_info Tuple(slices Array(Tuple(accounts_type UInt8, length UInt8)))), bps UInt32)), best_position Nullable(UInt8), is_mint Nullable(Bool), fill_data_present Bool, fill_data Array(UInt8), lst_amounts_present Bool, lst_amounts Array(UInt64), seed Nullable(UInt64), auth_amount_in Nullable(UInt64), auth Nullable(UInt64), amount_is_token_a Nullable(Bool), is_base_in Nullable(Bool), swap_type Nullable(Enum8('MintStable' = 0, 'RedeemStable' = 1, 'MintLever' = 2, 'RedeemLever' = 3, 'SwapStableToLever' = 4, 'SwapLeverToStable' = 5, 'StabilityPoolDeposit' = 6, 'StabilityPoolWithdraw' = 7)), max_split_quote_calls Nullable(UInt8), max_split_candidates Nullable(UInt8), claim_cashback Nullable(Bool)), bps UInt16, input_index UInt8, output_index UInt8))"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS route_plan Array(Tuple(swap Tuple(variant Enum16('Saber' = 0, 'SaberAddDecimalsDeposit' = 1, 'SaberAddDecimalsWithdraw' = 2, 'TokenSwap' = 3, 'Sencha' = 4, 'Step' = 5, 'Cropper' = 6, 'Raydium' = 7, 'Crema' = 8, 'Lifinity' = 9, 'Mercurial' = 10, 'Cykura' = 11, 'Serum' = 12, 'MarinadeDeposit' = 13, 'MarinadeUnstake' = 14, 'Aldrin' = 15, 'AldrinV2' = 16, 'Whirlpool' = 17, 'Invariant' = 18, 'Meteora' = 19, 'GooseFX' = 20, 'DeltaFi' = 21, 'Balansol' = 22, 'MarcoPolo' = 23, 'Dradex' = 24, 'LifinityV2' = 25, 'RaydiumClmm' = 26, 'Openbook' = 27, 'Phoenix' = 28, 'Symmetry' = 29, 'TokenSwapV2' = 30, 'HeliumTreasuryManagementRedeemV0' = 31, 'StakeDexStakeWrappedSol' = 32, 'StakeDexSwapViaStake' = 33, 'GooseFXV2' = 34, 'Perps' = 35, 'PerpsAddLiquidity' = 36, 'PerpsRemoveLiquidity' = 37, 'MeteoraDlmm' = 38, 'OpenBookV2' = 39, 'RaydiumClmmV2' = 40, 'StakeDexPrefundWithdrawStakeAndDepositStake' = 41, 'Clone' = 42, 'SanctumS' = 43, 'SanctumSAddLiquidity' = 44, 'SanctumSRemoveLiquidity' = 45, 'RaydiumCP' = 46, 'WhirlpoolSwapV2' = 47, 'OneIntro' = 48, 'PumpWrappedBuy' = 49, 'PumpWrappedSell' = 50, 'PerpsV2' = 51, 'PerpsV2AddLiquidity' = 52, 'PerpsV2RemoveLiquidity' = 53, 'MoonshotWrappedBuy' = 54, 'MoonshotWrappedSell' = 55, 'StabbleStableSwap' = 56, 'StabbleWeightedSwap' = 57, 'Obric' = 58, 'FoxBuyFromEstimatedCost' = 59, 'FoxClaimPartial' = 60, 'SolFi' = 61, 'SolayerDelegateNoInit' = 62, 'SolayerUndelegateNoInit' = 63, 'TokenMill' = 64, 'DaosFunBuy' = 65, 'DaosFunSell' = 66, 'ZeroFi' = 67, 'StakeDexWithdrawWrappedSol' = 68, 'VirtualsBuy' = 69, 'VirtualsSell' = 70, 'Perena' = 71, 'PumpSwapBuy' = 72, 'PumpSwapSell' = 73, 'Gamma' = 74, 'MeteoraDlmmSwapV2' = 75, 'Woofi' = 76, 'MeteoraDammV2' = 77, 'MeteoraDynamicBondingCurveSwap' = 78, 'StabbleStableSwapV2' = 79, 'StabbleWeightedSwapV2' = 80, 'RaydiumLaunchlabBuy' = 81, 'RaydiumLaunchlabSell' = 82, 'BoopdotfunWrappedBuy' = 83, 'BoopdotfunWrappedSell' = 84, 'Plasma' = 85, 'GoonFi' = 86, 'HumidiFi' = 87, 'MeteoraDynamicBondingCurveSwapWithRemainingAccounts' = 88, 'TesseraV' = 89, 'PumpWrappedBuyV2' = 90, 'PumpWrappedSellV2' = 91, 'PumpSwapBuyV2' = 92, 'PumpSwapSellV2' = 93, 'Heaven' = 94, 'SolFiV2' = 95, 'Aquifer' = 96, 'PumpWrappedBuyV3' = 97, 'PumpWrappedSellV3' = 98, 'PumpSwapBuyV3' = 99, 'PumpSwapSellV3' = 100, 'JupiterLendDeposit' = 101, 'JupiterLendRedeem' = 102, 'DefiTuna' = 103, 'AlphaQ' = 104, 'RaydiumV2' = 105, 'SarosDlmm' = 106, 'Futarchy' = 107, 'MeteoraDammV2WithRemainingAccounts' = 108, 'Obsidian' = 109, 'WhaleStreet' = 110, 'DynamicV1' = 111, 'PumpWrappedBuyV4' = 112, 'PumpWrappedSellV4' = 113, 'CarrotIssue' = 114, 'CarrotRedeem' = 115, 'Manifest' = 116, 'BisonFi' = 117, 'HumidiFiV2' = 118, 'PerenaStar' = 119, 'JupiterRfqV2' = 120, 'GoonFiV2' = 121, 'Scorch' = 122, 'VaultLiquidUnstake' = 123, 'XOrca' = 124, 'Quantum' = 125, 'WhaleStreetV2' = 126, 'Riptide' = 127, 'RunnerRodeo' = 128, 'TaurusFi' = 129, 'Omnipair' = 130, 'MSwap' = 131, 'Hylo' = 132, 'VoltrDeposit' = 133, 'VoltrWithdraw' = 134, 'SanctumSV2' = 135, 'LemmingsFi' = 136, 'ScaleVmmBuy' = 137, 'ScaleVmmSell' = 138, 'ScaleAmmBuy' = 139, 'ScaleAmmSell' = 140, 'BisonFiV2' = 141, 'Trends' = 142, 'HumaDeposit' = 143, 'HumaInstantWithdraw' = 144, 'Kipseli' = 145, 'DynamicV2' = 146, 'PumpSwapBuyV3WithCashbackClaim' = 147, 'PumpSwapSellV3WithCashbackClaim' = 148, 'PumpWrappedBuyV4WithCashbackClaim' = 149, 'PumpWrappedSellV4WithCashbackClaim' = 150, 'GoonFiV3' = 151, 'PumpWrappedBuyV5' = 152, 'PumpWrappedSellV5' = 153, 'ZeroFiSwapV2' = 154), a_to_b Nullable(Bool), side Nullable(Enum8('Bid' = 0, 'Ask' = 1)), x_to_y Nullable(Bool), stable Nullable(Bool), from_token_id Nullable(UInt64), to_token_id Nullable(UInt64), bridge_stake_seed Nullable(UInt32), pool_index Nullable(UInt8), quantity_is_input Nullable(Bool), quantity_is_collateral Nullable(Bool), src_lst_value_calc_accs Nullable(UInt8), dst_lst_value_calc_accs Nullable(UInt8), src_lst_index Nullable(UInt32), dst_lst_index Nullable(UInt32), lst_value_calc_accs Nullable(UInt8), lst_index Nullable(UInt32), remaining_accounts_info_present Bool, remaining_accounts_info Tuple(slices Array(Tuple(accounts_type UInt8, length UInt8))), is_y Nullable(Bool), is_quote_to_base Nullable(Bool), in_index Nullable(UInt8), out_index Nullable(UInt8), share_fee_rate Nullable(UInt64), is_bid Nullable(Bool), blacklist_bump Nullable(UInt8), swap_id Nullable(UInt128), is_base_to_quote Nullable(Bool), swap_for_y Nullable(Bool), dynamic_v1_candidate_swaps_present Bool, dynamic_v1_candidate_swaps Array(Tuple(variant Enum8('HumidiFi' = 0, 'TesseraV' = 1, 'HumidiFiV2' = 2, 'RaydiumV2' = 3, 'RaydiumClmm' = 4, 'Whirlpool' = 5, 'ZeroFi' = 6, 'BisonFiV2' = 7, 'GoonFiV2' = 8, 'GoonFiV3' = 9, 'WhirlpoolV2' = 10, 'ZeroFiSwapV2' = 11), swap_id Nullable(UInt64), is_base_to_quote Nullable(Bool), side Nullable(Enum8('Bid' = 0, 'Ask' = 1)), a_to_b Nullable(Bool), is_bid Nullable(Bool), remaining_accounts_info_present Bool, remaining_accounts_info Tuple(slices Array(Tuple(accounts_type UInt8, length UInt8))))), dynamic_v2_candidate_swaps_present Bool, dynamic_v2_candidate_swaps Array(Tuple(candidate_swap Tuple(variant Enum8('HumidiFi' = 0, 'TesseraV' = 1, 'HumidiFiV2' = 2, 'RaydiumV2' = 3, 'RaydiumClmm' = 4, 'Whirlpool' = 5, 'ZeroFi' = 6, 'BisonFiV2' = 7, 'GoonFiV2' = 8, 'GoonFiV3' = 9, 'WhirlpoolV2' = 10, 'ZeroFiSwapV2' = 11), swap_id Nullable(UInt64), is_base_to_quote Nullable(Bool), side Nullable(Enum8('Bid' = 0, 'Ask' = 1)), a_to_b Nullable(Bool), is_bid Nullable(Bool), remaining_accounts_info_present Bool, remaining_accounts_info Tuple(slices Array(Tuple(accounts_type UInt8, length UInt8)))), bps UInt32)), best_position Nullable(UInt8), is_mint Nullable(Bool), fill_data_present Bool, fill_data Array(UInt8), lst_amounts_present Bool, lst_amounts Array(UInt64), seed Nullable(UInt64), auth_amount_in Nullable(UInt64), auth Nullable(UInt64), amount_is_token_a Nullable(Bool), is_base_in Nullable(Bool), swap_type Nullable(Enum8('MintStable' = 0, 'RedeemStable' = 1, 'MintLever' = 2, 'RedeemLever' = 3, 'SwapStableToLever' = 4, 'SwapLeverToStable' = 5, 'StabilityPoolDeposit' = 6, 'StabilityPoolWithdraw' = 7)), max_split_quote_calls Nullable(UInt8), max_split_candidates Nullable(UInt8), claim_cashback Nullable(Bool)), bps UInt16, input_index UInt8, output_index UInt8))"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN route_plan Array(Tuple(swap Tuple(variant Enum16('Saber' = 0, 'SaberAddDecimalsDeposit' = 1, 'SaberAddDecimalsWithdraw' = 2, 'TokenSwap' = 3, 'Sencha' = 4, 'Step' = 5, 'Cropper' = 6, 'Raydium' = 7, 'Crema' = 8, 'Lifinity' = 9, 'Mercurial' = 10, 'Cykura' = 11, 'Serum' = 12, 'MarinadeDeposit' = 13, 'MarinadeUnstake' = 14, 'Aldrin' = 15, 'AldrinV2' = 16, 'Whirlpool' = 17, 'Invariant' = 18, 'Meteora' = 19, 'GooseFX' = 20, 'DeltaFi' = 21, 'Balansol' = 22, 'MarcoPolo' = 23, 'Dradex' = 24, 'LifinityV2' = 25, 'RaydiumClmm' = 26, 'Openbook' = 27, 'Phoenix' = 28, 'Symmetry' = 29, 'TokenSwapV2' = 30, 'HeliumTreasuryManagementRedeemV0' = 31, 'StakeDexStakeWrappedSol' = 32, 'StakeDexSwapViaStake' = 33, 'GooseFXV2' = 34, 'Perps' = 35, 'PerpsAddLiquidity' = 36, 'PerpsRemoveLiquidity' = 37, 'MeteoraDlmm' = 38, 'OpenBookV2' = 39, 'RaydiumClmmV2' = 40, 'StakeDexPrefundWithdrawStakeAndDepositStake' = 41, 'Clone' = 42, 'SanctumS' = 43, 'SanctumSAddLiquidity' = 44, 'SanctumSRemoveLiquidity' = 45, 'RaydiumCP' = 46, 'WhirlpoolSwapV2' = 47, 'OneIntro' = 48, 'PumpWrappedBuy' = 49, 'PumpWrappedSell' = 50, 'PerpsV2' = 51, 'PerpsV2AddLiquidity' = 52, 'PerpsV2RemoveLiquidity' = 53, 'MoonshotWrappedBuy' = 54, 'MoonshotWrappedSell' = 55, 'StabbleStableSwap' = 56, 'StabbleWeightedSwap' = 57, 'Obric' = 58, 'FoxBuyFromEstimatedCost' = 59, 'FoxClaimPartial' = 60, 'SolFi' = 61, 'SolayerDelegateNoInit' = 62, 'SolayerUndelegateNoInit' = 63, 'TokenMill' = 64, 'DaosFunBuy' = 65, 'DaosFunSell' = 66, 'ZeroFi' = 67, 'StakeDexWithdrawWrappedSol' = 68, 'VirtualsBuy' = 69, 'VirtualsSell' = 70, 'Perena' = 71, 'PumpSwapBuy' = 72, 'PumpSwapSell' = 73, 'Gamma' = 74, 'MeteoraDlmmSwapV2' = 75, 'Woofi' = 76, 'MeteoraDammV2' = 77, 'MeteoraDynamicBondingCurveSwap' = 78, 'StabbleStableSwapV2' = 79, 'StabbleWeightedSwapV2' = 80, 'RaydiumLaunchlabBuy' = 81, 'RaydiumLaunchlabSell' = 82, 'BoopdotfunWrappedBuy' = 83, 'BoopdotfunWrappedSell' = 84, 'Plasma' = 85, 'GoonFi' = 86, 'HumidiFi' = 87, 'MeteoraDynamicBondingCurveSwapWithRemainingAccounts' = 88, 'TesseraV' = 89, 'PumpWrappedBuyV2' = 90, 'PumpWrappedSellV2' = 91, 'PumpSwapBuyV2' = 92, 'PumpSwapSellV2' = 93, 'Heaven' = 94, 'SolFiV2' = 95, 'Aquifer' = 96, 'PumpWrappedBuyV3' = 97, 'PumpWrappedSellV3' = 98, 'PumpSwapBuyV3' = 99, 'PumpSwapSellV3' = 100, 'JupiterLendDeposit' = 101, 'JupiterLendRedeem' = 102, 'DefiTuna' = 103, 'AlphaQ' = 104, 'RaydiumV2' = 105, 'SarosDlmm' = 106, 'Futarchy' = 107, 'MeteoraDammV2WithRemainingAccounts' = 108, 'Obsidian' = 109, 'WhaleStreet' = 110, 'DynamicV1' = 111, 'PumpWrappedBuyV4' = 112, 'PumpWrappedSellV4' = 113, 'CarrotIssue' = 114, 'CarrotRedeem' = 115, 'Manifest' = 116, 'BisonFi' = 117, 'HumidiFiV2' = 118, 'PerenaStar' = 119, 'JupiterRfqV2' = 120, 'GoonFiV2' = 121, 'Scorch' = 122, 'VaultLiquidUnstake' = 123, 'XOrca' = 124, 'Quantum' = 125, 'WhaleStreetV2' = 126, 'Riptide' = 127, 'RunnerRodeo' = 128, 'TaurusFi' = 129, 'Omnipair' = 130, 'MSwap' = 131, 'Hylo' = 132, 'VoltrDeposit' = 133, 'VoltrWithdraw' = 134, 'SanctumSV2' = 135, 'LemmingsFi' = 136, 'ScaleVmmBuy' = 137, 'ScaleVmmSell' = 138, 'ScaleAmmBuy' = 139, 'ScaleAmmSell' = 140, 'BisonFiV2' = 141, 'Trends' = 142, 'HumaDeposit' = 143, 'HumaInstantWithdraw' = 144, 'Kipseli' = 145, 'DynamicV2' = 146, 'PumpSwapBuyV3WithCashbackClaim' = 147, 'PumpSwapSellV3WithCashbackClaim' = 148, 'PumpWrappedBuyV4WithCashbackClaim' = 149, 'PumpWrappedSellV4WithCashbackClaim' = 150, 'GoonFiV3' = 151, 'PumpWrappedBuyV5' = 152, 'PumpWrappedSellV5' = 153, 'ZeroFiSwapV2' = 154), a_to_b Nullable(Bool), side Nullable(Enum8('Bid' = 0, 'Ask' = 1)), x_to_y Nullable(Bool), stable Nullable(Bool), from_token_id Nullable(UInt64), to_token_id Nullable(UInt64), bridge_stake_seed Nullable(UInt32), pool_index Nullable(UInt8), quantity_is_input Nullable(Bool), quantity_is_collateral Nullable(Bool), src_lst_value_calc_accs Nullable(UInt8), dst_lst_value_calc_accs Nullable(UInt8), src_lst_index Nullable(UInt32), dst_lst_index Nullable(UInt32), lst_value_calc_accs Nullable(UInt8), lst_index Nullable(UInt32), remaining_accounts_info_present Bool, remaining_accounts_info Tuple(slices Array(Tuple(accounts_type UInt8, length UInt8))), is_y Nullable(Bool), is_quote_to_base Nullable(Bool), in_index Nullable(UInt8), out_index Nullable(UInt8), share_fee_rate Nullable(UInt64), is_bid Nullable(Bool), blacklist_bump Nullable(UInt8), swap_id Nullable(UInt128), is_base_to_quote Nullable(Bool), swap_for_y Nullable(Bool), dynamic_v1_candidate_swaps_present Bool, dynamic_v1_candidate_swaps Array(Tuple(variant Enum8('HumidiFi' = 0, 'TesseraV' = 1, 'HumidiFiV2' = 2, 'RaydiumV2' = 3, 'RaydiumClmm' = 4, 'Whirlpool' = 5, 'ZeroFi' = 6, 'BisonFiV2' = 7, 'GoonFiV2' = 8, 'GoonFiV3' = 9, 'WhirlpoolV2' = 10, 'ZeroFiSwapV2' = 11), swap_id Nullable(UInt64), is_base_to_quote Nullable(Bool), side Nullable(Enum8('Bid' = 0, 'Ask' = 1)), a_to_b Nullable(Bool), is_bid Nullable(Bool), remaining_accounts_info_present Bool, remaining_accounts_info Tuple(slices Array(Tuple(accounts_type UInt8, length UInt8))))), dynamic_v2_candidate_swaps_present Bool, dynamic_v2_candidate_swaps Array(Tuple(candidate_swap Tuple(variant Enum8('HumidiFi' = 0, 'TesseraV' = 1, 'HumidiFiV2' = 2, 'RaydiumV2' = 3, 'RaydiumClmm' = 4, 'Whirlpool' = 5, 'ZeroFi' = 6, 'BisonFiV2' = 7, 'GoonFiV2' = 8, 'GoonFiV3' = 9, 'WhirlpoolV2' = 10, 'ZeroFiSwapV2' = 11), swap_id Nullable(UInt64), is_base_to_quote Nullable(Bool), side Nullable(Enum8('Bid' = 0, 'Ask' = 1)), a_to_b Nullable(Bool), is_bid Nullable(Bool), remaining_accounts_info_present Bool, remaining_accounts_info Tuple(slices Array(Tuple(accounts_type UInt8, length UInt8)))), bps UInt32)), best_position Nullable(UInt8), is_mint Nullable(Bool), fill_data_present Bool, fill_data Array(UInt8), lst_amounts_present Bool, lst_amounts Array(UInt64), seed Nullable(UInt64), auth_amount_in Nullable(UInt64), auth Nullable(UInt64), amount_is_token_a Nullable(Bool), is_base_in Nullable(Bool), swap_type Nullable(Enum8('MintStable' = 0, 'RedeemStable' = 1, 'MintLever' = 2, 'RedeemLever' = 3, 'SwapStableToLever' = 4, 'SwapLeverToStable' = 5, 'StabilityPoolDeposit' = 6, 'StabilityPoolWithdraw' = 7)), max_split_quote_calls Nullable(UInt8), max_split_candidates Nullable(UInt8), claim_cashback Nullable(Bool)), bps UInt16, input_index UInt8, output_index UInt8))"),
+            },
+        ]
+    }
+
     fn clickhouse_engine(table_name: &str) -> String {
         let _ = table_name;
         format!("MergeTree")
+    }
+
+    fn clickhouse_engine_name(engine: &str) -> String {
+        engine
+            .split_once('(')
+            .map(|(name, _)| name)
+            .unwrap_or(engine)
+            .to_string()
     }
 
     fn create_table_sql_for(

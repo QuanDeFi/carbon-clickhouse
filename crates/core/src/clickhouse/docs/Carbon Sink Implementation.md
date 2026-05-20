@@ -20,6 +20,7 @@ The ClickHouse path includes:
 8. Runtime controls for byte-aware batching, global backpressure, transport timeouts, gzip, retries, and optional exact-batch insert deduplication tokens.
 9. Renderer-controlled landing-table DDL modes for `MergeTree`, `ReplicatedMergeTree`, and `Distributed` deployments.
 10. CLI parity for ClickHouse renderer options through `--clickhouse-options`.
+11. Managed schema drift checks that safely repair enum-extension drift and reject unsafe live-table drift before ingestion.
 
 ## How It Fits Into Carbon
 
@@ -75,7 +76,7 @@ The generic ClickHouse runtime in `carbon-core` is split by responsibility:
 
 - `config.rs` - endpoint, database, auth, source metadata, batching, transport, retry, deduplication, and insert settings
 - `http.rs` - HTTP transport over `reqwest`, including query settings, gzip request bodies, and classified errors
-- `admin.rs` - explicit schema/bootstrap execution
+- `admin.rs` - explicit schema/bootstrap execution, managed table reconciliation, and schema drift checks
 - `rows/mod.rs` - row/table traits, row context, multi-row contract, and deterministic ID helpers
 - `writer.rs` - per-buffer batch writer, byte backpressure, retry loop, and background flush worker
 - `processors.rs` - `ClickHouseInstructionProcessor` and `ClickHouseAccountProcessor`
@@ -92,11 +93,23 @@ Rows receive sink metadata through `ClickHouseRowContext`, which contains `sourc
 Schema/bootstrap execution uses:
 
 - `ClickHouseSchema::operations(config) -> Vec<String>` for ordered schema operations.
+- `ClickHouseSchema::managed_tables(config) -> Vec<ClickHouseManagedTable>` for generated managed tables with expected column definitions.
 - `ClickHouseAdmin::execute_query(...)` for a single query.
 - `ClickHouseAdmin::execute_queries(...)` for explicit ordered query lists.
 - `ClickHouseAdmin::execute_schema::<S>()` for schema bundles that implement `ClickHouseSchema`.
 
 Schema execution uses the same `ClickHouseConfig` endpoint, database, auth, and HTTP client settings as data inserts. Schema queries include `date_time_input_format=best_effort`.
+
+When a schema exposes managed table metadata, `ClickHouseAdmin::execute_schema::<S>()` creates missing tables, adds missing generated columns, validates live table layout, and compares live ClickHouse column types against generated expected types before rows are inserted.
+
+Schema reconciliation is intentionally fixed and opinionated:
+
+- Missing generated tables are created.
+- Missing generated columns are added.
+- Enum-extension-only drift is repaired with `ALTER TABLE ... MODIFY COLUMN` when all existing enum values and numeric IDs are preserved.
+- Unsafe drift fails fast. That includes scalar type changes, tuple shape changes, removed enum values, changed enum numeric IDs, engine drift, partition drift, order-key drift, and any unclassified mismatch.
+
+The ingestion path does not expose a drop/recreate policy. Destructive table repair belongs in explicit dev/admin operations, not Carbon process startup.
 
 ## What Lives In Decoder Crates
 
@@ -124,15 +137,16 @@ Those modules provide:
 
 - typed row structs
 - table names and DDL
+- managed table metadata and generated expected column definitions
 - decoder-family wrapper types
 - `ClickHouseRows` implementations
 - setup helpers used by examples
 
-The committed Jupiter and Token Program canary modules bootstrap tables with
-their row types' `migration_operations(...)` helpers. Each helper creates the
-landing table when missing and then emits additive
-`ALTER TABLE ... ADD COLUMN IF NOT EXISTS` operations for generated columns.
-The renderer does not generate destructive type-change migrations.
+The committed Jupiter and Token Program canary modules bootstrap tables through
+generated managed table metadata. Each row module exposes the generated `CREATE
+TABLE` SQL and the expected column definitions used for additive
+`ALTER TABLE ... ADD COLUMN IF NOT EXISTS` operations and drift validation. The
+renderer does not generate destructive type-change migrations.
 
 Examples should call these generated helpers. They should not duplicate decoder-specific schema or row mapping logic.
 
@@ -479,12 +493,13 @@ renderVisitor(outputDir, {
 });
 ```
 
-Renderer-generated migrations create tables and then emit additive
+Renderer-generated schema metadata creates tables and then exposes additive
 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` operations for generated columns.
-The committed Jupiter and Token Program canaries use this same helper shape.
-The renderer does not generate destructive type-change migrations.
+The same metadata is used for pre-ingest drift validation, so generated DDL and
+runtime schema checks stay aligned. The renderer does not generate destructive
+type-change migrations.
 
-For `distributed` DDL mode, generated migration operations create and alter the local table first, then create and alter the distributed table. The distributed table omits local `MergeTree` clauses because storage lives in the generated local table. Additive column operations are emitted for both local and distributed tables.
+For `distributed` DDL mode, generated schema operations create and alter the local table first, then create and alter the distributed table. The distributed table omits local `MergeTree` clauses because storage lives in the generated local table. Additive column operations are emitted for both local and distributed tables.
 
 Column codecs are applied by column name to both common metadata columns and payload columns wherever the name matches `columnCodecs`.
 

@@ -25,7 +25,8 @@ use std::time::Duration;
 use carbon_core::{
     clickhouse::{
         rows::{ClickHouseRow, ClickHouseRowContext, ClickHouseRows},
-        ClickHouseAdmin, ClickHouseConfig, ClickHouseInstructionProcessor, ClickHouseSchema,
+        ClickHouseAdmin, ClickHouseConfig, ClickHouseInstructionProcessor, ClickHouseManagedTable,
+        ClickHouseSchema,
     },
     error::CarbonResult,
     instruction::InstructionMetadata,
@@ -102,6 +103,19 @@ impl ClickHouseSchema for {{ program.name | pascalCase }}ClickHouseInstructionsM
 {% endfor %}
 {% endif %}
         operations
+    }
+
+    fn managed_tables(_config: &ClickHouseConfig) -> Vec<ClickHouseManagedTable> {
+        let mut tables = Vec::new();
+{% for instruction in instructionsToExport | sort(false, false, 'name') %}
+        tables.extend({{ macros.escapeRustKeyword(instruction.name | snakeCase) }}_row::{{ instruction.name | pascalCase }}InstructionClickHouseRow::managed_tables({{ macros.escapeRustKeyword(instruction.name | snakeCase) }}_row::{{ instruction.name | pascalCase }}InstructionClickHouseRow::DEFAULT_TABLE_NAME));
+{% endfor %}
+{% if hasAnchorEvents %}
+{% for event in events | sort(false, false, 'name') %}
+        tables.extend({{ macros.escapeRustKeyword(event.name | snakeCase) }}_event_row::{{ event.name | pascalCase }}EventClickHouseRow::managed_tables({{ macros.escapeRustKeyword(event.name | snakeCase) }}_event_row::{{ event.name | pascalCase }}EventClickHouseRow::DEFAULT_TABLE_NAME));
+{% endfor %}
+{% endif %}
+        tables
     }
 }
 

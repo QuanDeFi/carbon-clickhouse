@@ -8,7 +8,8 @@ use {
         account::{AccountMetadata, DecodedAccount},
         clickhouse::{
             rows::{ClickHouseRow, ClickHouseRowContext, ClickHouseRows},
-            ClickHouseAccountProcessor, ClickHouseAdmin, ClickHouseConfig, ClickHouseSchema,
+            ClickHouseAccountProcessor, ClickHouseAdmin, ClickHouseConfig, ClickHouseManagedTable,
+            ClickHouseSchema,
         },
         error::CarbonResult,
     },
@@ -59,6 +60,16 @@ impl ClickHouseSchema for JupiterSwapClickHouseAccountsMigration {
             ),
         );
         operations
+    }
+
+    fn managed_tables(_config: &ClickHouseConfig) -> Vec<ClickHouseManagedTable> {
+        let mut tables = Vec::new();
+        tables.extend(
+            token_ledger_row::TokenLedgerAccountClickHouseRow::managed_tables(
+                token_ledger_row::TokenLedgerAccountClickHouseRow::DEFAULT_TABLE_NAME,
+            ),
+        );
+        tables
     }
 }
 

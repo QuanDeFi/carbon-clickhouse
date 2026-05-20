@@ -5,7 +5,16 @@
 {% macro chType(column, type) -%}
 {{ type }}{% if clickHouseDdl.columnCodecs[column] %} CODEC({{ clickHouseDdl.columnCodecs[column] }}){% endif %}
 {%- endmacro %}
+{% macro columnDefinition(column, type) -%}
+ClickHouseColumnDefinition {
+                name: "{{ column }}".to_string(),
+                clickhouse_type: r#"{{ type }}"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} ADD COLUMN IF NOT EXISTS {{ column }} {{ chType(column, type) }}"),
+                modify_column_sql: format!("ALTER TABLE {table_name}{{ clickHouseDdl.onClusterClause }} MODIFY COLUMN {{ column }} {{ chType(column, type) }}"),
+            }
+{%- endmacro %}
 
+use carbon_core::clickhouse::{ClickHouseColumnDefinition, ClickHouseManagedTable};
 use carbon_core::clickhouse::rows::{
     {% if isAccount %}deterministic_account_id{% else %}deterministic_instruction_id{% endif %},
     ClickHouseRow,
@@ -222,6 +231,38 @@ impl {{ entityName | pascalCase }}{% if isAccount %}Account{% else %}Instruction
         operations
     }
 
+    pub fn managed_tables(table_name: &str) -> Vec<ClickHouseManagedTable> {
+{% if clickHouseDdl.createLocalTable %}
+        let local_table_name = format!("{table_name}{{ clickHouseDdl.localTableSuffix }}");
+        let local_engine = Self::clickhouse_local_engine(&local_table_name);
+        let distributed_engine = Self::clickhouse_engine(table_name);
+        vec![
+            Self::managed_table_for(&local_table_name, Self::create_local_table_sql(table_name), local_engine, true),
+            Self::managed_table_for(table_name, Self::create_table_sql(table_name), distributed_engine, false),
+        ]
+{% else %}
+        let engine = Self::clickhouse_engine(table_name);
+        vec![Self::managed_table_for(table_name, Self::create_table_sql(table_name), engine, true)]
+{% endif %}
+    }
+
+    fn managed_table_for(
+        table_name: &str,
+        create_table_sql: String,
+        engine: String,
+        include_merge_tree_layout: bool,
+    ) -> ClickHouseManagedTable {
+        ClickHouseManagedTable {
+            name: table_name.to_string(),
+            create_table_sql,
+            drop_table_sql: format!("DROP TABLE IF EXISTS {table_name}{{ clickHouseDdl.onClusterClause }}"),
+            engine: Some(Self::clickhouse_engine_name(&engine)),
+            partition_by: include_merge_tree_layout.then(|| r#"{{ clickHouseDdl.partitionBy }}"#.to_string()),
+            order_by: include_merge_tree_layout.then(|| r#"{{ clickHouseDdl.orderBy }}"#.to_string()),
+            columns: Self::column_definitions(table_name),
+        }
+    }
+
 {% if clickHouseDdl.createLocalTable %}
     pub fn create_local_table_sql(table_name: &str) -> String {
         let local_table_name = format!("{table_name}{{ clickHouseDdl.localTableSuffix }}");
@@ -276,9 +317,58 @@ impl {{ entityName | pascalCase }}{% if isAccount %}Account{% else %}Instruction
         ]
     }
 
+    pub fn column_definitions(table_name: &str) -> Vec<ClickHouseColumnDefinition> {
+        vec![
+            {{ columnDefinition('program_id', 'String') }},
+            {{ columnDefinition('family_name', 'String') }},
+{% if isAccount %}
+            {{ columnDefinition('account_type', 'String') }},
+            {{ columnDefinition('account_id', 'String') }},
+            {{ columnDefinition('slot', 'UInt64') }},
+            {{ columnDefinition('pubkey', 'String') }},
+            {{ columnDefinition('transaction_signature', 'Nullable(String)') }},
+            {{ columnDefinition('lamports', 'UInt64') }},
+            {{ columnDefinition('owner', 'String') }},
+            {{ columnDefinition('executable', 'Bool') }},
+            {{ columnDefinition('rent_epoch', 'UInt64') }},
+{% else %}
+            {{ columnDefinition('instruction_type', 'String') }},
+            {{ columnDefinition('instruction_id', 'String') }},
+            {{ columnDefinition('slot', 'UInt64') }},
+            {{ columnDefinition('signature', 'String') }},
+            {{ columnDefinition('instruction_index', 'UInt32') }},
+            {{ columnDefinition('stack_height', 'UInt32') }},
+            {{ columnDefinition('absolute_path', 'Array(UInt8)') }},
+{% endif %}
+            {{ columnDefinition('source_name', 'String') }},
+            {{ columnDefinition('mode', 'String') }},
+            {{ columnDefinition('decoder_version', 'String') }},
+            {{ columnDefinition('ingest_ts', "DateTime64(3, 'UTC')") }},
+{% if isAccount %}
+            {{ columnDefinition('partition_slot', 'UInt64') }},
+{% else %}
+            {{ columnDefinition('chain_time', "Nullable(DateTime64(3, 'UTC'))") }},
+            {{ columnDefinition('partition_time', "DateTime64(3, 'UTC')") }},
+            {{ columnDefinition('block_hash', 'Nullable(String)') }},
+            {{ columnDefinition('tx_index', 'Nullable(UInt64)') }},
+{% endif %}
+{% for field in flatFields %}
+            {{ columnDefinition(field.column, field.clickHouseColumnType) }},
+{% endfor %}
+        ]
+    }
+
     fn clickhouse_engine(table_name: &str) -> String {
         let _ = table_name;
         format!("{{ clickHouseDdl.engine }}")
+    }
+
+    fn clickhouse_engine_name(engine: &str) -> String {
+        engine
+            .split_once('(')
+            .map(|(name, _)| name)
+            .unwrap_or(engine)
+            .to_string()
     }
 
 {% if clickHouseDdl.createLocalTable %}

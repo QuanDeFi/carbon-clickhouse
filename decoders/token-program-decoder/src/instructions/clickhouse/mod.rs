@@ -60,7 +60,8 @@ use {
     carbon_core::{
         clickhouse::{
             rows::{ClickHouseRow, ClickHouseRowContext, ClickHouseRows},
-            ClickHouseAdmin, ClickHouseConfig, ClickHouseInstructionProcessor, ClickHouseSchema,
+            ClickHouseAdmin, ClickHouseConfig, ClickHouseInstructionProcessor,
+            ClickHouseManagedTable, ClickHouseSchema,
         },
         error::CarbonResult,
         instruction::InstructionMetadata,
@@ -293,6 +294,103 @@ impl ClickHouseSchema for TokenProgramClickHouseInstructionsMigration {
         );
         operations.extend(withdraw_excess_lamports_row::WithdrawExcessLamportsInstructionClickHouseRow::migration_operations(withdraw_excess_lamports_row::WithdrawExcessLamportsInstructionClickHouseRow::DEFAULT_TABLE_NAME));
         operations
+    }
+
+    fn managed_tables(_config: &ClickHouseConfig) -> Vec<ClickHouseManagedTable> {
+        let mut tables = Vec::new();
+        tables.extend(amount_to_ui_amount_row::AmountToUiAmountInstructionClickHouseRow::managed_tables(amount_to_ui_amount_row::AmountToUiAmountInstructionClickHouseRow::DEFAULT_TABLE_NAME));
+        tables.extend(
+            approve_row::ApproveInstructionClickHouseRow::managed_tables(
+                approve_row::ApproveInstructionClickHouseRow::DEFAULT_TABLE_NAME,
+            ),
+        );
+        tables.extend(
+            approve_checked_row::ApproveCheckedInstructionClickHouseRow::managed_tables(
+                approve_checked_row::ApproveCheckedInstructionClickHouseRow::DEFAULT_TABLE_NAME,
+            ),
+        );
+        tables.extend(batch_row::BatchInstructionClickHouseRow::managed_tables(
+            batch_row::BatchInstructionClickHouseRow::DEFAULT_TABLE_NAME,
+        ));
+        tables.extend(burn_row::BurnInstructionClickHouseRow::managed_tables(
+            burn_row::BurnInstructionClickHouseRow::DEFAULT_TABLE_NAME,
+        ));
+        tables.extend(
+            burn_checked_row::BurnCheckedInstructionClickHouseRow::managed_tables(
+                burn_checked_row::BurnCheckedInstructionClickHouseRow::DEFAULT_TABLE_NAME,
+            ),
+        );
+        tables.extend(
+            close_account_row::CloseAccountInstructionClickHouseRow::managed_tables(
+                close_account_row::CloseAccountInstructionClickHouseRow::DEFAULT_TABLE_NAME,
+            ),
+        );
+        tables.extend(
+            freeze_account_row::FreezeAccountInstructionClickHouseRow::managed_tables(
+                freeze_account_row::FreezeAccountInstructionClickHouseRow::DEFAULT_TABLE_NAME,
+            ),
+        );
+        tables.extend(get_account_data_size_row::GetAccountDataSizeInstructionClickHouseRow::managed_tables(get_account_data_size_row::GetAccountDataSizeInstructionClickHouseRow::DEFAULT_TABLE_NAME));
+        tables.extend(initialize_account_row::InitializeAccountInstructionClickHouseRow::managed_tables(initialize_account_row::InitializeAccountInstructionClickHouseRow::DEFAULT_TABLE_NAME));
+        tables.extend(initialize_account2_row::InitializeAccount2InstructionClickHouseRow::managed_tables(initialize_account2_row::InitializeAccount2InstructionClickHouseRow::DEFAULT_TABLE_NAME));
+        tables.extend(initialize_account3_row::InitializeAccount3InstructionClickHouseRow::managed_tables(initialize_account3_row::InitializeAccount3InstructionClickHouseRow::DEFAULT_TABLE_NAME));
+        tables.extend(initialize_immutable_owner_row::InitializeImmutableOwnerInstructionClickHouseRow::managed_tables(initialize_immutable_owner_row::InitializeImmutableOwnerInstructionClickHouseRow::DEFAULT_TABLE_NAME));
+        tables.extend(
+            initialize_mint_row::InitializeMintInstructionClickHouseRow::managed_tables(
+                initialize_mint_row::InitializeMintInstructionClickHouseRow::DEFAULT_TABLE_NAME,
+            ),
+        );
+        tables.extend(
+            initialize_mint2_row::InitializeMint2InstructionClickHouseRow::managed_tables(
+                initialize_mint2_row::InitializeMint2InstructionClickHouseRow::DEFAULT_TABLE_NAME,
+            ),
+        );
+        tables.extend(initialize_multisig_row::InitializeMultisigInstructionClickHouseRow::managed_tables(initialize_multisig_row::InitializeMultisigInstructionClickHouseRow::DEFAULT_TABLE_NAME));
+        tables.extend(initialize_multisig2_row::InitializeMultisig2InstructionClickHouseRow::managed_tables(initialize_multisig2_row::InitializeMultisig2InstructionClickHouseRow::DEFAULT_TABLE_NAME));
+        tables.extend(mint_to_row::MintToInstructionClickHouseRow::managed_tables(
+            mint_to_row::MintToInstructionClickHouseRow::DEFAULT_TABLE_NAME,
+        ));
+        tables.extend(
+            mint_to_checked_row::MintToCheckedInstructionClickHouseRow::managed_tables(
+                mint_to_checked_row::MintToCheckedInstructionClickHouseRow::DEFAULT_TABLE_NAME,
+            ),
+        );
+        tables.extend(revoke_row::RevokeInstructionClickHouseRow::managed_tables(
+            revoke_row::RevokeInstructionClickHouseRow::DEFAULT_TABLE_NAME,
+        ));
+        tables.extend(
+            set_authority_row::SetAuthorityInstructionClickHouseRow::managed_tables(
+                set_authority_row::SetAuthorityInstructionClickHouseRow::DEFAULT_TABLE_NAME,
+            ),
+        );
+        tables.extend(
+            sync_native_row::SyncNativeInstructionClickHouseRow::managed_tables(
+                sync_native_row::SyncNativeInstructionClickHouseRow::DEFAULT_TABLE_NAME,
+            ),
+        );
+        tables.extend(
+            thaw_account_row::ThawAccountInstructionClickHouseRow::managed_tables(
+                thaw_account_row::ThawAccountInstructionClickHouseRow::DEFAULT_TABLE_NAME,
+            ),
+        );
+        tables.extend(
+            transfer_row::TransferInstructionClickHouseRow::managed_tables(
+                transfer_row::TransferInstructionClickHouseRow::DEFAULT_TABLE_NAME,
+            ),
+        );
+        tables.extend(
+            transfer_checked_row::TransferCheckedInstructionClickHouseRow::managed_tables(
+                transfer_checked_row::TransferCheckedInstructionClickHouseRow::DEFAULT_TABLE_NAME,
+            ),
+        );
+        tables.extend(ui_amount_to_amount_row::UiAmountToAmountInstructionClickHouseRow::managed_tables(ui_amount_to_amount_row::UiAmountToAmountInstructionClickHouseRow::DEFAULT_TABLE_NAME));
+        tables.extend(
+            unwrap_lamports_row::UnwrapLamportsInstructionClickHouseRow::managed_tables(
+                unwrap_lamports_row::UnwrapLamportsInstructionClickHouseRow::DEFAULT_TABLE_NAME,
+            ),
+        );
+        tables.extend(withdraw_excess_lamports_row::WithdrawExcessLamportsInstructionClickHouseRow::managed_tables(withdraw_excess_lamports_row::WithdrawExcessLamportsInstructionClickHouseRow::DEFAULT_TABLE_NAME));
+        tables
     }
 }
 

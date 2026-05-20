@@ -88,6 +88,9 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
         output,
         /migration_operations\(swap_event_event_row::SwapEventEventClickHouseRow::DEFAULT_TABLE_NAME\)/,
     );
+    assert.match(output, /SwapInstructionClickHouseRow::managed_tables/);
+    assert.match(output, /SwapEventEventClickHouseRow::managed_tables/);
+    assert.match(output, /fn managed_tables\(_config: &ClickHouseConfig\) -> Vec<ClickHouseManagedTable>/);
 }
 
 {
@@ -104,6 +107,9 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
     assert.doesNotMatch(output, /pub use self::token_row::\*/);
     assert.match(output, /MintAccountClickHouseRow::migration_operations/);
     assert.match(output, /TokenAccountClickHouseRow::migration_operations/);
+    assert.match(output, /MintAccountClickHouseRow::managed_tables/);
+    assert.match(output, /TokenAccountClickHouseRow::managed_tables/);
+    assert.match(output, /fn managed_tables\(_config: &ClickHouseConfig\) -> Vec<ClickHouseManagedTable>/);
     assert.match(output, /ClickHouseAccountProcessor</);
     assert.match(output, /DemoProgramAccount::Mint/);
 }
@@ -122,6 +128,13 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
     assert.match(output, /pub amount: u64/);
     assert.match(output, /amount UInt64/);
     assert.match(output, /ALTER TABLE \{table_name\} ADD COLUMN IF NOT EXISTS amount UInt64/);
+    assert.match(output, /pub fn managed_tables\(table_name: &str\) -> Vec<ClickHouseManagedTable>/);
+    assert.match(output, /pub fn column_definitions\(table_name: &str\) -> Vec<ClickHouseColumnDefinition>/);
+    assert.match(output, /engine: Some\(Self::clickhouse_engine_name\(&engine\)\)/);
+    assert.match(output, /partition_by: include_merge_tree_layout\.then\(\|\| r#"partition_slot"#\.to_string\(\)\)/);
+    assert.match(output, /order_by: include_merge_tree_layout\.then\(\|\| r#"\(program_id, family_name, account_id, slot\)"#\.to_string\(\)\)/);
+    assert.match(output, /clickhouse_type: r#"UInt64"#\.to_string\(\)/);
+    assert.match(output, /MODIFY COLUMN amount UInt64/);
     assert.match(output, /demo_program_mint_account_landing/);
 }
 
@@ -153,6 +166,11 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
     assert.match(output, /pub swap_events: Vec<ClickHouseSwapEvent>/);
     assert.match(output, /swap_events_present Bool/);
     assert.match(output, /swap_events Array\(Tuple\(input_mint String, input_amount UInt64\)\)/);
+    assert.match(output, /pub fn managed_tables\(table_name: &str\) -> Vec<ClickHouseManagedTable>/);
+    assert.match(output, /partition_by: include_merge_tree_layout\.then\(\|\| r#"toYear\(partition_time\)"#\.to_string\(\)\)/);
+    assert.match(output, /order_by: include_merge_tree_layout\.then\(\|\| r#"\(program_id, family_name, event_id, slot\)"#\.to_string\(\)\)/);
+    assert.match(output, /clickhouse_type: r#"Array\(Tuple\(input_mint String, input_amount UInt64\)\)"#\.to_string\(\)/);
+    assert.match(output, /MODIFY COLUMN swap_events Array\(Tuple\(input_mint String, input_amount UInt64\)\)/);
     assert.match(output, /pub fn from_parts/);
     assert.doesNotMatch(output, /data JSON/);
 }
@@ -216,6 +234,8 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
     assert.match(distributedOutput, /Distributed\('prod_cluster', 'analytics', '\{table_name\}_local', cityHash64\(instruction_id\)\)/);
     assert.match(distributedOutput, /Self::create_table_sql_for\(table_name, &engine, false\)/);
     assert.match(distributedOutput, /Self::create_table_sql_for\(&local_table_name, &engine, true\)/);
+    assert.match(distributedOutput, /Self::managed_table_for\(&local_table_name, Self::create_local_table_sql\(table_name\), local_engine, true\)/);
+    assert.match(distributedOutput, /Self::managed_table_for\(table_name, Self::create_table_sql\(table_name\), distributed_engine, false\)/);
 }
 
 {

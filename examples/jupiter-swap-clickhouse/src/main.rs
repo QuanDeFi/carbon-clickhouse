@@ -10,11 +10,15 @@ use carbon_core::{
 };
 use carbon_jupiter_swap_decoder::{
     accounts::clickhouse::{
-        bootstrap_clickhouse_from_database_url as bootstrap_accounts_clickhouse,
+        clickhouse_config_from_database_url as accounts_clickhouse_config,
         clickhouse_processor as account_processor, JupiterSwapClickHouseAccountProcessor,
+        JupiterSwapClickHouseAccountsMigration,
     },
     instructions::{
-        clickhouse::{bootstrap_clickhouse_from_database_url, clickhouse_processor},
+        clickhouse::{
+            clickhouse_config_from_database_url, clickhouse_processor,
+            JupiterSwapClickHouseInstructionsMigration,
+        },
         JupiterSwapInstruction,
     },
     JupiterSwapDecoder,
@@ -110,11 +114,12 @@ pub async fn main() -> CarbonResult<()> {
     let end_slot = optional_env_u64("BLOCK_CRAWLER_END_SLOT")?;
     let head_live_mode = start_slot.is_none() && end_slot.is_none();
 
-    let instruction_config =
-        clickhouse_config(bootstrap_clickhouse_from_database_url(&database_url).await?);
+    let instruction_config = clickhouse_config(clickhouse_config_from_database_url(&database_url)?);
+    JupiterSwapClickHouseInstructionsMigration::run(&instruction_config).await?;
     let token_ledger_processor = if head_live_mode {
-        let mut config = clickhouse_config(bootstrap_accounts_clickhouse(&database_url).await?);
+        let mut config = clickhouse_config(accounts_clickhouse_config(&database_url)?);
         config.source_name = "exact_token_ledger_accounts".to_string();
+        JupiterSwapClickHouseAccountsMigration::run(&config).await?;
         Some(TokenLedgerPubkeys::new(&rpc_url, account_processor(config)))
     } else {
         None

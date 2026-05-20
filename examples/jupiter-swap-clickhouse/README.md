@@ -60,6 +60,12 @@ CLICKHOUSE_ASYNC_INSERT=true cargo run -p jupiter-swap-clickhouse-carbon-example
 This is the production-live ingestion canary path. The default remains
 synchronous inserts for deterministic backfills.
 
+Generated ClickHouse table schema is checked before ingestion. The sink creates
+missing generated tables, adds missing generated columns, and repairs only
+proven enum-extension drift such as newly generated Jupiter swap enum variants
+on an older local table. Other schema drift fails before ingestion. Destructive
+drop/recreate cleanup is intentionally not exposed through this example.
+
 ## ClickHouse Tables
 
 The example bootstraps one typed landing table per generated Jupiter Swap

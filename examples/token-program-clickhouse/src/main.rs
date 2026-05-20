@@ -2,6 +2,7 @@ use std::{env, net::SocketAddr, sync::Arc};
 
 use {
     carbon_core::{
+        clickhouse::{ClickHouseAsyncInsertSettings, ClickHouseInsertSettings},
         datasource::Datasource,
         error::{CarbonResult, Error as CarbonError},
         pipeline::{Pipeline, ShutdownStrategy},
@@ -12,8 +13,8 @@ use {
     carbon_rpc_gpa_datasource::GpaDatasource,
     carbon_token_program_decoder::{
         accounts::clickhouse::{
-            bootstrap_clickhouse_from_database_url, clickhouse_processor,
-            TokenProgramClickHouseAccountProcessor,
+            clickhouse_config_from_database_url, clickhouse_processor,
+            TokenProgramClickHouseAccountProcessor, TokenProgramClickHouseAccountsMigration,
         },
         TokenProgramDecoder, PROGRAM_ID as TOKEN_PROGRAM_ID,
     },
@@ -65,19 +66,18 @@ pub async fn main() -> CarbonResult<()> {
     let account_filter = token_account_filter(&args)?;
     let database_url = required_env("DATABASE_URL")?;
 
-    let mut config = bootstrap_clickhouse_from_database_url(&database_url).await?;
+    let mut config = clickhouse_config_from_database_url(&database_url)?;
     if env_bool("CLICKHOUSE_ASYNC_INSERT", false)? {
-        config = config.with_insert_settings(
-            carbon_core::clickhouse::ClickHouseInsertSettings::AsyncWait(
-                carbon_core::clickhouse::ClickHouseAsyncInsertSettings {
-                    busy_timeout_ms: optional_env_u64("CLICKHOUSE_ASYNC_INSERT_BUSY_TIMEOUT_MS")?,
-                    max_data_size: optional_env_u64("CLICKHOUSE_ASYNC_INSERT_MAX_DATA_SIZE")?,
-                    max_query_number: optional_env_u64("CLICKHOUSE_ASYNC_INSERT_MAX_QUERY_NUMBER")?,
-                    deduplicate: optional_env_bool("CLICKHOUSE_ASYNC_INSERT_DEDUPLICATE")?,
-                },
-            ),
-        );
+        config = config.with_insert_settings(ClickHouseInsertSettings::AsyncWait(
+            ClickHouseAsyncInsertSettings {
+                busy_timeout_ms: optional_env_u64("CLICKHOUSE_ASYNC_INSERT_BUSY_TIMEOUT_MS")?,
+                max_data_size: optional_env_u64("CLICKHOUSE_ASYNC_INSERT_MAX_DATA_SIZE")?,
+                max_query_number: optional_env_u64("CLICKHOUSE_ASYNC_INSERT_MAX_QUERY_NUMBER")?,
+                deduplicate: optional_env_bool("CLICKHOUSE_ASYNC_INSERT_DEDUPLICATE")?,
+            },
+        ));
     }
+    TokenProgramClickHouseAccountsMigration::run(&config).await?;
     let processor = clickhouse_processor(config);
 
     match args.source {

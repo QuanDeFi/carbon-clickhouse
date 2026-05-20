@@ -2,8 +2,9 @@
 
 use {
     carbon_core::{
-        clickhouse::rows::{
-            deterministic_event_id, ClickHouseRow, ClickHouseRowContext, ClickHouseTable,
+        clickhouse::{
+            rows::{deterministic_event_id, ClickHouseRow, ClickHouseRowContext, ClickHouseTable},
+            ClickHouseColumnDefinition, ClickHouseManagedTable,
         },
         instruction::InstructionMetadata,
     },
@@ -141,6 +142,35 @@ impl SwapEventEventClickHouseRow {
         operations
     }
 
+    pub fn managed_tables(table_name: &str) -> Vec<ClickHouseManagedTable> {
+        let engine = Self::clickhouse_engine(table_name);
+        vec![Self::managed_table_for(
+            table_name,
+            Self::create_table_sql(table_name),
+            engine,
+            true,
+        )]
+    }
+
+    fn managed_table_for(
+        table_name: &str,
+        create_table_sql: String,
+        engine: String,
+        include_merge_tree_layout: bool,
+    ) -> ClickHouseManagedTable {
+        ClickHouseManagedTable {
+            name: table_name.to_string(),
+            create_table_sql,
+            drop_table_sql: format!("DROP TABLE IF EXISTS {table_name}"),
+            engine: Some(Self::clickhouse_engine_name(&engine)),
+            partition_by: include_merge_tree_layout
+                .then(|| r#"toYear(partition_time)"#.to_string()),
+            order_by: include_merge_tree_layout
+                .then(|| r#"(program_id, family_name, event_id, slot)"#.to_string()),
+            columns: Self::column_definitions(table_name),
+        }
+    }
+
     pub fn add_column_sql(table_name: &str) -> Vec<String> {
         vec![
             format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS program_id String"),
@@ -169,9 +199,160 @@ impl SwapEventEventClickHouseRow {
         ]
     }
 
+    pub fn column_definitions(table_name: &str) -> Vec<ClickHouseColumnDefinition> {
+        vec![
+            ClickHouseColumnDefinition {
+                name: "program_id".to_string(),
+                clickhouse_type: r#"String"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS program_id String"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN program_id String"),
+            },
+            ClickHouseColumnDefinition {
+                name: "family_name".to_string(),
+                clickhouse_type: r#"String"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS family_name String"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN family_name String"),
+            },
+            ClickHouseColumnDefinition {
+                name: "event_type".to_string(),
+                clickhouse_type: r#"String"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS event_type String"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN event_type String"),
+            },
+            ClickHouseColumnDefinition {
+                name: "event_id".to_string(),
+                clickhouse_type: r#"String"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS event_id String"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN event_id String"),
+            },
+            ClickHouseColumnDefinition {
+                name: "slot".to_string(),
+                clickhouse_type: r#"UInt64"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS slot UInt64"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN slot UInt64"),
+            },
+            ClickHouseColumnDefinition {
+                name: "signature".to_string(),
+                clickhouse_type: r#"String"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS signature String"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN signature String"),
+            },
+            ClickHouseColumnDefinition {
+                name: "instruction_index".to_string(),
+                clickhouse_type: r#"UInt32"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS instruction_index UInt32"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN instruction_index UInt32"),
+            },
+            ClickHouseColumnDefinition {
+                name: "stack_height".to_string(),
+                clickhouse_type: r#"UInt32"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS stack_height UInt32"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN stack_height UInt32"),
+            },
+            ClickHouseColumnDefinition {
+                name: "absolute_path".to_string(),
+                clickhouse_type: r#"Array(UInt8)"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS absolute_path Array(UInt8)"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN absolute_path Array(UInt8)"),
+            },
+            ClickHouseColumnDefinition {
+                name: "event_seq".to_string(),
+                clickhouse_type: r#"UInt32"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS event_seq UInt32"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN event_seq UInt32"),
+            },
+            ClickHouseColumnDefinition {
+                name: "source_name".to_string(),
+                clickhouse_type: r#"String"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS source_name String"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN source_name String"),
+            },
+            ClickHouseColumnDefinition {
+                name: "mode".to_string(),
+                clickhouse_type: r#"String"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS mode String"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN mode String"),
+            },
+            ClickHouseColumnDefinition {
+                name: "decoder_version".to_string(),
+                clickhouse_type: r#"String"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS decoder_version String"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN decoder_version String"),
+            },
+            ClickHouseColumnDefinition {
+                name: "ingest_ts".to_string(),
+                clickhouse_type: r#"DateTime64(3, 'UTC')"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS ingest_ts DateTime64(3, 'UTC')"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN ingest_ts DateTime64(3, 'UTC')"),
+            },
+            ClickHouseColumnDefinition {
+                name: "chain_time".to_string(),
+                clickhouse_type: r#"Nullable(DateTime64(3, 'UTC'))"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS chain_time Nullable(DateTime64(3, 'UTC'))"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN chain_time Nullable(DateTime64(3, 'UTC'))"),
+            },
+            ClickHouseColumnDefinition {
+                name: "partition_time".to_string(),
+                clickhouse_type: r#"DateTime64(3, 'UTC')"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS partition_time DateTime64(3, 'UTC')"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN partition_time DateTime64(3, 'UTC')"),
+            },
+            ClickHouseColumnDefinition {
+                name: "block_hash".to_string(),
+                clickhouse_type: r#"Nullable(String)"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS block_hash Nullable(String)"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN block_hash Nullable(String)"),
+            },
+            ClickHouseColumnDefinition {
+                name: "tx_index".to_string(),
+                clickhouse_type: r#"Nullable(UInt64)"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS tx_index Nullable(UInt64)"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN tx_index Nullable(UInt64)"),
+            },
+            ClickHouseColumnDefinition {
+                name: "amm".to_string(),
+                clickhouse_type: r#"String"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS amm String"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN amm String"),
+            },
+            ClickHouseColumnDefinition {
+                name: "input_mint".to_string(),
+                clickhouse_type: r#"String"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS input_mint String"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN input_mint String"),
+            },
+            ClickHouseColumnDefinition {
+                name: "input_amount".to_string(),
+                clickhouse_type: r#"UInt64"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS input_amount UInt64"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN input_amount UInt64"),
+            },
+            ClickHouseColumnDefinition {
+                name: "output_mint".to_string(),
+                clickhouse_type: r#"String"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS output_mint String"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN output_mint String"),
+            },
+            ClickHouseColumnDefinition {
+                name: "output_amount".to_string(),
+                clickhouse_type: r#"UInt64"#.to_string(),
+                add_column_sql: format!("ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS output_amount UInt64"),
+                modify_column_sql: format!("ALTER TABLE {table_name} MODIFY COLUMN output_amount UInt64"),
+            },
+        ]
+    }
+
     fn clickhouse_engine(table_name: &str) -> String {
         let _ = table_name;
         format!("MergeTree")
+    }
+
+    fn clickhouse_engine_name(engine: &str) -> String {
+        engine
+            .split_once('(')
+            .map(|(name, _)| name)
+            .unwrap_or(engine)
+            .to_string()
     }
 
     fn create_table_sql_for(

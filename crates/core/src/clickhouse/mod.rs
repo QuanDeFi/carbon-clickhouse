@@ -6,7 +6,9 @@ pub mod processors;
 pub mod rows;
 pub mod writer;
 
-pub use admin::{ClickHouseAdmin, ClickHouseSchema};
+pub use admin::{
+    ClickHouseAdmin, ClickHouseColumnDefinition, ClickHouseManagedTable, ClickHouseSchema,
+};
 pub use config::{
     ClickHouseAsyncInsertSettings, ClickHouseBatchSettings, ClickHouseConfig,
     ClickHouseDeduplicationSettings, ClickHouseHttpCompression, ClickHouseInsertSettings,

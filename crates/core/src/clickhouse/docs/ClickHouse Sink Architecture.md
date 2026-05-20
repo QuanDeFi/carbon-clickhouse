@@ -21,6 +21,7 @@ The current architectural scope is:
 - synchronous inserts by default
 - optional async-wait inserts for live multi-writer deployments
 - renderer-controlled production DDL modes
+- pre-ingest schema drift validation with safe enum-extension repair
 - CLI parity for renderer DDL options through `--clickhouse-options`
 
 The sink is not a warehouse serving layer. Serving tables, canonicalization, durable replay control, slot/range coverage, finality policy, DLQs, and APIs belong above or around the sink.
@@ -173,7 +174,13 @@ Concrete landing-table DDL is decoder-owned and renderer-generated.
 
 The core runtime provides schema execution primitives. It does not decide which tables a program owns or what columns they contain.
 
-Renderer-controlled DDL modes exist so the same generated row families can be deployed as simple local `MergeTree` tables, replicated tables, or distributed table setups. The renderer may generate additive schema operations, but destructive type-change migrations remain outside the sink.
+Renderer-controlled DDL modes exist so the same generated row families can be deployed as simple local `MergeTree` tables, replicated tables, or distributed table setups.
+
+Generated managed schema metadata is the source of truth for landing-table shape. Before ingestion, the runtime compares generated expected column definitions with live ClickHouse tables. Missing tables and columns are additive and safe. Enum-extension-only drift is repaired automatically because the generated enum keeps all existing values and only adds new variants with stable numeric IDs.
+
+Unsafe drift is not hidden. Scalar type changes, tuple shape changes, removed enum values, changed enum numeric IDs, engine drift, partition drift, order-key drift, and unclassified mismatches fail before rows are inserted.
+
+Destructive table repair and production type-change migration remain outside the ingestion path. The sink detects the problem, but table recreation and broader migration planning require explicit operator-controlled admin work.
 
 ## Metrics Model
 
@@ -211,6 +218,7 @@ The Carbon sink handles:
 - transient HTTP retry/backoff and failed-buffer preservation
 - optional exact-batch insert deduplication tokens
 - generated landing-table bootstrap
+- safe generated-schema drift validation and enum-extension repair
 - sink-side metrics
 
 ClickHouse handles:
@@ -250,9 +258,21 @@ The current canary boundary validates:
 - Jupiter swap TokenLedger account rows in the live head-follow example path
 - Token Program account rows
 
-The committed canaries are renderer-generated and use generated migration
-operations. That boundary is a release-risk decision, not a limitation of the
-architecture.
+The committed canaries are renderer-generated and use generated managed schema
+metadata for bootstrap and drift validation. That boundary is a release-risk
+decision, not a limitation of the architecture.
+
+## Roadmap
+
+Near-term schema-evolution follow-up work:
+
+- Add schema version or schema fingerprint tracking for generated landing-table
+  metadata. The goal is to make expected/generated schema state observable
+  across deployments, predeploy validation, and live ingestion diagnostics.
+- Add table-versioning or side-by-side table coexistence for breaking generated
+  schema changes. This is the safer path when old and new decoder versions need
+  to run at the same time or when a change is broader than additive columns or
+  enum-extension-only drift.
 
 ## Non-Goals
 
@@ -267,6 +287,7 @@ The ClickHouse sink does not implement:
 - Solana finality policy
 - serving APIs
 - destructive schema migration generation
+- destructive drop/recreate repair during ingestion startup
 - universal JSON landing tables
 - fire-and-forget async inserts
 - committed broad decoder regeneration before upstream v1 stabilizes

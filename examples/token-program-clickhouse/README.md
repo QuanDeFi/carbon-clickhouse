@@ -65,6 +65,12 @@ CLICKHOUSE_ASYNC_INSERT_BUSY_TIMEOUT_MS=1000 \
 cargo run -p token-program-clickhouse-carbon-example
 ```
 
+Generated ClickHouse table schema is checked before ingestion. The sink creates
+missing generated tables, adds missing generated columns, and repairs only
+proven enum-extension drift. Other schema drift fails before ingestion.
+Destructive drop/recreate cleanup is intentionally not exposed through this
+example.
+
 ## ClickHouse Tables
 
 The example bootstraps one typed account landing table per generated Token
