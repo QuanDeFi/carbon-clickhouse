@@ -13,7 +13,7 @@ The ClickHouse sink is a generator-backed typed landing-table backend for Carbon
 The current architectural scope is:
 
 - decoder-owned account, instruction, and CPI/event landing rows
-- typed landing tables: one per instruction family, one per account family, and one CPI/event table per generated decoder
+- typed landing tables: one per instruction family, one per account family, and one per generated CPI/event family
 - append-only landing writes
 - deterministic landing row identity
 - client-side batched ClickHouse inserts
@@ -108,15 +108,15 @@ Therefore the ClickHouse sink adds buffering, per-buffer flushing, retry/backoff
 
 ## Typed Landing Table Model
 
-The standard table model is typed landing tables with Postgres-aligned
-CPI/event grouping: one table per instruction family, one table per account
-family, and one CPI/event table per generated decoder.
+The standard table model is typed landing tables: one table per instruction
+family, one table per account family, and one table per generated CPI/event
+family.
 
 Reasons:
 
 - Decoder-owned schemas remain explicit and strongly typed.
 - ClickHouse compression and query planning work better with stable typed columns than one universal JSON blob.
-- Instruction/account family tables and decoder-level CPI/event tables keep payloads queryable without downstream JSON parsing.
+- Instruction, account, and CPI/event family tables keep payloads queryable without downstream JSON parsing.
 - Landing rows can still be appended safely during replay or backfill.
 - Serving/canonicalization logic can be built later without changing the ingestion contract.
 

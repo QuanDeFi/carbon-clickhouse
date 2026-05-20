@@ -72,15 +72,18 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
     });
 
     assert.match(output, /pub mod swap_row;/);
-    assert.match(output, /pub mod cpi_event_row;/);
-    assert.doesNotMatch(output, /pub mod swap_event_event_row;/);
+    assert.match(output, /pub mod swap_event_event_row;/);
+    assert.doesNotMatch(output, /pub mod cpi_event_row;/);
     assert.match(output, /SwapInstructionClickHouseRow/);
-    assert.match(output, /DemoProgramCpiEventClickHouseRow/);
+    assert.match(output, /SwapEventEventClickHouseRow/);
     assert.match(output, /ClickHouseRows<DemoProgramClickHouseInstructionRow>/);
     assert.match(output, /DemoProgramInstruction::Swap/);
     assert.match(output, /super::CpiEvent::SwapEvent/);
     assert.match(output, /migration_operations\(swap_row::SwapInstructionClickHouseRow::DEFAULT_TABLE_NAME\)/);
-    assert.match(output, /migration_operations\(cpi_event_row::DemoProgramCpiEventClickHouseRow::DEFAULT_TABLE_NAME\)/);
+    assert.match(
+        output,
+        /migration_operations\(swap_event_event_row::SwapEventEventClickHouseRow::DEFAULT_TABLE_NAME\)/,
+    );
 }
 
 {
@@ -115,76 +118,34 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
 }
 
 {
-    const output = render('cpiEventClickHouseRowPage.njk', {
+    const output = render('eventInstructionClickHouseRowPage.njk', {
         program,
-        clickHouseDdl: defaultEventDdl,
-        clickHouseEventHelperDefinitions: [],
-        clickHouseEventUnionPlans: [
+        event: { name: 'swapsEvent' },
+        helperDefinitions: [],
+        flatFields: [
             {
-                name: 'feeEvent',
-                fields: [
-                    {
-                        column: 'fee_event_amount',
-                        rowType: 'Option<u64>',
-                        clickHouseColumnType: 'Nullable(UInt64)',
-                        expr: 'Some(source.amount)',
-                        defaultExpr: 'None',
-                    },
-                ],
-            },
-            {
-                name: 'swapsEvent',
-                fields: [
-                    {
-                        column: 'swaps_event_swap_events_present',
-                        rowType: 'bool',
-                        clickHouseColumnType: 'Bool',
-                        expr: 'true',
-                        defaultExpr: 'false',
-                    },
-                    {
-                        column: 'swaps_event_swap_events',
-                        rowType: 'Vec<ClickHouseSwapEvent>',
-                        clickHouseColumnType: 'Array(Tuple(input_mint String, input_amount UInt64))',
-                        expr: 'source.swap_events.iter().map(ClickHouseSwapEvent::from).collect()',
-                        defaultExpr: 'Vec::new()',
-                    },
-                ],
-            },
-        ],
-        clickHouseEventUnionFields: [
-            {
-                column: 'fee_event_amount',
-                rowType: 'Option<u64>',
-                clickHouseColumnType: 'Nullable(UInt64)',
-                expr: 'Some(source.amount)',
-                defaultExpr: 'None',
-            },
-            {
-                column: 'swaps_event_swap_events_present',
+                column: 'swap_events_present',
                 rowType: 'bool',
                 clickHouseColumnType: 'Bool',
                 expr: 'true',
-                defaultExpr: 'false',
             },
             {
-                column: 'swaps_event_swap_events',
+                column: 'swap_events',
                 rowType: 'Vec<ClickHouseSwapEvent>',
                 clickHouseColumnType: 'Array(Tuple(input_mint String, input_amount UInt64))',
                 expr: 'source.swap_events.iter().map(ClickHouseSwapEvent::from).collect()',
-                defaultExpr: 'Vec::new()',
             },
         ],
+        clickHouseDdl: defaultEventDdl,
     });
 
-    assert.match(output, /pub struct DemoProgramCpiEventClickHouseRow/);
-    assert.match(output, /pub const DEFAULT_TABLE_NAME: &'static str = "demo_program_cpi_event_landing"/);
-    assert.match(output, /pub fee_event_amount: Option<u64>/);
-    assert.match(output, /fee_event_amount Nullable\(UInt64\)/);
-    assert.match(output, /swaps_event_swap_events_present Bool/);
-    assert.match(output, /swaps_event_swap_events Array\(Tuple\(input_mint String, input_amount UInt64\)\)/);
-    assert.match(output, /pub fn from_fee_event/);
-    assert.match(output, /pub fn from_swaps_event/);
+    assert.match(output, /pub struct SwapsEventEventClickHouseRow/);
+    assert.match(output, /pub const DEFAULT_TABLE_NAME: &'static str = "demo_program_swaps_event_landing"/);
+    assert.match(output, /pub swap_events_present: bool/);
+    assert.match(output, /pub swap_events: Vec<ClickHouseSwapEvent>/);
+    assert.match(output, /swap_events_present Bool/);
+    assert.match(output, /swap_events Array\(Tuple\(input_mint String, input_amount UInt64\)\)/);
+    assert.match(output, /pub fn from_parts/);
     assert.doesNotMatch(output, /data JSON/);
 }
 

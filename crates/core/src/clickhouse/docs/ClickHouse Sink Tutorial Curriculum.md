@@ -157,10 +157,14 @@ Validation queries:
 ```sql
 SHOW TABLES FROM default LIKE 'jupiter_swap_%landing';
 
-SELECT event_type, count()
-FROM default.jupiter_swap_cpi_event_landing
-GROUP BY event_type
-ORDER BY event_type;
+SELECT 'fee_event' AS event_table, count()
+FROM default.jupiter_swap_fee_event_landing
+UNION ALL
+SELECT 'swap_event' AS event_table, count()
+FROM default.jupiter_swap_swap_event_landing
+UNION ALL
+SELECT 'swaps_event' AS event_table, count()
+FROM default.jupiter_swap_swaps_event_landing;
 
 SELECT
   count() AS rows,
@@ -171,7 +175,7 @@ FROM default.jupiter_swap_route_instruction_landing;
 Expected outcome:
 
 - At least one Jupiter landing table exists.
-- The unified CPI/event table exists as `jupiter_swap_cpi_event_landing`.
+- The generated CPI/event landing tables exist, including `jupiter_swap_fee_event_landing`, `jupiter_swap_swap_event_landing`, and `jupiter_swap_swaps_event_landing`.
 - If the selected blocks include decoded Jupiter activity, row counts increase.
 - Sink buffers drain on shutdown.
 
@@ -358,7 +362,7 @@ Topics:
   does not know Jupiter, Token Program, or any other program-specific schema.
 - Generated table families follow these patterns:
   - `{program}_{instruction}_instruction_landing`
-  - `{program}_cpi_event_landing`
+  - `{program}_{event}_landing`
   - `{program}_{account}_account_landing`
 - The default DDL mode is local `MergeTree`.
 - Renderer options can produce replicated or distributed table setups.
@@ -425,4 +429,3 @@ Final checkpoint:
 - Identify which concerns are handled by Carbon, ClickHouse, and an external
   control plane.
 - List the SQL and Prometheus checks that prove the smoke run completed cleanly.
-

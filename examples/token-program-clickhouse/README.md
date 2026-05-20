@@ -4,7 +4,10 @@ This example runs a real Token Program account snapshot into generated ClickHous
 
 It uses RPC `getProgramAccounts` or Helius gPA v2 with a token-account filter, decodes accounts with `TokenProgramDecoder`, and writes rows through the generated Token Program ClickHouse account processor.
 
-The default path tests token accounts because it can be bounded safely with owner and/or mint filters. The generated decoder also has mint and multisig ClickHouse rows, but unbounded GPA over all Token Program mints is not a safe default.
+The default path tests a specific USDC token account. It uses an owner filter
+that currently returns one SPL Token account whose decoded mint is mainnet
+USDC. The generated decoder also has mint and multisig ClickHouse rows, but
+unbounded Token Program account scans are not a safe default.
 
 ## Required Environment
 
@@ -14,8 +17,8 @@ Create `.env` from `.env.example`:
 DATABASE_URL=http://carbon:carbon@localhost:8123
 RPC_URL=<provider-rpc-url>
 HELIUS_RPC_URL=https://mainnet.helius-rpc.com/?api-key=<key>
-TOKEN_ACCOUNT_OWNER=<wallet-pubkey>
-# TOKEN_MINT=<mint-pubkey>
+TOKEN_ACCOUNT_OWNER=EKFXPqGVdNZmhSsp143XjqBqnEXsauPVWf3o4VeF9BVJ
+# TOKEN_MINT=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
 LOG_LEVEL=info
 PROMETHEUS_METRICS_ADDR=0.0.0.0:9464
 ```
@@ -28,7 +31,9 @@ At least one of these filters must be set:
 - `TOKEN_ACCOUNT_OWNER`: token account owner wallet, matched at token account data offset 32.
 - `TOKEN_MINT`: token mint, matched at token account data offset 0.
 
-Using both fetches the intersection.
+Using both fetches the intersection. The committed owner filter is the routine
+USDC token-account canary; the row should decode with mint
+`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`.
 
 ## Run
 
@@ -87,7 +92,7 @@ Program account family:
     </tr>
     <tr>
       <td><code>token_program_<wbr>token_account_<wbr>landing</code></td>
-      <td>SPL Token holding-account snapshots matching the configured owner and/or mint filters. This is the default bounded real-world path for validating account-family ClickHouse ingestion.</td>
+      <td>SPL Token holding-account snapshots matching the configured owner and/or mint filters. The default real-world path validates account-family ClickHouse ingestion with one USDC token account.</td>
     </tr>
   </tbody>
 </table>

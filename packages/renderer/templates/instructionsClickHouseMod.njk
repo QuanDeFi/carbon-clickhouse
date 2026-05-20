@@ -6,14 +6,18 @@
 pub mod {{ macros.escapeRustKeyword(instruction.name | snakeCase) }}_row;
 {% endfor %}
 {% if hasAnchorEvents %}
-pub mod cpi_event_row;
+{% for event in events | sort(false, false, 'name') %}
+pub mod {{ macros.escapeRustKeyword(event.name | snakeCase) }}_event_row;
+{% endfor %}
 {% endif %}
 
 {% for instruction in instructionsToExport | sort(false, false, 'name') %}
 pub use self::{{ macros.escapeRustKeyword(instruction.name | snakeCase) }}_row::*;
 {% endfor %}
 {% if hasAnchorEvents %}
-pub use self::cpi_event_row::*;
+{% for event in events | sort(false, false, 'name') %}
+pub use self::{{ macros.escapeRustKeyword(event.name | snakeCase) }}_event_row::*;
+{% endfor %}
 {% endif %}
 
 use std::time::Duration;
@@ -44,7 +48,9 @@ pub enum {{ program.name | pascalCase }}ClickHouseInstructionRow {
     {{ instruction.name | pascalCase }}({{ macros.escapeRustKeyword(instruction.name | snakeCase) }}_row::{{ instruction.name | pascalCase }}InstructionClickHouseRow),
 {% endfor %}
 {% if hasAnchorEvents %}
-    CpiEvent(cpi_event_row::{{ program.name | pascalCase }}CpiEventClickHouseRow),
+{% for event in events | sort(false, false, 'name') %}
+    {{ event.name | pascalCase }}Event({{ macros.escapeRustKeyword(event.name | snakeCase) }}_event_row::{{ event.name | pascalCase }}EventClickHouseRow),
+{% endfor %}
 {% endif %}
 }
 
@@ -55,7 +61,9 @@ impl ClickHouseRow for {{ program.name | pascalCase }}ClickHouseInstructionRow {
             Self::{{ instruction.name | pascalCase }}(row) => row.table_name(),
 {% endfor %}
 {% if hasAnchorEvents %}
-            Self::CpiEvent(row) => row.table_name(),
+{% for event in events | sort(false, false, 'name') %}
+            Self::{{ event.name | pascalCase }}Event(row) => row.table_name(),
+{% endfor %}
 {% endif %}
         }
     }
@@ -66,7 +74,9 @@ impl ClickHouseRow for {{ program.name | pascalCase }}ClickHouseInstructionRow {
             Self::{{ instruction.name | pascalCase }}(row) => row.partition_key(),
 {% endfor %}
 {% if hasAnchorEvents %}
-            Self::CpiEvent(row) => row.partition_key(),
+{% for event in events | sort(false, false, 'name') %}
+            Self::{{ event.name | pascalCase }}Event(row) => row.partition_key(),
+{% endfor %}
 {% endif %}
         }
     }
@@ -87,7 +97,9 @@ impl ClickHouseSchema for {{ program.name | pascalCase }}ClickHouseInstructionsM
         operations.extend({{ macros.escapeRustKeyword(instruction.name | snakeCase) }}_row::{{ instruction.name | pascalCase }}InstructionClickHouseRow::migration_operations({{ macros.escapeRustKeyword(instruction.name | snakeCase) }}_row::{{ instruction.name | pascalCase }}InstructionClickHouseRow::DEFAULT_TABLE_NAME));
 {% endfor %}
 {% if hasAnchorEvents %}
-        operations.extend(cpi_event_row::{{ program.name | pascalCase }}CpiEventClickHouseRow::migration_operations(cpi_event_row::{{ program.name | pascalCase }}CpiEventClickHouseRow::DEFAULT_TABLE_NAME));
+{% for event in events | sort(false, false, 'name') %}
+        operations.extend({{ macros.escapeRustKeyword(event.name | snakeCase) }}_event_row::{{ event.name | pascalCase }}EventClickHouseRow::migration_operations({{ macros.escapeRustKeyword(event.name | snakeCase) }}_event_row::{{ event.name | pascalCase }}EventClickHouseRow::DEFAULT_TABLE_NAME));
+{% endfor %}
 {% endif %}
         operations
     }
@@ -137,9 +149,9 @@ impl ClickHouseRows<{{ program.name | pascalCase }}ClickHouseInstructionRow>
             {{ program.name | pascalCase }}Instruction::CpiEvent { data, .. } => match data {
 {% for event in events | sort(false, false, 'name') %}
                 super::CpiEvent::{{ event.name | pascalCase }}(event) => {
-                    vec![{{ program.name | pascalCase }}ClickHouseInstructionRow::CpiEvent(
-                        cpi_event_row::{{ program.name | pascalCase }}CpiEventClickHouseRow::from_{{ macros.escapeRustKeyword(event.name | snakeCase) }}(
-                            event,
+                    vec![{{ program.name | pascalCase }}ClickHouseInstructionRow::{{ event.name | pascalCase }}Event(
+                        {{ macros.escapeRustKeyword(event.name | snakeCase) }}_event_row::{{ event.name | pascalCase }}EventClickHouseRow::from_parts(
+                            event.clone(),
                             metadata,
                             context,
                         ),
@@ -163,7 +175,11 @@ pub fn clickhouse_config_from_database_url(database_url: &str) -> CarbonResult<C
 {% endif %}
 {% endfor %}
 {% else %}
-        cpi_event_row::{{ program.name | pascalCase }}CpiEventClickHouseRow::DEFAULT_TABLE_NAME.to_string(),
+{% for event in events | sort(false, false, 'name') %}
+{% if loop.first %}
+        {{ macros.escapeRustKeyword(event.name | snakeCase) }}_event_row::{{ event.name | pascalCase }}EventClickHouseRow::DEFAULT_TABLE_NAME.to_string(),
+{% endif %}
+{% endfor %}
 {% endif %}
         DEFAULT_SOURCE_NAME.to_string(),
         DEFAULT_MODE.to_string(),
