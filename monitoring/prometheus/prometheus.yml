@@ -9,7 +9,14 @@ scrape_configs:
       - targets:
           - localhost:9464
         labels:
-          pipeline_id: local-carbon
-          decoder: local
-          datasource: local
+          pipeline_id: jupiter-swap-clickhouse
+          decoder: jupiter-swap
+          datasource: rpc-block-crawler
+          mode: dev
+      - targets:
+          - localhost:9465
+        labels:
+          pipeline_id: token-program-clickhouse
+          decoder: token-program
+          datasource: rpc-get-multiple-accounts
           mode: dev

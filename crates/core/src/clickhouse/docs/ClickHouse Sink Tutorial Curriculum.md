@@ -29,7 +29,6 @@ Before starting, learners should have:
 - a working Rust toolchain
 - Docker access for the local ClickHouse and monitoring services
 - a provider RPC URL for Solana mainnet data
-- optionally, a Helius RPC URL for the Token Program account snapshot example
 
 Do not use the public mainnet-beta RPC endpoint for the examples. These smoke
 tests need a production/provider RPC endpoint.
@@ -41,7 +40,7 @@ After completing the curriculum, learners should be able to:
 - explain where ClickHouse fits in Carbon's datasource, decoder, processor, and
   writer flow
 - run the Jupiter ClickHouse example in bounded and live modes
-- run the Token Program ClickHouse account snapshot example with safe filters
+- run the Token Program ClickHouse fixed-USDC account snapshot example
 - identify the generated landing tables created by each example
 - validate inserted rows with ClickHouse SQL
 - distinguish synchronous inserts from async-wait inserts
@@ -93,7 +92,8 @@ Expected outcome:
 - ClickHouse responds to `SELECT 1`.
 - Prometheus is available at `http://localhost:9090`.
 - Grafana is available at `http://localhost:3000`.
-- The Carbon examples can expose metrics at `0.0.0.0:9464/metrics`.
+- The Jupiter example can expose metrics at `0.0.0.0:9464/metrics`.
+- The Token Program example can expose metrics at `0.0.0.0:9465/metrics`.
 
 Troubleshooting focus:
 
@@ -137,12 +137,12 @@ Modes:
 - Set `BLOCK_CRAWLER_START_SLOT` and leave `BLOCK_CRAWLER_END_SLOT` empty to
   catch up from that slot and keep following head.
 - Leave both slot envs empty for pure head-follow mode. The example starts near
-  the current confirmed slot using `BLOCK_CRAWLER_HEAD_LAG_SLOTS`.
+  the current finalized slot using `BLOCK_CRAWLER_HEAD_LAG_SLOTS`.
 
 Teaching notes:
 
 - The example bootstraps generated Jupiter instruction landing tables.
-- It also bootstraps one generated Jupiter CPI/event landing table.
+- It also bootstraps generated Jupiter CPI/event landing tables.
 - In pure head-follow mode, it attaches the generated TokenLedger account
   processor and fetches current confirmed TokenLedger account snapshots for
   first-seen TokenLedger pubkeys.
@@ -181,8 +181,8 @@ Expected outcome:
 
 ## Module 4: Token Program Account Snapshot Ingestion
 
-Goal: run a bounded account-family ingestion path into generated Token Program
-ClickHouse landing tables.
+Goal: fetch a small real USDC account snapshot into all generated Token Program
+account-family ClickHouse landing tables.
 
 Example directory:
 
@@ -195,38 +195,32 @@ Environment:
 ```env
 DATABASE_URL=http://carbon:carbon@localhost:8123
 RPC_URL=<provider-rpc-url>
-HELIUS_RPC_URL=https://mainnet.helius-rpc.com/?api-key=<key>
-TOKEN_ACCOUNT_OWNER=<wallet-pubkey>
-# TOKEN_MINT=<mint-pubkey>
+PROMETHEUS_METRICS_ADDR=0.0.0.0:9465
 LOG_LEVEL=info
-PROMETHEUS_METRICS_ADDR=0.0.0.0:9464
 ```
 
-At least one account filter must be set:
-
-- `TOKEN_ACCOUNT_OWNER`, matched at token account data offset 32.
-- `TOKEN_MINT`, matched at token account data offset 0.
-
-Run with the default Helius gPA v2 source:
+Run the fixed USDC snapshot:
 
 ```sh
 cargo run -p token-program-clickhouse-carbon-example
 ```
 
-Run with standard Solana JSON-RPC `getProgramAccounts`:
-
-```sh
-cargo run -p token-program-clickhouse-carbon-example -- --source rpc
-```
-
 Teaching notes:
 
-- The default path focuses on token accounts because owner and mint filters keep
-  the query bounded.
-- The generated decoder also supports mint and multisig account landing rows.
-- Unbounded Token Program account scans are intentionally not a safe default.
-- GPA snapshots usually have `transaction_signature = NULL` because they are
-  not tied to a single transaction.
+- The example uses standard Solana JSON-RPC `getMultipleAccounts` against four
+  hardwired USDC accounts: the USDC mint, the USDC mint authority multisig, the
+  USDC freeze authority multisig, and one USDC token holding account.
+- This intentionally avoids unbounded Token Program scans and provider-specific
+  GPA modes.
+- It populates the generated mint, multisig, and token account landing tables in
+  one small smoke run.
+- Rows are current account snapshots fetched at the RPC response slot, so the
+  example writes `mode = live` and `source_name = rpc_get_multiple_accounts`.
+- Snapshot rows have `transaction_signature = NULL` because they are current
+  account reads, not transaction-scoped account updates.
+- The example exposes ClickHouse account metrics at `PROMETHEUS_METRICS_ADDR`
+  and stays alive briefly after completion so Prometheus can scrape the final
+  counters.
 
 Validation queries:
 
@@ -244,10 +238,11 @@ FROM default.token_program_token_account_landing;
 Expected outcome:
 
 - The Token Program account landing tables exist.
-- Filtered token account rows land in
-  `token_program_token_account_landing`.
-- Mint and multisig landing tables can exist even when they are empty for a
-  token-account-only run.
+- `token_program_mint_account_landing` contains the USDC mint snapshot.
+- `token_program_multisig_account_landing` contains the USDC mint and freeze
+  authority multisig snapshots.
+- `token_program_token_account_landing` contains the fixed USDC token holding
+  account snapshot.
 
 ## Module 5: Insert Modes And Runtime Configuration
 
@@ -277,9 +272,7 @@ CLICKHOUSE_ASYNC_INSERT=true cargo run -p jupiter-swap-clickhouse-carbon-example
 Token Program async-wait run:
 
 ```sh
-CLICKHOUSE_ASYNC_INSERT=true \
-CLICKHOUSE_ASYNC_INSERT_BUSY_TIMEOUT_MS=1000 \
-cargo run -p token-program-clickhouse-carbon-example
+CLICKHOUSE_ASYNC_INSERT=true cargo run -p token-program-clickhouse-carbon-example
 ```
 
 ClickHouse async insert inspection:
@@ -320,7 +313,12 @@ Inspect the Carbon metrics endpoint:
 
 ```sh
 curl -sS http://localhost:9464/metrics | rg 'carbon_updates_failed_total|clickhouse_'
+curl -sS http://localhost:9465/metrics | rg 'clickhouse_accounts_'
 ```
+
+The Jupiter example exposes Prometheus metrics on `9464` by default. The Token
+Program one-shot snapshot exposes its ClickHouse account metrics on `9465` by
+default, so both examples can be monitored locally without a port conflict.
 
 Prometheus queries:
 

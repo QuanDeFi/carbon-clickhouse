@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, net::SocketAddr, time::Duration};
 
 use {
     carbon_core::{
@@ -7,6 +7,7 @@ use {
         error::{CarbonResult, Error as CarbonError},
         processor::Processor,
     },
+    carbon_prometheus_metrics::{PrometheusMetrics, PrometheusServerConfig},
     carbon_token_program_decoder::{
         accounts::clickhouse::{
             clickhouse_config_from_database_url, clickhouse_processor,
@@ -18,6 +19,7 @@ use {
     solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcAccountInfoConfig},
     solana_commitment_config::CommitmentConfig,
     solana_pubkey::Pubkey,
+    tokio::time::sleep,
 };
 
 const USDC_ACCOUNTS: [Pubkey; 4] = [
@@ -31,9 +33,12 @@ const USDC_ACCOUNTS: [Pubkey; 4] = [
 pub async fn main() -> CarbonResult<()> {
     dotenv::dotenv().ok();
     init_logger();
+    start_prometheus_metrics()?;
 
     let database_url = required_env("DATABASE_URL")?;
     let mut config = clickhouse_config_from_database_url(&database_url)?;
+    config.source_name = "rpc_get_multiple_accounts".to_string();
+    config.mode = "live".to_string();
     if enabled("CLICKHOUSE_ASYNC_INSERT") {
         config = config.with_insert_settings(ClickHouseInsertSettings::AsyncWait(
             ClickHouseAsyncInsertSettings {
@@ -51,6 +56,7 @@ pub async fn main() -> CarbonResult<()> {
     processor.finalize().await?;
 
     log::info!("USDC token program snapshot complete");
+    sleep(Duration::from_secs(6)).await;
     Ok(())
 }
 
@@ -115,6 +121,16 @@ fn init_logger() {
         logger.parse_filters(&log_level);
     }
     logger.init();
+}
+
+fn start_prometheus_metrics() -> CarbonResult<()> {
+    let addr = env::var("PROMETHEUS_METRICS_ADDR")
+        .unwrap_or_else(|_| "0.0.0.0:9465".to_string())
+        .parse::<SocketAddr>()
+        .map_err(|err| CarbonError::Custom(format!("Invalid PROMETHEUS_METRICS_ADDR: {err}")))?;
+    PrometheusMetrics::start_server(PrometheusServerConfig::new().listen_addr(addr));
+    log::info!("Prometheus metrics server starting on http://{addr}/metrics");
+    Ok(())
 }
 
 fn required_env(name: &str) -> CarbonResult<String> {

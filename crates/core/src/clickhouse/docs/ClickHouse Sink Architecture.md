@@ -66,6 +66,15 @@ Reasoning:
 
 This keeps ClickHouse aligned with the same decoder-owned families used by the Postgres integration: accounts, instructions, and events through the instruction path.
 
+The physical ClickHouse table shape is intentionally not identical to upstream
+Postgres for CPI/events. Upstream Postgres groups all CPI/event variants into a
+generic JSON-backed event table. The current ClickHouse sink ships one typed
+landing table per generated CPI/event family, such as
+`jupiter_swap_fee_event_landing`, `jupiter_swap_swap_event_landing`, and
+`jupiter_swap_swaps_event_landing`. The temporary unified
+`jupiter_swap_cpi_event_landing` table was removed and is stale local state if
+it still exists.
+
 ## Where ClickHouse Fits In Carbon
 
 The ClickHouse integration is a normal Carbon processor path.
@@ -118,6 +127,9 @@ Reasons:
 - Decoder-owned schemas remain explicit and strongly typed.
 - ClickHouse compression and query planning work better with stable typed columns than one universal JSON blob.
 - Instruction, account, and CPI/event family tables keep payloads queryable without downstream JSON parsing.
+- Per-event tables preserve the structured ClickHouse mapping for each known
+  event payload instead of collapsing all events back into a Postgres-style
+  generic JSON table.
 - Landing rows can still be appended safely during replay or backfill.
 - Serving/canonicalization logic can be built later without changing the ingestion contract.
 
@@ -269,6 +281,11 @@ Near-term schema-evolution follow-up work:
 - Add schema version or schema fingerprint tracking for generated landing-table
   metadata. The goal is to make expected/generated schema state observable
   across deployments, predeploy validation, and live ingestion diagnostics.
+- Split decoder provenance metadata from the current logical `decoder_version`
+  field. `decoder_version` should represent the renderer `versionName` or
+  equivalent decoder-routing version, while separate metadata should track the
+  decoder crate version, IDL/schema fingerprint, generator version, and optional
+  generated-from commit for traceability.
 - Add table-versioning or side-by-side table coexistence for breaking generated
   schema changes. This is the safer path when old and new decoder versions need
   to run at the same time or when a change is broader than additive columns or

@@ -12707,6 +12707,7 @@ name = "token-program-clickhouse-carbon-example"
 version = "0.12.0"
 dependencies = [
  "carbon-core",
+ "carbon-prometheus-metrics",
  "carbon-token-program-decoder",
  "dotenv",
  "env_logger",

@@ -18,6 +18,7 @@ Create `.env` from `.env.example`:
 ```env
 DATABASE_URL=http://carbon:carbon@localhost:8123
 RPC_URL=<provider-rpc-url>
+PROMETHEUS_METRICS_ADDR=0.0.0.0:9465
 LOG_LEVEL=info
 ```
 
@@ -33,6 +34,10 @@ cargo run -p token-program-clickhouse-carbon-example
 ```
 
 The example uses `getMultipleAccounts` through `RPC_URL`.
+
+The example exposes Carbon/ClickHouse metrics at `PROMETHEUS_METRICS_ADDR` and
+keeps the process alive briefly after the snapshot so Prometheus can scrape the
+final counters.
 
 To opt into ClickHouse async inserts with `wait_for_async_insert=1`:
 

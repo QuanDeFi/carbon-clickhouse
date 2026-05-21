@@ -366,6 +366,12 @@ table per account family, and one table per generated CPI/event family. Each
 CPI/event table keeps the common event metadata plus the typed payload columns
 for that specific event family instead of a generic JSON payload.
 
+This is the current shipping model after the CPI/event table reversal in
+`3f98a52f9`. The earlier temporary Postgres-aligned model from `9c3ef9444`
+used one unified `jupiter_swap_cpi_event_landing` table. That table is obsolete
+local state now; generated Jupiter CPI/event rows are emitted to separate
+per-event tables.
+
 Generated row mapping derives structured ClickHouse types from the decoder schema:
 
 - primitives map to native ClickHouse scalar types
@@ -566,26 +572,24 @@ Use a bounded slot range when testing the example against production RPC.
 
 It validates:
 
-- Helius gPA v2 by default, or filtered RPC `getProgramAccounts` through explicit `--source rpc`
+- standard Solana JSON-RPC `getMultipleAccounts` against a fixed USDC account set
 - generated Token Program ClickHouse account table bootstrap
 - Token Program account decoding from real mainnet account data
-- generated token account landing rows
+- generated mint, multisig, and token account landing rows
 - `ClickHouseAccountProcessor`
 - account-family metrics
 - per-buffer writer flushing and shutdown drain
-- `ShutdownStrategy::ProcessPending` for finite account snapshots
-- RPC `getProgramAccounts` with token-account data-size/memcmp filters
-- Helius gPA v2 through `--source helius-gpa-v2`
-- optional `CLICKHOUSE_ASYNC_INSERT*` environment variables
+- optional `CLICKHOUSE_ASYNC_INSERT=true`
+- Prometheus scrape exposure on `PROMETHEUS_METRICS_ADDR`, default `0.0.0.0:9465`
 
-The example requires a token-account owner and/or mint filter so it does not
-accidentally fetch the entire Token Program account set. By default it uses
-Helius gPA v2 because that path is paginated and safer for free/trial-tier
-bounded snapshots. Use `--source rpc` only when intentionally testing a
-provider's standard JSON-RPC `getProgramAccounts` support. By default the
-example focuses on token accounts because those can be bounded safely. The
-generated mint and multisig account rows are covered by compile/tests and
-schema generation, but they are not the default real-world query path.
+The example is intentionally opinionated. It fetches four hardwired USDC
+accounts: the USDC mint, the USDC mint-authority multisig, the USDC
+freeze-authority multisig, and one USDC token holding account. It does not scan
+Token Program accounts, does not use GPA pagination, does not require Helius
+specific APIs, and has no `--source` mode. Rows are current account snapshots
+from the RPC response slot, so the example writes `mode = live` and
+`source_name = rpc_get_multiple_accounts`. It stays alive briefly after the
+snapshot so Prometheus can scrape final ClickHouse account metrics.
 
 ## Identity, Replay, And Table Semantics
 
