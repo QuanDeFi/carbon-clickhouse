@@ -162,7 +162,7 @@ async fn block_crawler(
     } else if end_slot.is_none() {
         let head_lag_slots =
             optional_env_u64("BLOCK_CRAWLER_HEAD_LAG_SLOTS")?.unwrap_or(DEFAULT_HEAD_LAG_SLOTS);
-        RpcClient::new_with_commitment(rpc_url.clone(), CommitmentConfig::confirmed())
+        RpcClient::new_with_commitment(rpc_url.clone(), CommitmentConfig::finalized())
             .get_slot()
             .await
             .map(|slot| slot.saturating_sub(head_lag_slots))
@@ -179,6 +179,7 @@ async fn block_crawler(
         end_slot,
         None,
         RpcBlockConfig {
+            commitment: Some(CommitmentConfig::finalized()),
             encoding: Some(UiTransactionEncoding::Binary),
             max_supported_transaction_version: Some(0),
             ..Default::default()
