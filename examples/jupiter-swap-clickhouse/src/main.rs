@@ -113,11 +113,17 @@ pub async fn main() -> CarbonResult<()> {
     let start_slot = optional_env_u64("BLOCK_CRAWLER_START_SLOT")?;
     let end_slot = optional_env_u64("BLOCK_CRAWLER_END_SLOT")?;
     let head_live_mode = start_slot.is_none() && end_slot.is_none();
+    let ingestion_mode = if head_live_mode { "live" } else { "backfill" };
 
-    let instruction_config = clickhouse_config(clickhouse_config_from_database_url(&database_url)?);
+    let instruction_config = clickhouse_config(
+        with_ingestion_mode(clickhouse_config_from_database_url(&database_url)?, ingestion_mode),
+    );
     JupiterSwapClickHouseInstructionsMigration::run(&instruction_config).await?;
     let token_ledger_processor = if head_live_mode {
-        let mut config = clickhouse_config(accounts_clickhouse_config(&database_url)?);
+        let mut config = clickhouse_config(with_ingestion_mode(
+            accounts_clickhouse_config(&database_url)?,
+            ingestion_mode,
+        ));
         config.source_name = "exact_token_ledger_accounts".to_string();
         JupiterSwapClickHouseAccountsMigration::run(&config).await?;
         Some(TokenLedgerPubkeys::new(&rpc_url, account_processor(config)))
@@ -187,6 +193,11 @@ async fn block_crawler(
         Some(1),
         None,
     ))
+}
+
+fn with_ingestion_mode(mut config: ClickHouseConfig, mode: &str) -> ClickHouseConfig {
+    config.mode = mode.to_string();
+    config
 }
 
 fn clickhouse_config(config: ClickHouseConfig) -> ClickHouseConfig {
