@@ -6,17 +6,13 @@ publish = false
 
 [dependencies]
 carbon-core = { workspace = true, features = ["clickhouse"] }
-carbon-helius-gpa-v2-datasource = { workspace = true }
-carbon-log-metrics = { workspace = true }
-carbon-prometheus-metrics = { workspace = true }
-carbon-rpc-gpa-datasource = { workspace = true }
 carbon-token-program-decoder = { workspace = true, features = ["clickhouse"] }
 
-clap = { workspace = true, features = ["derive"] }
 dotenv = { workspace = true }
 env_logger = { workspace = true }
 log = { workspace = true }
 solana-account-decoder = { workspace = true }
+solana-account = { workspace = true }
 solana-client = { workspace = true }
 solana-commitment-config = { workspace = true }
 solana-pubkey = { workspace = true }

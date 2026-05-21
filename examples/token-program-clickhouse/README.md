@@ -1,13 +1,15 @@
 # Token Program ClickHouse Example
 
-This example runs a real Token Program account snapshot into generated ClickHouse landing tables.
+This example runs fixed real USDC Token Program account snapshots into generated ClickHouse landing tables.
 
-It uses RPC `getProgramAccounts` or Helius gPA v2 with a token-account filter, decodes accounts with `TokenProgramDecoder`, and writes rows through the generated Token Program ClickHouse account processor.
+It fetches four hardwired mainnet USDC accounts with `getMultipleAccounts`:
+the USDC mint, the USDC mint authority multisig, the USDC freeze authority
+multisig, and one USDC token holding account. All accounts are decoded with
+`TokenProgramDecoder` and written through the generated Token Program
+ClickHouse account processor.
 
-The default path tests a specific USDC token account. It uses an owner filter
-that currently returns one SPL Token account whose decoded mint is mainnet
-USDC. The generated decoder also has mint and multisig ClickHouse rows, but
-unbounded Token Program account scans are not a safe default.
+The default path populates all three generated Token Program account landing
+tables without scanning Token Program accounts or paginating account indexes.
 
 ## Required Environment
 
@@ -16,24 +18,13 @@ Create `.env` from `.env.example`:
 ```env
 DATABASE_URL=http://carbon:carbon@localhost:8123
 RPC_URL=<provider-rpc-url>
-HELIUS_RPC_URL=https://mainnet.helius-rpc.com/?api-key=<key>
-TOKEN_ACCOUNT_OWNER=EKFXPqGVdNZmhSsp143XjqBqnEXsauPVWf3o4VeF9BVJ
-# TOKEN_MINT=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
 LOG_LEVEL=info
-PROMETHEUS_METRICS_ADDR=0.0.0.0:9464
 ```
 
 Use the production/provider RPC URL from the local `.env`. The public
-mainnet-beta endpoint is not reliable enough for bounded account smoke tests.
-
-At least one of these filters must be set:
-
-- `TOKEN_ACCOUNT_OWNER`: token account owner wallet, matched at token account data offset 32.
-- `TOKEN_MINT`: token mint, matched at token account data offset 0.
-
-Using both fetches the intersection. The committed owner filter is the routine
-USDC token-account canary; the row should decode with mint
-`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`.
+mainnet-beta endpoint is not reliable enough for account smoke tests. The USDC
+mint, USDC authority multisigs, and USDC token account are hardwired in the
+example.
 
 ## Run
 
@@ -41,28 +32,12 @@ USDC token-account canary; the row should decode with mint
 cargo run -p token-program-clickhouse-carbon-example
 ```
 
-The example also exposes Carbon metrics for Prometheus at
-`PROMETHEUS_METRICS_ADDR` and keeps log metrics enabled. Use
-`monitoring/compose.yaml` to run the local Prometheus/Grafana stack.
-
-To use Helius gPA v2 instead:
-
-```sh
-cargo run -p token-program-clickhouse-carbon-example
-```
-
-To force standard Solana JSON-RPC `getProgramAccounts` instead:
-
-```sh
-cargo run -p token-program-clickhouse-carbon-example -- --source rpc
-```
+The example uses `getMultipleAccounts` through `RPC_URL`.
 
 To opt into ClickHouse async inserts with `wait_for_async_insert=1`:
 
 ```sh
-CLICKHOUSE_ASYNC_INSERT=true \
-CLICKHOUSE_ASYNC_INSERT_BUSY_TIMEOUT_MS=1000 \
-cargo run -p token-program-clickhouse-carbon-example
+CLICKHOUSE_ASYNC_INSERT=true cargo run -p token-program-clickhouse-carbon-example
 ```
 
 Generated ClickHouse table schema is checked before ingestion. The sink creates
@@ -90,15 +65,15 @@ Program account family:
   <tbody>
     <tr>
       <td><code>token_program_<wbr>mint_account_<wbr>landing</code></td>
-      <td>SPL Token mint account snapshots, including mint configuration and supply state. This table exists for mint-family account data and can be empty when the example is run with only token-account filters.</td>
+      <td>The USDC mint account snapshot. This records the token's supply state, decimals, and the authorities that can mint new USDC or freeze USDC token accounts.</td>
     </tr>
     <tr>
       <td><code>token_program_<wbr>multisig_account_<wbr>landing</code></td>
-      <td>SPL Token multisig account snapshots, including threshold and signer state. This table exists for multisig-family account data and can be empty when the example is run with only token-account filters.</td>
+      <td>The SPL Token multisig accounts currently referenced by the USDC mint as mint authority and freeze authority. These rows show the signer threshold and signer set controlling those USDC authority paths.</td>
     </tr>
     <tr>
       <td><code>token_program_<wbr>token_account_<wbr>landing</code></td>
-      <td>SPL Token holding-account snapshots matching the configured owner and/or mint filters. The default real-world path validates account-family ClickHouse ingestion with one USDC token account.</td>
+      <td>One fixed USDC token holding-account snapshot. This validates the token-account family with a small real holder/account sample.</td>
     </tr>
   </tbody>
 </table>
@@ -108,20 +83,5 @@ slot, and account type. Landing rows are append-only snapshots. If the same
 token account is fetched again at a later slot, the table will contain another
 row for the same `pubkey` with a different `slot` and `account_id`.
 
-`transaction_signature` is expected to be `NULL` for account snapshots sourced
-from GPA because those snapshots are not tied to a single transaction. It is
-only populated when the datasource provides account updates with transaction
-context.
-
-## RPC Source Notes
-
-The default `--source helius-gpa-v2` path calls Helius
-`getProgramAccountsV2` via `HELIUS_RPC_URL` and supports pagination through
-`--helius-page-limit` and `--helius-changed-since-slot`. This is the preferred
-default for Helius free/trial testing because it is paginated and costs fewer
-credits than standard `getProgramAccounts`.
-
-The explicit `--source rpc` path calls standard Solana JSON-RPC
-`getProgramAccounts` via `RPC_URL`. Free/trial RPC tiers vary by provider and
-method. Some providers rate-limit or disable bounded `getProgramAccounts`; this
-is an RPC-provider capability issue, not a ClickHouse sink issue.
+`transaction_signature` is expected to be `NULL` because these snapshots are
+current account reads, not transaction-scoped account updates.

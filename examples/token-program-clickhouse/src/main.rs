@@ -1,178 +1,111 @@
-use std::{env, net::SocketAddr, sync::Arc};
+use std::env;
 
 use {
     carbon_core::{
+        account::{AccountDecoder, AccountMetadata, AccountProcessorInputType},
         clickhouse::{ClickHouseAsyncInsertSettings, ClickHouseInsertSettings},
-        datasource::Datasource,
         error::{CarbonResult, Error as CarbonError},
-        pipeline::{Pipeline, ShutdownStrategy},
+        processor::Processor,
     },
-    carbon_helius_gpa_v2_datasource::{HeliusGpaV2Config, HeliusGpaV2Datasource},
-    carbon_log_metrics::LogMetrics,
-    carbon_prometheus_metrics::{PrometheusMetrics, PrometheusServerConfig},
-    carbon_rpc_gpa_datasource::GpaDatasource,
     carbon_token_program_decoder::{
         accounts::clickhouse::{
             clickhouse_config_from_database_url, clickhouse_processor,
             TokenProgramClickHouseAccountProcessor, TokenProgramClickHouseAccountsMigration,
         },
-        TokenProgramDecoder, PROGRAM_ID as TOKEN_PROGRAM_ID,
+        TokenProgramDecoder,
     },
-    clap::{Parser, ValueEnum},
     solana_account_decoder::UiAccountEncoding,
-    solana_client::{
-        rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
-        rpc_filter::{Memcmp, RpcFilterType},
-    },
+    solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcAccountInfoConfig},
     solana_commitment_config::CommitmentConfig,
     solana_pubkey::Pubkey,
 };
 
-const TOKEN_ACCOUNT_SIZE: u64 = 165;
-const TOKEN_ACCOUNT_MINT_OFFSET: usize = 0;
-const TOKEN_ACCOUNT_OWNER_OFFSET: usize = 32;
-
-#[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
-struct Args {
-    #[arg(long, value_enum, default_value_t = Source::HeliusGpaV2)]
-    source: Source,
-
-    #[arg(long)]
-    token_owner: Option<String>,
-
-    #[arg(long)]
-    token_mint: Option<String>,
-
-    #[arg(long)]
-    helius_changed_since_slot: Option<u64>,
-
-    #[arg(long)]
-    helius_page_limit: Option<u32>,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-enum Source {
-    Rpc,
-    HeliusGpaV2,
-}
+const USDC_ACCOUNTS: [Pubkey; 4] = [
+    Pubkey::from_str_const("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
+    Pubkey::from_str_const("BJE5MMbqXjVwjAF7oxwPYXnTXDyspzZyt4vwenNw5ruG"),
+    Pubkey::from_str_const("7dGbd2QZcCKcTndnHcTL8q7SMVXAkp688NTQYwrRCrar"),
+    Pubkey::from_str_const("11kzWyAwp9fG47nbgo47E2nKDxbi7hBwNcvDRbPFYk"),
+];
 
 #[tokio::main]
 pub async fn main() -> CarbonResult<()> {
     dotenv::dotenv().ok();
     init_logger();
 
-    let args = Args::parse();
-    let account_filter = token_account_filter(&args)?;
     let database_url = required_env("DATABASE_URL")?;
-
     let mut config = clickhouse_config_from_database_url(&database_url)?;
-    if env_bool("CLICKHOUSE_ASYNC_INSERT", false)? {
+    if enabled("CLICKHOUSE_ASYNC_INSERT") {
         config = config.with_insert_settings(ClickHouseInsertSettings::AsyncWait(
             ClickHouseAsyncInsertSettings {
-                busy_timeout_ms: optional_env_u64("CLICKHOUSE_ASYNC_INSERT_BUSY_TIMEOUT_MS")?,
-                max_data_size: optional_env_u64("CLICKHOUSE_ASYNC_INSERT_MAX_DATA_SIZE")?,
-                max_query_number: optional_env_u64("CLICKHOUSE_ASYNC_INSERT_MAX_QUERY_NUMBER")?,
-                deduplicate: optional_env_bool("CLICKHOUSE_ASYNC_INSERT_DEDUPLICATE")?,
+                busy_timeout_ms: Some(1_000),
+                max_data_size: None,
+                max_query_number: None,
+                deduplicate: None,
             },
         ));
     }
+
     TokenProgramClickHouseAccountsMigration::run(&config).await?;
-    let processor = clickhouse_processor(config);
+    let mut processor = clickhouse_processor(config);
+    process_usdc_accounts(&required_env("RPC_URL")?, &mut processor).await?;
+    processor.finalize().await?;
 
-    match args.source {
-        Source::Rpc => {
-            let datasource = GpaDatasource::new_with_config(
-                required_env("RPC_URL")?,
-                TOKEN_PROGRAM_ID,
-                account_filter,
-            );
-            run_pipeline(datasource, processor).await
-        }
-        Source::HeliusGpaV2 => {
-            let datasource = HeliusGpaV2Datasource::new_with_config(
-                required_env("HELIUS_RPC_URL")?,
-                TOKEN_PROGRAM_ID,
-                HeliusGpaV2Config::new(
-                    Some(account_filter),
-                    args.helius_changed_since_slot
-                        .or(optional_env_u64("HELIUS_GPA_V2_CHANGED_SINCE_SLOT")?),
-                    args.helius_page_limit
-                        .or(optional_env_u32("HELIUS_GPA_V2_PAGE_LIMIT")?)
-                        .or(Some(1000)),
-                ),
-            );
-            run_pipeline(datasource, processor).await
-        }
-    }?;
-
-    log::info!("token account snapshot complete");
+    log::info!("USDC token program snapshot complete");
     Ok(())
 }
 
-async fn run_pipeline<D>(
-    datasource: D,
-    processor: TokenProgramClickHouseAccountProcessor,
-) -> CarbonResult<()>
-where
-    D: Datasource + 'static,
-{
-    Pipeline::builder()
-        .datasource(datasource)
-        .metrics(Arc::new(LogMetrics::new_with_flush_interval(3)))
-        .metrics(Arc::new(prometheus_metrics()?))
-        .account(TokenProgramDecoder, processor)
-        .shutdown_strategy(ShutdownStrategy::ProcessPending)
-        .build()?
-        .run()
+async fn process_usdc_accounts(
+    rpc_url: &str,
+    processor: &mut TokenProgramClickHouseAccountProcessor,
+) -> CarbonResult<()> {
+    let commitment = CommitmentConfig::confirmed();
+    let response = RpcClient::new_with_commitment(rpc_url.to_string(), commitment)
+        .get_multiple_ui_accounts_with_config(
+            &USDC_ACCOUNTS,
+            RpcAccountInfoConfig {
+                encoding: Some(UiAccountEncoding::Base64),
+                commitment: Some(commitment),
+                ..Default::default()
+            },
+        )
         .await
+        .map_err(|err| {
+            CarbonError::FailedToConsumeDatasource(format!("Failed to fetch USDC accounts: {err}"))
+        })?;
+
+    for (pubkey, account) in USDC_ACCOUNTS.into_iter().zip(response.value) {
+        let Some(account) = account.and_then(|account| account.decode()) else {
+            return Err(CarbonError::FailedToConsumeDatasource(format!(
+                "USDC account {pubkey} was missing or could not be decoded"
+            )));
+        };
+        process_account(processor, pubkey, response.context.slot, &account).await?;
+    }
+
+    Ok(())
 }
 
-fn token_account_filter(args: &Args) -> CarbonResult<RpcProgramAccountsConfig> {
-    let token_owner = args
-        .token_owner
-        .clone()
-        .or_else(|| env::var("TOKEN_ACCOUNT_OWNER").ok())
-        .map(|value| parse_pubkey("TOKEN_ACCOUNT_OWNER", &value))
-        .transpose()?;
-    let token_mint = args
-        .token_mint
-        .clone()
-        .or_else(|| env::var("TOKEN_MINT").ok())
-        .map(|value| parse_pubkey("TOKEN_MINT", &value))
-        .transpose()?;
-
-    if token_owner.is_none() && token_mint.is_none() {
-        return Err(CarbonError::Custom(
-            "Set TOKEN_ACCOUNT_OWNER, TOKEN_MINT, --token-owner, or --token-mint to keep GPA bounded"
-                .to_string(),
-        ));
+async fn process_account(
+    processor: &mut TokenProgramClickHouseAccountProcessor,
+    pubkey: Pubkey,
+    slot: u64,
+    account: &solana_account::Account,
+) -> CarbonResult<()> {
+    let metadata = AccountMetadata {
+        slot,
+        pubkey,
+        transaction_signature: None,
+    };
+    if let Some(decoded_account) = TokenProgramDecoder.decode_account(account) {
+        processor
+            .process(&AccountProcessorInputType {
+                metadata: &metadata,
+                decoded_account: &decoded_account,
+                raw_account: account,
+            })
+            .await?;
     }
-
-    let mut filters = vec![RpcFilterType::DataSize(TOKEN_ACCOUNT_SIZE)];
-    if let Some(token_mint) = token_mint {
-        filters.push(RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
-            TOKEN_ACCOUNT_MINT_OFFSET,
-            token_mint.as_ref(),
-        )));
-    }
-    if let Some(token_owner) = token_owner {
-        filters.push(RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
-            TOKEN_ACCOUNT_OWNER_OFFSET,
-            token_owner.as_ref(),
-        )));
-    }
-
-    Ok(RpcProgramAccountsConfig {
-        filters: Some(filters),
-        account_config: RpcAccountInfoConfig {
-            encoding: Some(UiAccountEncoding::Base64),
-            commitment: Some(CommitmentConfig::confirmed()),
-            ..Default::default()
-        },
-        with_context: Some(true),
-        ..Default::default()
-    })
+    Ok(())
 }
 
 fn init_logger() {
@@ -188,68 +121,8 @@ fn required_env(name: &str) -> CarbonResult<String> {
     env::var(name).map_err(|err| CarbonError::Custom(format!("{name} must be set ({err})")))
 }
 
-fn prometheus_metrics() -> CarbonResult<PrometheusMetrics> {
-    let listen_addr = env::var("PROMETHEUS_METRICS_ADDR")
-        .unwrap_or_else(|_| "0.0.0.0:9464".to_string())
-        .parse::<SocketAddr>()
-        .map_err(|err| CarbonError::Custom(format!("Invalid PROMETHEUS_METRICS_ADDR: {err}")))?;
-
-    Ok(PrometheusMetrics::with_server(
-        PrometheusServerConfig::new().listen_addr(listen_addr),
-    ))
-}
-
-fn parse_pubkey(name: &str, value: &str) -> CarbonResult<Pubkey> {
-    value
-        .parse()
-        .map_err(|err| CarbonError::Custom(format!("Invalid {name}={value:?}: {err}")))
-}
-
-fn optional_env_u64(name: &str) -> CarbonResult<Option<u64>> {
+fn enabled(name: &str) -> bool {
     env::var(name)
         .ok()
-        .filter(|value| !value.trim().is_empty())
-        .map(|value| {
-            value
-                .parse::<u64>()
-                .map_err(|err| CarbonError::Custom(format!("Invalid {name}={value:?}: {err}")))
-        })
-        .transpose()
-}
-
-fn optional_env_u32(name: &str) -> CarbonResult<Option<u32>> {
-    env::var(name)
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .map(|value| {
-            value
-                .parse::<u32>()
-                .map_err(|err| CarbonError::Custom(format!("Invalid {name}={value:?}: {err}")))
-        })
-        .transpose()
-}
-
-fn optional_env_bool(name: &str) -> CarbonResult<Option<bool>> {
-    env::var(name)
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .map(|value| parse_bool(name, &value))
-        .transpose()
-}
-
-fn env_bool(name: &str, default: bool) -> CarbonResult<bool> {
-    match env::var(name) {
-        Ok(value) if !value.trim().is_empty() => parse_bool(name, &value),
-        _ => Ok(default),
-    }
-}
-
-fn parse_bool(name: &str, value: &str) -> CarbonResult<bool> {
-    match value.trim().to_ascii_lowercase().as_str() {
-        "1" | "true" | "yes" | "y" | "on" => Ok(true),
-        "0" | "false" | "no" | "n" | "off" => Ok(false),
-        _ => Err(CarbonError::Custom(format!(
-            "Invalid {name}={value:?}: expected true/false"
-        ))),
-    }
+        .is_some_and(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "on"))
 }
