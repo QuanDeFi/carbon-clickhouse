@@ -27,6 +27,8 @@ use {
 const CHANNEL_BUFFER_SIZE: usize = 1000;
 const MAX_CONCURRENT_REQUESTS: usize = 10;
 const BLOCK_INTERVAL: Duration = Duration::from_millis(100);
+const GET_BLOCK_MAX_RETRIES: usize = 3;
+const GET_BLOCK_RETRY_BACKOFF: Duration = Duration::from_millis(500);
 
 static BLOCKS_FETCH_TIMES_MILLIS: LazyLock<Histogram> = LazyLock::new(|| {
     Histogram::new(
@@ -96,6 +98,17 @@ fn register_block_crawler_metrics() {
     registry.register_histogram(&BLOCKS_FETCH_TIMES_MILLIS);
     registry.register_histogram(&TRANSACTION_PROCESS_TIME_NANOS);
     registry.register_histogram(&BLOCK_PROCESS_TIME_NANOS);
+}
+
+fn is_skippable_block_error(error: &str) -> bool {
+    error.contains("-32009") || error.contains("-32004") || error.contains("-32007")
+}
+
+fn is_retryable_block_error(error: &str) -> bool {
+    error.contains("TimedOut")
+        || error.contains("IncompleteMessage")
+        || error.contains("429")
+        || error.contains("Too Many Requests")
 }
 
 /// RpcBlockCrawler is a datasource that crawls the Solana blockchain for blocks
@@ -240,29 +253,43 @@ fn block_fetcher(
 
                     async move {
                         let start = Instant::now();
-                        match rpc_client.get_block_with_config(slot, block_config).await {
-                            Ok(block) => {
-                                let time_taken = start.elapsed().as_millis();
-                                BLOCKS_FETCH_TIMES_MILLIS.record(time_taken as f64);
-                                BLOCKS_FETCHED.inc();
-                                Some((slot, block))
-                            }
-                            Err(e) => {
-                                // https://support.quicknode.com/hc/en-us/articles/16459608696721-Solana-RPC-Error-Code-Reference
-                                // solana skippable errors
-                                // -32004, // Block not available for slot x
-                                // -32007, // Slot {} was skipped, or missing due to ledger jump to
-                                // recent snapshot -32009, // Slot
-                                // {} was skipped, or missing in long-term storage
-                                if e.to_string().contains("-32009")
-                                    || e.to_string().contains("-32004")
-                                    || e.to_string().contains("-32007")
-                                {
-                                    BLOCKS_SKIPPED.inc();
-                                } else {
-                                    log::error!("Error fetching block at slot {slot}: {e:?}");
+                        let mut attempt = 0usize;
+                        loop {
+                            match rpc_client.get_block_with_config(slot, block_config).await {
+                                Ok(block) => {
+                                    let time_taken = start.elapsed().as_millis();
+                                    BLOCKS_FETCH_TIMES_MILLIS.record(time_taken as f64);
+                                    BLOCKS_FETCHED.inc();
+                                    break Some((slot, block));
                                 }
-                                None
+                                Err(e) => {
+                                    let error = format!("{e:?}");
+                                    // https://support.quicknode.com/hc/en-us/articles/16459608696721-Solana-RPC-Error-Code-Reference
+                                    // Solana skippable errors:
+                                    // -32004 block not available, -32007 skipped/missing slot,
+                                    // -32009 missing in long-term storage.
+                                    if is_skippable_block_error(&error) {
+                                        BLOCKS_SKIPPED.inc();
+                                        break None;
+                                    }
+
+                                    if attempt < GET_BLOCK_MAX_RETRIES
+                                        && is_retryable_block_error(&error)
+                                    {
+                                        attempt += 1;
+                                        log::debug!(
+                                            "Retrying block fetch for slot {slot}; attempt {attempt}/{GET_BLOCK_MAX_RETRIES}: {e:?}"
+                                        );
+                                        tokio::time::sleep(
+                                            GET_BLOCK_RETRY_BACKOFF.saturating_mul(attempt as u32),
+                                        )
+                                        .await;
+                                        continue;
+                                    }
+
+                                    log::error!("Error fetching block at slot {slot}: {e:?}");
+                                    break None;
+                                }
                             }
                         }
                     }
@@ -349,7 +376,7 @@ fn task_processor(
                                 TRANSACTION_PROCESS_TIME_NANOS.record(start_time.elapsed().as_nanos() as f64);
                                 TRANSACTIONS_PROCESSED.inc();
 
-                                if let Err(err) = sender.try_send((update, id_for_loop.clone())) {
+                                if let Err(err) = sender.send((update, id_for_loop.clone())).await {
                                     log::error!("Error sending transaction update: {err:?}");
                                     break;
                                 }

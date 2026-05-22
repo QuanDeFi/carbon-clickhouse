@@ -113,3 +113,4 @@ ehthumbs.db
 Thumbs.db
 crates/core/src/clickhouse/docs/architecture_visualization.md
 crates/core/src/clickhouse/docs/CHvPG diff.md
+crates/core/src/clickhouse/docs/Jupiter Live Run Failure Log Extracts.md

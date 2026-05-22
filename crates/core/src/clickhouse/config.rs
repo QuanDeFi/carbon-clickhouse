@@ -83,7 +83,7 @@ pub struct ClickHouseRetrySettings {
 impl Default for ClickHouseRetrySettings {
     fn default() -> Self {
         Self {
-            max_retries: 0,
+            max_retries: 3,
             initial_backoff: Duration::from_millis(100),
             max_backoff: Duration::from_secs(5),
             jitter: true,

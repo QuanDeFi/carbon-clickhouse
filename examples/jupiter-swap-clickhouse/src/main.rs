@@ -115,9 +115,10 @@ pub async fn main() -> CarbonResult<()> {
     let head_live_mode = start_slot.is_none() && end_slot.is_none();
     let ingestion_mode = if head_live_mode { "live" } else { "backfill" };
 
-    let instruction_config = clickhouse_config(
-        with_ingestion_mode(clickhouse_config_from_database_url(&database_url)?, ingestion_mode),
-    );
+    let instruction_config = clickhouse_config(with_ingestion_mode(
+        clickhouse_config_from_database_url(&database_url)?,
+        ingestion_mode,
+    ));
     JupiterSwapClickHouseInstructionsMigration::run(&instruction_config).await?;
     let token_ledger_processor = if head_live_mode {
         let mut config = clickhouse_config(with_ingestion_mode(
