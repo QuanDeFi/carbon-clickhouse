@@ -112,3 +112,4 @@ jspm_packages/
 ehthumbs.db
 Thumbs.db
 crates/core/src/clickhouse/docs/architecture_visualization.md
+crates/core/src/clickhouse/docs/CHvPG diff.md
