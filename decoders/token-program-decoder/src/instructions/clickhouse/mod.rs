@@ -24,6 +24,7 @@ pub mod sync_native_row;
 pub mod thaw_account_row;
 pub mod transfer_checked_row;
 pub mod transfer_row;
+pub mod types;
 pub mod ui_amount_to_amount_row;
 pub mod unwrap_lamports_row;
 pub mod withdraw_excess_lamports_row;

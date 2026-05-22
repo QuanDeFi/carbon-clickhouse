@@ -23,6 +23,47 @@ pub struct ClickHouseColumnDefinition {
     pub modify_column_sql: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ClickHouseColumnSpec {
+    pub name: &'static str,
+    pub clickhouse_type: &'static str,
+    pub ddl_type: &'static str,
+}
+
+impl ClickHouseColumnSpec {
+    pub const fn new(name: &'static str, clickhouse_type: &'static str) -> Self {
+        Self {
+            name,
+            clickhouse_type,
+            ddl_type: clickhouse_type,
+        }
+    }
+
+    pub const fn with_ddl_type(
+        name: &'static str,
+        clickhouse_type: &'static str,
+        ddl_type: &'static str,
+    ) -> Self {
+        Self {
+            name,
+            clickhouse_type,
+            ddl_type,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClickHouseTableOptions {
+    pub on_cluster_clause: &'static str,
+    pub engine: String,
+    pub local_engine: Option<String>,
+    pub local_table_suffix: &'static str,
+    pub partition_by: &'static str,
+    pub order_by: &'static str,
+    pub ttl_clause: &'static str,
+    pub settings_clause: &'static str,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClickHouseManagedTable {
     pub name: String,
@@ -205,6 +246,187 @@ impl ClickHouseAdmin {
 
         Ok(())
     }
+}
+
+pub fn clickhouse_column_names(columns: &[ClickHouseColumnSpec]) -> Vec<&'static str> {
+    columns.iter().map(|column| column.name).collect()
+}
+
+pub fn clickhouse_migration_operations(
+    table_name: &str,
+    columns: &[ClickHouseColumnSpec],
+    options: &ClickHouseTableOptions,
+) -> Vec<String> {
+    let mut operations = Vec::new();
+    if let Some(local_engine) = &options.local_engine {
+        let local_table_name = local_table_name(table_name, options);
+        operations.push(clickhouse_create_table_sql(
+            &local_table_name,
+            columns,
+            local_engine,
+            true,
+            options,
+        ));
+        operations.extend(clickhouse_add_column_sql(
+            &local_table_name,
+            columns,
+            options,
+        ));
+    }
+
+    operations.push(clickhouse_create_table_sql(
+        table_name,
+        columns,
+        &options.engine,
+        options.local_engine.is_none(),
+        options,
+    ));
+    operations.extend(clickhouse_add_column_sql(table_name, columns, options));
+    operations
+}
+
+pub fn clickhouse_managed_tables(
+    table_name: &str,
+    columns: &[ClickHouseColumnSpec],
+    options: &ClickHouseTableOptions,
+) -> Vec<ClickHouseManagedTable> {
+    let mut tables = Vec::new();
+    if let Some(local_engine) = &options.local_engine {
+        let local_table_name = local_table_name(table_name, options);
+        tables.push(clickhouse_managed_table(
+            &local_table_name,
+            columns,
+            local_engine,
+            true,
+            options,
+        ));
+        tables.push(clickhouse_managed_table(
+            table_name,
+            columns,
+            &options.engine,
+            false,
+            options,
+        ));
+    } else {
+        tables.push(clickhouse_managed_table(
+            table_name,
+            columns,
+            &options.engine,
+            true,
+            options,
+        ));
+    }
+
+    tables
+}
+
+pub fn clickhouse_create_table_sql(
+    table_name: &str,
+    columns: &[ClickHouseColumnSpec],
+    engine: &str,
+    include_merge_tree_clauses: bool,
+    options: &ClickHouseTableOptions,
+) -> String {
+    let columns_sql = columns
+        .iter()
+        .map(|column| format!("{} {}", column.name, column.ddl_type))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let merge_tree_clauses = if include_merge_tree_clauses {
+        format!(
+            " PARTITION BY {} ORDER BY {}{}{}",
+            options.partition_by, options.order_by, options.ttl_clause, options.settings_clause
+        )
+    } else {
+        String::new()
+    };
+    let engine = render_table_fragment(engine, table_name);
+
+    format!(
+        "CREATE TABLE IF NOT EXISTS {table_name}{} ({columns_sql}) ENGINE = {engine}{merge_tree_clauses}",
+        options.on_cluster_clause
+    )
+}
+
+pub fn clickhouse_add_column_sql(
+    table_name: &str,
+    columns: &[ClickHouseColumnSpec],
+    options: &ClickHouseTableOptions,
+) -> Vec<String> {
+    columns
+        .iter()
+        .map(|column| {
+            format!(
+                "ALTER TABLE {table_name}{} ADD COLUMN IF NOT EXISTS {} {}",
+                options.on_cluster_clause, column.name, column.ddl_type
+            )
+        })
+        .collect()
+}
+
+pub fn clickhouse_column_definitions(
+    table_name: &str,
+    columns: &[ClickHouseColumnSpec],
+    options: &ClickHouseTableOptions,
+) -> Vec<ClickHouseColumnDefinition> {
+    columns
+        .iter()
+        .map(|column| ClickHouseColumnDefinition {
+            name: column.name.to_string(),
+            clickhouse_type: column.clickhouse_type.to_string(),
+            add_column_sql: format!(
+                "ALTER TABLE {table_name}{} ADD COLUMN IF NOT EXISTS {} {}",
+                options.on_cluster_clause, column.name, column.ddl_type
+            ),
+            modify_column_sql: format!(
+                "ALTER TABLE {table_name}{} MODIFY COLUMN {} {}",
+                options.on_cluster_clause, column.name, column.ddl_type
+            ),
+        })
+        .collect()
+}
+
+fn clickhouse_managed_table(
+    table_name: &str,
+    columns: &[ClickHouseColumnSpec],
+    engine: &str,
+    include_merge_tree_layout: bool,
+    options: &ClickHouseTableOptions,
+) -> ClickHouseManagedTable {
+    ClickHouseManagedTable {
+        name: table_name.to_string(),
+        create_table_sql: clickhouse_create_table_sql(
+            table_name,
+            columns,
+            engine,
+            include_merge_tree_layout,
+            options,
+        ),
+        drop_table_sql: format!(
+            "DROP TABLE IF EXISTS {table_name}{}",
+            options.on_cluster_clause
+        ),
+        engine: Some(clickhouse_engine_name(engine)),
+        partition_by: include_merge_tree_layout.then(|| options.partition_by.to_string()),
+        order_by: include_merge_tree_layout.then(|| options.order_by.to_string()),
+        columns: clickhouse_column_definitions(table_name, columns, options),
+    }
+}
+
+fn clickhouse_engine_name(engine: &str) -> String {
+    engine
+        .split_once('(')
+        .map(|(name, _)| name)
+        .unwrap_or(engine)
+        .to_string()
+}
+
+fn local_table_name(table_name: &str, options: &ClickHouseTableOptions) -> String {
+    format!("{table_name}{}", options.local_table_suffix)
+}
+
+fn render_table_fragment(fragment: &str, table_name: &str) -> String {
+    fragment.replace("{table_name}", table_name)
 }
 
 fn schema_drift_error(

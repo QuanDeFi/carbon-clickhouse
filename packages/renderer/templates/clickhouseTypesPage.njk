@@ -1,0 +1,11 @@
+{% extends "layout.njk" %}
+
+{% block main %}
+#[allow(unused_imports)]
+use carbon_core::clickhouse::rows::clickhouse_enum_variant;
+
+{% for helper in helperDefinitions %}
+{{ helper }}
+
+{% endfor %}
+{% endblock %}

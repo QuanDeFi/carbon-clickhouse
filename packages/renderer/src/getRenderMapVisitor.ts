@@ -122,6 +122,26 @@ const CLICKHOUSE_EVENT_COMMON_COLUMNS = [
     'tx_index',
 ];
 
+function collectClickHouseHelpers(target: Map<string, string>, helperDefinitions: string[]) {
+    for (const definition of helperDefinitions) {
+        const match = definition.match(/pub struct\s+([A-Za-z0-9_]+)/);
+        if (!match) {
+            throw new Error(`Unable to identify generated ClickHouse helper name:\n${definition}`);
+        }
+
+        const name = match[1];
+        const existing = target.get(name);
+        if (existing && normalizeHelperDefinition(existing) !== normalizeHelperDefinition(definition)) {
+            throw new Error(`Conflicting generated ClickHouse helper definition for ${name}`);
+        }
+        target.set(name, definition);
+    }
+}
+
+function normalizeHelperDefinition(definition: string): string {
+    return definition.replace(/\s+/g, ' ').trim();
+}
+
 export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
     const renderParentInstructions = options.renderParentInstructions ?? false;
     const clickHouseEnabled = isClickHouseEnabled(options.withClickHouse);
@@ -152,6 +172,8 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
     const instructionsWithGraphQLSchemas = new Set<string>();
     // Track if any types require serde-big-array
     let requiresSerdeBigArray = false;
+    const clickHouseAccountHelpers = new Map<string, string>();
+    const clickHouseInstructionHelpers = new Map<string, string>();
 
     return pipe(
         staticVisitor(() => new RenderMap(), {
@@ -281,13 +303,14 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                             reservedNames: CLICKHOUSE_ACCOUNT_COMMON_COLUMNS,
                             collisionPrefix: node.name,
                         });
+                        collectClickHouseHelpers(clickHouseAccountHelpers, clickhousePlan.helperDefinitions);
                         renderMap.add(
                             `src/accounts/clickhouse/${snakeCase(node.name)}_row.rs`,
                             render('clickhouseRowPage.njk', {
                                 entityDocs: node.docs,
                                 entityName: node.name,
                                 flatFields: clickhousePlan.fields,
-                                helperDefinitions: clickhousePlan.helperDefinitions,
+                                hasSharedHelpers: clickhousePlan.helperDefinitions.length > 0,
                                 isAccount: true,
                                 program: currentRenderProgram(),
                                 clickHouseDdl: getClickHouseDdlContext(options.withClickHouse, 'account'),
@@ -456,12 +479,16 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                                     reservedNames: CLICKHOUSE_EVENT_COMMON_COLUMNS,
                                     collisionPrefix: node.name,
                                 });
+                                collectClickHouseHelpers(
+                                    clickHouseInstructionHelpers,
+                                    clickhousePlan.helperDefinitions,
+                                );
                                 renderMap.add(
                                     `src/instructions/clickhouse/${snakeCase(node.name)}_event_row.rs`,
                                     render('eventInstructionClickHouseRowPage.njk', {
                                         event: node,
                                         flatFields: clickhousePlan.fields,
-                                        helperDefinitions: clickhousePlan.helperDefinitions,
+                                        hasSharedHelpers: clickhousePlan.helperDefinitions.length > 0,
                                         program: currentRenderProgram(),
                                         clickHouseDdl: getClickHouseDdlContext(options.withClickHouse, 'event'),
                                     }),
@@ -706,13 +733,14 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                                 collisionPrefix: node.name,
                             },
                         );
+                        collectClickHouseHelpers(clickHouseInstructionHelpers, clickhousePlan.helperDefinitions);
                         renderMap.add(
                             `src/instructions/clickhouse/${snakeCase(node.name)}_row.rs`,
                             render('clickhouseRowPage.njk', {
                                 entityDocs: node.docs,
                                 entityName: node.name,
                                 flatFields: clickhousePlan.fields,
-                                helperDefinitions: clickhousePlan.helperDefinitions,
+                                hasSharedHelpers: clickhousePlan.helperDefinitions.length > 0,
                                 isAccount: false,
                                 program: currentRenderProgram(),
                                 clickHouseDdl: getClickHouseDdlContext(options.withClickHouse, 'instruction'),
@@ -806,7 +834,10 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                         name: programName,
                     };
 
-                    // Visit the program first to populate instructionsWithGraphQLSchemas Set
+                    clickHouseAccountHelpers.clear();
+                    clickHouseInstructionHelpers.clear();
+
+                    // Visit the program first to populate instructionsWithGraphQLSchemas and ClickHouse helper sets.
                     const programRenderMap = visit(program, self);
 
                     // Use getAll* functions but they will only process the main program
@@ -848,6 +879,8 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                         withPostgres: options.withPostgres !== false,
                         withGraphQL: options.withGraphql !== false,
                         withClickHouse: clickHouseEnabled,
+                        hasClickHouseAccountTypes: clickHouseAccountHelpers.size > 0,
+                        hasClickHouseInstructionTypes: clickHouseInstructionHelpers.size > 0,
                         withSerde: options.withSerde ?? false,
                         withBase58: options.withBase58 ?? false,
                     };
@@ -877,6 +910,14 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                         map.add('src/accounts/postgres/mod.rs', render('accountsPostgresMod.njk', ctx));
                     }
                     if (clickHouseEnabled && accountsToExport.length > 0) {
+                        if (clickHouseAccountHelpers.size > 0) {
+                            map.add(
+                                'src/accounts/clickhouse/types.rs',
+                                render('clickhouseTypesPage.njk', {
+                                    helperDefinitions: [...clickHouseAccountHelpers.values()],
+                                }),
+                            );
+                        }
                         map.add('src/accounts/clickhouse/mod.rs', render('accountsClickHouseMod.njk', ctx));
                     }
                     if (options.withGraphql !== false) {
@@ -905,6 +946,14 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                             clickHouseEnabled &&
                             (instructionsToExport.length > 0 || (options.anchorEvents?.length ?? 0) > 0)
                         ) {
+                            if (clickHouseInstructionHelpers.size > 0) {
+                                map.add(
+                                    'src/instructions/clickhouse/types.rs',
+                                    render('clickhouseTypesPage.njk', {
+                                        helperDefinitions: [...clickHouseInstructionHelpers.values()],
+                                    }),
+                                );
+                            }
                             map.add('src/instructions/clickhouse/mod.rs', render('instructionsClickHouseMod.njk', ctx));
                         }
                         if (options.withGraphql !== false) {

@@ -22,6 +22,7 @@ pub mod shared_accounts_route_v2_row;
 pub mod shared_accounts_route_with_token_ledger_row;
 pub mod swap_event_event_row;
 pub mod swaps_event_event_row;
+pub mod types;
 
 pub use self::{
     best_swap_out_amount_violation_event_row::BestSwapOutAmountViolationEventClickHouseRow,

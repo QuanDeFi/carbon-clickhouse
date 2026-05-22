@@ -2,6 +2,9 @@
 {% import "macros.njk" as macros %}
 
 {% block main %}
+{% if hasClickHouseInstructionTypes %}
+pub mod types;
+{% endif %}
 {% for instruction in instructionsToExport | sort(false, false, 'name') %}
 pub mod {{ macros.escapeRustKeyword(instruction.name | snakeCase) }}_row;
 {% endfor %}

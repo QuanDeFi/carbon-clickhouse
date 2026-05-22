@@ -69,8 +69,10 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
         instructionsToExport: [{ name: 'swap' }],
         events: [{ name: 'swapEvent' }],
         hasAnchorEvents: true,
+        hasClickHouseInstructionTypes: true,
     });
 
+    assert.match(output, /pub mod types;/);
     assert.match(output, /pub mod swap_row;/);
     assert.match(output, /pub mod swap_event_event_row;/);
     assert.doesNotMatch(output, /pub mod cpi_event_row;/);
@@ -97,8 +99,10 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
     const output = render('accountsClickHouseMod.njk', {
         program,
         accountsToExport: [{ name: 'mint' }, { name: 'token' }],
+        hasClickHouseAccountTypes: true,
     });
 
+    assert.match(output, /pub mod types;/);
     assert.match(output, /pub mod mint_row;/);
     assert.match(output, /pub mod token_row;/);
     assert.match(output, /pub use self::mint_row::MintAccountClickHouseRow;/);
@@ -115,6 +119,15 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
 }
 
 {
+    const output = render('clickhouseTypesPage.njk', {
+        helperDefinitions: ['pub struct ClickHouseSharedHelper { pub value: u64 }'],
+    });
+
+    assert.match(output, /use carbon_core::clickhouse::rows::clickhouse_enum_variant;/);
+    assert.match(output, /pub struct ClickHouseSharedHelper/);
+}
+
+{
     const output = render('clickhouseRowPage.njk', {
         program,
         entityName: 'mint',
@@ -124,17 +137,15 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
     });
 
     assert.match(output, /pub struct MintAccountClickHouseRow/);
-    assert.match(output, /deterministic_account_id/);
+    assert.match(output, /ClickHouseAccountLandingMetadata::new/);
+    assert.match(output, /#\[serde\(flatten\)\]/);
     assert.match(output, /pub amount: u64/);
-    assert.match(output, /amount UInt64/);
-    assert.match(output, /ALTER TABLE \{table_name\} ADD COLUMN IF NOT EXISTS amount UInt64/);
+    assert.match(output, /ClickHouseColumnSpec::new\("amount", r#"UInt64"#\)/);
     assert.match(output, /pub fn managed_tables\(table_name: &str\) -> Vec<ClickHouseManagedTable>/);
-    assert.match(output, /pub fn column_definitions\(table_name: &str\) -> Vec<ClickHouseColumnDefinition>/);
-    assert.match(output, /engine: Some\(Self::clickhouse_engine_name\(&engine\)\)/);
-    assert.match(output, /partition_by: include_merge_tree_layout\.then\(\|\| r#"partition_slot"#\.to_string\(\)\)/);
-    assert.match(output, /order_by: include_merge_tree_layout\.then\(\|\| r#"\(program_id, family_name, account_id, slot\)"#\.to_string\(\)\)/);
-    assert.match(output, /clickhouse_type: r#"UInt64"#\.to_string\(\)/);
-    assert.match(output, /MODIFY COLUMN amount UInt64/);
+    assert.match(output, /clickhouse_migration_operations\(table_name, &columns, &Self::table_options\(\)\)/);
+    assert.match(output, /clickhouse_managed_tables\(table_name, &columns, &Self::table_options\(\)\)/);
+    assert.match(output, /partition_by: r#"partition_slot"#/);
+    assert.match(output, /order_by: r#"\(program_id, family_name, account_id, slot\)"#/);
     assert.match(output, /demo_program_mint_account_landing/);
 }
 
@@ -162,15 +173,17 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
 
     assert.match(output, /pub struct SwapsEventEventClickHouseRow/);
     assert.match(output, /pub const DEFAULT_TABLE_NAME: &'static str = "demo_program_swaps_event_landing"/);
+    assert.match(output, /ClickHouseEventLandingMetadata::new/);
     assert.match(output, /pub swap_events_present: bool/);
     assert.match(output, /pub swap_events: Vec<ClickHouseSwapEvent>/);
-    assert.match(output, /swap_events_present Bool/);
-    assert.match(output, /swap_events Array\(Tuple\(input_mint String, input_amount UInt64\)\)/);
+    assert.match(output, /ClickHouseColumnSpec::new\("swap_events_present", r#"Bool"#\)/);
+    assert.match(
+        output,
+        /ClickHouseColumnSpec::new\("swap_events", r#"Array\(Tuple\(input_mint String, input_amount UInt64\)\)"#\)/,
+    );
     assert.match(output, /pub fn managed_tables\(table_name: &str\) -> Vec<ClickHouseManagedTable>/);
-    assert.match(output, /partition_by: include_merge_tree_layout\.then\(\|\| r#"toYear\(partition_time\)"#\.to_string\(\)\)/);
-    assert.match(output, /order_by: include_merge_tree_layout\.then\(\|\| r#"\(program_id, family_name, event_id, slot\)"#\.to_string\(\)\)/);
-    assert.match(output, /clickhouse_type: r#"Array\(Tuple\(input_mint String, input_amount UInt64\)\)"#\.to_string\(\)/);
-    assert.match(output, /MODIFY COLUMN swap_events Array\(Tuple\(input_mint String, input_amount UInt64\)\)/);
+    assert.match(output, /partition_by: r#"toYear\(partition_time\)"#/);
+    assert.match(output, /order_by: r#"\(program_id, family_name, event_id, slot\)"#/);
     assert.match(output, /pub fn from_parts/);
     assert.doesNotMatch(output, /data JSON/);
 }
@@ -203,12 +216,18 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
     });
 
     assert.match(replicatedOutput, /ON CLUSTER prod_cluster/);
-    assert.match(replicatedOutput, /ENGINE = \{engine\}\{merge_tree_clauses\}/);
-    assert.match(replicatedOutput, /ReplicatedMergeTree\('\/clickhouse\/\{\{cluster\}\}\/\{table_name\}', '\{\{replica\}\}'\)/);
-    assert.match(replicatedOutput, /PARTITION BY toYYYYMM\(partition_time\) ORDER BY \(program_id, slot, instruction_id\)/);
-    assert.match(replicatedOutput, /TTL partition_time \+ INTERVAL 30 DAY SETTINGS index_granularity = 8192/);
-    assert.match(replicatedOutput, /amount UInt64 CODEC\(ZSTD\(3\)\)/);
-    assert.match(replicatedOutput, /ALTER TABLE \{table_name\} ON CLUSTER prod_cluster ADD COLUMN IF NOT EXISTS amount UInt64 CODEC\(ZSTD\(3\)\)/);
+    assert.match(
+        replicatedOutput,
+        /engine: r#"ReplicatedMergeTree\('\/clickhouse\/\{\{cluster\}\}\/\{table_name\}', '\{\{replica\}\}'\)"#\.to_string\(\)/,
+    );
+    assert.match(replicatedOutput, /partition_by: r#"toYYYYMM\(partition_time\)"#/);
+    assert.match(replicatedOutput, /order_by: r#"\(program_id, slot, instruction_id\)"#/);
+    assert.match(replicatedOutput, /ttl_clause: r#" TTL partition_time \+ INTERVAL 30 DAY"#/);
+    assert.match(replicatedOutput, /settings_clause: r#" SETTINGS index_granularity = 8192"#/);
+    assert.match(
+        replicatedOutput,
+        /ClickHouseColumnSpec::with_ddl_type\("amount", r#"UInt64"#, r#"UInt64 CODEC\(ZSTD\(3\)\)"#\)/,
+    );
 
     const distributedDdl = getClickHouseDdlContext(
         {
@@ -229,13 +248,14 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
         clickHouseDdl: distributedDdl,
     });
 
-    assert.match(distributedOutput, /pub fn create_local_table_sql\(table_name: &str\) -> String/);
-    assert.match(distributedOutput, /format!\("\{table_name\}_local"\)/);
-    assert.match(distributedOutput, /Distributed\('prod_cluster', 'analytics', '\{table_name\}_local', cityHash64\(instruction_id\)\)/);
-    assert.match(distributedOutput, /Self::create_table_sql_for\(table_name, &engine, false\)/);
-    assert.match(distributedOutput, /Self::create_table_sql_for\(&local_table_name, &engine, true\)/);
-    assert.match(distributedOutput, /Self::managed_table_for\(&local_table_name, Self::create_local_table_sql\(table_name\), local_engine, true\)/);
-    assert.match(distributedOutput, /Self::managed_table_for\(table_name, Self::create_table_sql\(table_name\), distributed_engine, false\)/);
+    assert.match(distributedOutput, /local_engine: Some\(r#"ReplicatedMergeTree/);
+    assert.match(distributedOutput, /local_table_suffix: r#"_local"#/);
+    assert.match(
+        distributedOutput,
+        /Distributed\('prod_cluster', 'analytics', '\{table_name\}_local', cityHash64\(instruction_id\)\)/,
+    );
+    assert.match(distributedOutput, /clickhouse_create_table_sql\(/);
+    assert.match(distributedOutput, /options\.local_engine\.is_none\(\)/);
 }
 
 {
@@ -306,7 +326,10 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
         imports: 'use { crate::{TokenProgramDecoder, PROGRAM_ID}, solana_program_pack::Pack };',
     });
 
-    assert.match(tokenProgramAccountsModFromPackageName, /spl_token_interface::state::Account::unpack\(&account\.data\)/);
+    assert.match(
+        tokenProgramAccountsModFromPackageName,
+        /spl_token_interface::state::Account::unpack\(&account\.data\)/,
+    );
     assert.doesNotMatch(tokenProgramAccountsModFromPackageName, /::decode\(data\)/);
 }
 
@@ -346,7 +369,11 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
     const defined = name => ({ kind: 'definedTypeLinkNode', name });
     const emptyVariant = name => ({ kind: 'enumEmptyVariantTypeNode', name });
     const structVariant = (name, fields) => ({ kind: 'enumStructVariantTypeNode', name, struct: struct(fields) });
-    const tupleVariant = (name, items) => ({ kind: 'enumTupleVariantTypeNode', name, tuple: { kind: 'tupleTypeNode', items } });
+    const tupleVariant = (name, items) => ({
+        kind: 'enumTupleVariantTypeNode',
+        name,
+        tuple: { kind: 'tupleTypeNode', items },
+    });
 
     const side = {
         kind: 'enumTypeNode',
