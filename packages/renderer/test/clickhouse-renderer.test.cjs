@@ -146,6 +146,7 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
     assert.match(output, /clickhouse_managed_tables\(table_name, &columns, &Self::table_options\(\)\)/);
     assert.match(output, /partition_by: r#"partition_slot"#/);
     assert.match(output, /order_by: r#"\(program_id, family_name, account_id, slot\)"#/);
+    assert.match(output, /settings_clause: r#" SETTINGS non_replicated_deduplication_window = 1000"#/);
     assert.match(output, /demo_program_mint_account_landing/);
 }
 
@@ -184,6 +185,7 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
     assert.match(output, /pub fn managed_tables\(table_name: &str\) -> Vec<ClickHouseManagedTable>/);
     assert.match(output, /partition_by: r#"toYear\(partition_time\)"#/);
     assert.match(output, /order_by: r#"\(program_id, family_name, event_id, slot\)"#/);
+    assert.match(output, /settings_clause: r#" SETTINGS non_replicated_deduplication_window = 1000"#/);
     assert.match(output, /pub fn from_parts/);
     assert.doesNotMatch(output, /data JSON/);
 }
@@ -256,6 +258,26 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
     );
     assert.match(distributedOutput, /clickhouse_create_table_sql\(/);
     assert.match(distributedOutput, /options\.local_engine\.is_none\(\)/);
+
+    const mergeTreeDdl = getClickHouseDdlContext(
+        {
+            ddlMode: 'merge-tree',
+            engineSettings: { index_granularity: 8192 },
+        },
+        'instruction',
+    );
+    const mergeTreeOutput = render('clickhouseRowPage.njk', {
+        program,
+        entityName: 'swap',
+        isAccount: false,
+        flatFields: [typedField],
+        clickHouseDdl: mergeTreeDdl,
+    });
+
+    assert.match(
+        mergeTreeOutput,
+        /settings_clause: r#" SETTINGS index_granularity = 8192, non_replicated_deduplication_window = 1000"#/,
+    );
 }
 
 {

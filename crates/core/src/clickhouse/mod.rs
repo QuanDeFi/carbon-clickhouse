@@ -9,8 +9,8 @@ pub mod writer;
 pub use admin::{
     clickhouse_add_column_sql, clickhouse_column_definitions, clickhouse_column_names,
     clickhouse_create_table_sql, clickhouse_managed_tables, clickhouse_migration_operations,
-    ClickHouseAdmin, ClickHouseColumnDefinition, ClickHouseColumnSpec, ClickHouseManagedTable,
-    ClickHouseSchema, ClickHouseTableOptions,
+    clickhouse_modify_settings_sql, ClickHouseAdmin, ClickHouseColumnDefinition,
+    ClickHouseColumnSpec, ClickHouseManagedTable, ClickHouseSchema, ClickHouseTableOptions,
 };
 pub use config::{
     ClickHouseAsyncInsertSettings, ClickHouseBatchSettings, ClickHouseConfig,

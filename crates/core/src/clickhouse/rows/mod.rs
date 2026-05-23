@@ -103,7 +103,7 @@ impl ClickHouseInstructionLandingMetadata {
     }
 
     pub fn partition_key(&self) -> String {
-        self.partition_time[..4].to_string()
+        self.partition_time.get(..4).unwrap_or("0000").to_string()
     }
 }
 
@@ -179,7 +179,7 @@ impl ClickHouseEventLandingMetadata {
     }
 
     pub fn partition_key(&self) -> String {
-        self.partition_time[..4].to_string()
+        self.partition_time.get(..4).unwrap_or("0000").to_string()
     }
 }
 

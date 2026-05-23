@@ -90,7 +90,9 @@ export function getClickHouseDdlContext(
     const partitionBy = resolveByKind(options.partitionBy, kind) ?? defaultPartitionBy(kind);
     const orderBy = renderOrderBy(resolveByKind(options.orderBy, kind) ?? defaultOrderBy(kind));
     const ttl = resolveByKind(options.ttl, kind);
-    const settings = renderSettings(options.engineSettings);
+    const settings = renderSettings(
+        withDefaultDeduplicationSetting(options.engineSettings, shouldEnableLocalMergeTreeDeduplication(options)),
+    );
     const onClusterClause = options.onCluster ? ` ON CLUSTER ${options.onCluster}` : '';
 
     return {
@@ -177,6 +179,40 @@ function renderSettings(settings: ClickHouseEngineSettings | undefined): string 
     return Object.entries(settings)
         .map(([key, value]) => `${key} = ${renderSettingValue(value)}`)
         .join(', ');
+}
+
+function shouldEnableLocalMergeTreeDeduplication(options: NormalizedClickHouseOptions): boolean {
+    return (
+        options.ddlMode === 'merge-tree' ||
+        (options.ddlMode === 'distributed' && options.distributedLocalDdlMode === 'merge-tree')
+    );
+}
+
+function withDefaultDeduplicationSetting(
+    settings: ClickHouseEngineSettings | undefined,
+    enabled: boolean,
+): ClickHouseEngineSettings | undefined {
+    if (!enabled) return settings;
+    const defaultSetting = 'non_replicated_deduplication_window = 1000';
+
+    if (!settings) return defaultSetting;
+    if (typeof settings === 'string') {
+        return settings.includes('non_replicated_deduplication_window')
+            ? settings
+            : `${settings}, ${defaultSetting}`;
+    }
+    if (Array.isArray(settings)) {
+        return settings.some(setting => setting.includes('non_replicated_deduplication_window'))
+            ? settings
+            : [...settings, defaultSetting];
+    }
+    if (Object.prototype.hasOwnProperty.call(settings, 'non_replicated_deduplication_window')) {
+        return settings;
+    }
+    return {
+        ...settings,
+        non_replicated_deduplication_window: 1000,
+    };
 }
 
 function renderSettingValue(value: string | number | boolean): string {

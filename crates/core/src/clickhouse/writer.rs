@@ -1,7 +1,10 @@
 use std::{
     collections::HashMap,
     marker::PhantomData,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex,
+    },
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -30,6 +33,8 @@ pub struct ClickHouseBatchWriter<R: ClickHouseRow> {
     metrics_family: ClickHouseMetricsFamily,
     _phantom: PhantomData<R>,
 }
+
+static QUERY_ID_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct ClickHouseBufferKey {
@@ -327,22 +332,49 @@ impl<R: ClickHouseRow> ClickHouseBatchWriter<R> {
         keys: Vec<ClickHouseBufferKey>,
     ) -> CarbonResult<ClickHouseFlushOutcome> {
         let mut flushed = 0usize;
+        let mut first_error: Option<Error> = None;
+        let mut failed_buffers = 0usize;
         for key in keys {
-            let outcome = Self::flush_buffer_key(
+            match Self::flush_buffer_key(
                 Arc::clone(&state),
                 client.clone(),
                 config.clone(),
                 metrics_family,
                 key,
             )
-            .await?;
-            flushed += outcome.rows;
+            .await
+            {
+                Ok(outcome) => flushed += outcome.rows,
+                Err(error) => {
+                    failed_buffers += 1;
+                    if first_error.is_none() {
+                        first_error = Some(error);
+                    }
+                }
+            }
         }
 
-        let buffered_rows = state
-            .lock()
-            .expect("ClickHouse writer state poisoned")
-            .buffered_rows;
+        let buffered_rows = {
+            let mut state = state.lock().expect("ClickHouse writer state poisoned");
+            if let Some(error) = first_error {
+                let message = if failed_buffers == 1 {
+                    error.to_string()
+                } else {
+                    format!(
+                        "{}; {failed_buffers} ClickHouse buffers failed during flush",
+                        error
+                    )
+                };
+                state.background_error = Some(message.clone());
+                return Err(Error::Custom(message));
+            }
+
+            if flushed > 0 {
+                state.background_error = None;
+            }
+            state.buffered_rows
+        };
+
         Ok(ClickHouseFlushOutcome {
             rows: flushed,
             buffered_rows,
@@ -624,7 +656,7 @@ fn batch_query_settings(
     let mut settings = config.insert_query_settings();
     settings.push(ClickHouseQuerySetting::new(
         "query_id",
-        query_id(table, body, attempt),
+        query_id(table, attempt),
     ));
 
     if config.deduplication_settings == ClickHouseDeduplicationSettings::ExactBatchHash {
@@ -669,12 +701,9 @@ fn deduplication_token(table: &str, query: &str, body: &str) -> String {
     hash_hex([table, "\n", query, "\n", body])
 }
 
-fn query_id(table: &str, body: &str, attempt: usize) -> String {
-    let attempt = attempt.to_string();
-    format!(
-        "carbon-clickhouse-{table}-{}",
-        hash_hex([table, body, attempt.as_str()])
-    )
+fn query_id(table: &str, attempt: usize) -> String {
+    let sequence = QUERY_ID_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    format!("carbon-clickhouse-{table}-{sequence}-{attempt}")
 }
 
 fn hash_hex<'a>(parts: impl IntoIterator<Item = &'a str>) -> String {
@@ -1109,7 +1138,12 @@ mod tests {
                 .unwrap();
             request
         });
-        let mut writer = ClickHouseBatchWriter::<TestRow>::new(config_with_max_rows(endpoint, 2));
+        let mut writer = ClickHouseBatchWriter::<TestRow>::new(
+            config_with_max_rows(endpoint, 2).with_retry_settings(ClickHouseRetrySettings {
+                max_retries: 0,
+                ..ClickHouseRetrySettings::default()
+            }),
+        );
 
         writer
             .buffer_row(TestRow {
@@ -1142,6 +1176,61 @@ mod tests {
         assert_eq!(writer.buffer_count(), 2);
         assert!(request.contains("failing_table"));
         assert!(!request.contains("cold_table"));
+        writer.shutdown().await.unwrap_err();
+    }
+
+    #[tokio::test]
+    async fn flush_attempts_all_buffers_before_returning_error() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let endpoint = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let mut requests = Vec::new();
+            for _ in 0..2 {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut buffer = vec![0u8; 8192];
+                let n = socket.read(&mut buffer).await.unwrap();
+                let request = String::from_utf8_lossy(&buffer[..n]).to_string();
+                let response = if request.contains("failing_table") {
+                    b"HTTP/1.1 400 Bad Request\r\nContent-Length: 6\r\n\r\nschema".as_slice()
+                } else {
+                    b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".as_slice()
+                };
+                socket.write_all(response).await.unwrap();
+                requests.push(request);
+            }
+            requests
+        });
+        let config = config_with_endpoint(endpoint).with_retry_settings(ClickHouseRetrySettings {
+            max_retries: 0,
+            ..ClickHouseRetrySettings::default()
+        });
+        let mut writer = ClickHouseBatchWriter::<TestRow>::new(config);
+
+        writer
+            .buffer_row(TestRow {
+                id: 1,
+                table: "failing_table",
+                partition: "2026".to_string(),
+            })
+            .await
+            .unwrap();
+        writer
+            .buffer_row(TestRow {
+                id: 2,
+                table: "healthy_table",
+                partition: "2026".to_string(),
+            })
+            .await
+            .unwrap();
+
+        let error = writer.flush().await.unwrap_err();
+        let requests = server.await.unwrap().join("\n");
+
+        assert!(error.to_string().contains("400 Bad Request"));
+        assert!(requests.contains("failing_table"));
+        assert!(requests.contains("healthy_table"));
+        assert_eq!(writer.buffered_rows(), 1);
+        assert_eq!(writer.buffer_count(), 1);
         writer.shutdown().await.unwrap_err();
     }
 
@@ -1365,8 +1454,28 @@ mod tests {
         assert!(request.contains("async_insert_busy_timeout_ms=250"));
         assert!(request.contains("async_insert_max_data_size=1000000"));
         assert!(request.contains("async_insert_max_query_number=8"));
-        assert!(request.contains("async_insert_deduplicate=0"));
+        assert!(request.contains("async_insert_deduplicate=1"));
         writer.shutdown().await.unwrap();
+    }
+
+    #[test]
+    fn exact_batch_deduplication_is_enabled_by_default() {
+        assert_eq!(
+            config().deduplication_settings,
+            ClickHouseDeduplicationSettings::ExactBatchHash
+        );
+
+        let settings = batch_query_settings(
+            &config(),
+            "settings_table",
+            "INSERT INTO settings_table FORMAT JSONEachRow",
+            "{\"id\":1}\n",
+            0,
+        );
+
+        assert!(settings
+            .iter()
+            .any(|setting| setting.name == "insert_deduplication_token"));
     }
 
     #[test]

@@ -93,8 +93,8 @@ impl Default for ClickHouseRetrySettings {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ClickHouseDeduplicationSettings {
-    #[default]
     Disabled,
+    #[default]
     ExactBatchHash,
 }
 
@@ -263,7 +263,14 @@ impl ClickHouseConfig {
                         value.to_string(),
                     ));
                 }
-                if let Some(value) = async_settings.deduplicate {
+                let async_deduplicate = if self.deduplication_settings
+                    == ClickHouseDeduplicationSettings::ExactBatchHash
+                {
+                    Some(true)
+                } else {
+                    async_settings.deduplicate
+                };
+                if let Some(value) = async_deduplicate {
                     settings.push(ClickHouseQuerySetting::new(
                         "async_insert_deduplicate",
                         if value { "1" } else { "0" },
@@ -320,7 +327,7 @@ mod tests {
         assert_eq!(config.retry_settings, ClickHouseRetrySettings::default());
         assert_eq!(
             config.deduplication_settings,
-            ClickHouseDeduplicationSettings::Disabled
+            ClickHouseDeduplicationSettings::ExactBatchHash
         );
     }
 

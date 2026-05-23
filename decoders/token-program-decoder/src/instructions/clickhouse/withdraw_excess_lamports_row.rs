@@ -64,7 +64,7 @@ impl WithdrawExcessLamportsInstructionClickHouseRow {
             partition_by: r#"toYear(partition_time)"#,
             order_by: r#"(program_id, family_name, instruction_id, slot)"#,
             ttl_clause: r#""#,
-            settings_clause: r#""#,
+            settings_clause: r#" SETTINGS non_replicated_deduplication_window = 1000"#,
         }
     }
 

@@ -94,7 +94,12 @@ pub(crate) fn client_from_config(config: &ClickHouseConfig) -> reqwest::Client {
         }
     }
 
-    builder.build().unwrap_or_else(|_| reqwest::Client::new())
+    builder.build().unwrap_or_else(|error| {
+        log::warn!(
+            "Falling back to default ClickHouse HTTP client after configured client build failed: {error}"
+        );
+        reqwest::Client::new()
+    })
 }
 
 fn apply_auth(
