@@ -782,8 +782,7 @@ mod tests {
             "source".to_string(),
             "live".to_string(),
             "v1".to_string(),
-            100,
-            Duration::from_secs(60),
+            ClickHouseBatchSettings::new(100, Duration::from_secs(60)),
         )
     }
 
@@ -797,8 +796,7 @@ mod tests {
             "source".to_string(),
             "live".to_string(),
             "v1".to_string(),
-            max_rows,
-            Duration::from_secs(60),
+            ClickHouseBatchSettings::new(max_rows, Duration::from_secs(60)),
         )
     }
 
@@ -812,8 +810,7 @@ mod tests {
             "source".to_string(),
             "live".to_string(),
             "v1".to_string(),
-            100,
-            flush_interval,
+            ClickHouseBatchSettings::new(100, flush_interval),
         )
     }
 

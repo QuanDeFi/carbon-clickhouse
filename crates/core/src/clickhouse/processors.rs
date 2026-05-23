@@ -154,7 +154,7 @@ where
 mod tests {
     use super::*;
     use crate::{
-        clickhouse::{rows::ClickHouseTable, ClickHouseConfig},
+        clickhouse::{rows::ClickHouseTable, ClickHouseBatchSettings, ClickHouseConfig},
         metrics::MetricsRegistry,
     };
     use solana_pubkey::Pubkey;
@@ -262,8 +262,7 @@ mod tests {
             "source".to_string(),
             "live".to_string(),
             "v1".to_string(),
-            100,
-            Duration::from_secs(60),
+            ClickHouseBatchSettings::new(100, Duration::from_secs(60)),
         )
     }
 

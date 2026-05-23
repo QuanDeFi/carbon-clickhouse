@@ -816,6 +816,7 @@ fn normalize_clickhouse_type(input: &str) -> String {
 mod tests {
     use std::time::Duration;
 
+    use crate::clickhouse::ClickHouseBatchSettings;
     use tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
         net::TcpListener,
@@ -833,8 +834,7 @@ mod tests {
             "source".to_string(),
             "live".to_string(),
             "v1".to_string(),
-            100,
-            Duration::from_secs(60),
+            ClickHouseBatchSettings::new(100, Duration::from_secs(60)),
         )
     }
 

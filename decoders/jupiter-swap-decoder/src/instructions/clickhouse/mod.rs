@@ -52,8 +52,8 @@ use {
     carbon_core::{
         clickhouse::{
             rows::{ClickHouseRow, ClickHouseRowContext, ClickHouseRows},
-            ClickHouseAdmin, ClickHouseConfig, ClickHouseInstructionProcessor,
-            ClickHouseManagedTable, ClickHouseSchema,
+            ClickHouseAdmin, ClickHouseBatchSettings, ClickHouseConfig,
+            ClickHouseInstructionProcessor, ClickHouseManagedTable, ClickHouseSchema,
         },
         error::CarbonResult,
         instruction::InstructionMetadata,
@@ -66,8 +66,8 @@ pub const DEFAULT_DATABASE: &str = "default";
 pub const DEFAULT_SOURCE_NAME: &str = "block_crawler";
 pub const DEFAULT_MODE: &str = "backfill";
 pub const DEFAULT_DECODER_VERSION: &str = "v1";
-pub const DEFAULT_MAX_ROWS: usize = 500;
-pub const DEFAULT_FLUSH_INTERVAL_MS: u64 = 1_000;
+pub const DEFAULT_BATCH_MAX_ROWS: usize = 500;
+pub const DEFAULT_BATCH_FLUSH_INTERVAL_MS: u64 = 1_000;
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(untagged)]
@@ -568,8 +568,10 @@ pub fn clickhouse_config_from_database_url(database_url: &str) -> CarbonResult<C
         DEFAULT_SOURCE_NAME.to_string(),
         DEFAULT_MODE.to_string(),
         DEFAULT_DECODER_VERSION.to_string(),
-        DEFAULT_MAX_ROWS,
-        Duration::from_millis(DEFAULT_FLUSH_INTERVAL_MS),
+        ClickHouseBatchSettings::new(
+            DEFAULT_BATCH_MAX_ROWS,
+            Duration::from_millis(DEFAULT_BATCH_FLUSH_INTERVAL_MS),
+        ),
     )
 }
 

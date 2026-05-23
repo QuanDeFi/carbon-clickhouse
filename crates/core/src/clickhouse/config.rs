@@ -108,8 +108,6 @@ pub struct ClickHouseConfig {
     pub source_name: String,
     pub mode: String,
     pub decoder_version: String,
-    pub max_rows: usize,
-    pub flush_interval: Duration,
     pub insert_settings: ClickHouseInsertSettings,
     pub batch_settings: ClickHouseBatchSettings,
     pub transport_settings: ClickHouseTransportSettings,
@@ -128,8 +126,7 @@ impl ClickHouseConfig {
         source_name: String,
         mode: String,
         decoder_version: String,
-        max_rows: usize,
-        flush_interval: Duration,
+        batch_settings: ClickHouseBatchSettings,
     ) -> Self {
         Self {
             endpoint,
@@ -140,10 +137,8 @@ impl ClickHouseConfig {
             source_name,
             mode,
             decoder_version,
-            max_rows,
-            flush_interval,
             insert_settings: ClickHouseInsertSettings::Sync,
-            batch_settings: ClickHouseBatchSettings::new(max_rows, flush_interval),
+            batch_settings,
             transport_settings: ClickHouseTransportSettings::default(),
             retry_settings: ClickHouseRetrySettings::default(),
             deduplication_settings: ClickHouseDeduplicationSettings::default(),
@@ -158,8 +153,7 @@ impl ClickHouseConfig {
         source_name: String,
         mode: String,
         decoder_version: String,
-        max_rows: usize,
-        flush_interval: Duration,
+        batch_settings: ClickHouseBatchSettings,
     ) -> CarbonResult<Self> {
         let parsed = url::Url::parse(database_url).map_err(|err| {
             Error::Custom(format!("Invalid DATABASE_URL={database_url:?}: {err}"))
@@ -190,8 +184,7 @@ impl ClickHouseConfig {
             source_name,
             mode,
             decoder_version,
-            max_rows,
-            flush_interval,
+            batch_settings,
         ))
     }
 
@@ -209,8 +202,6 @@ impl ClickHouseConfig {
     }
 
     pub fn with_batch_settings(mut self, settings: ClickHouseBatchSettings) -> Self {
-        self.max_rows = settings.max_rows;
-        self.flush_interval = settings.flush_interval;
         self.batch_settings = settings;
         self
     }
@@ -297,8 +288,7 @@ mod tests {
             "source".to_string(),
             "mode".to_string(),
             "v1".to_string(),
-            100,
-            Duration::from_secs(1),
+            ClickHouseBatchSettings::new(100, Duration::from_secs(1)),
         )
     }
 
@@ -312,11 +302,11 @@ mod tests {
     }
 
     #[test]
-    fn legacy_constructors_populate_production_defaults() {
+    fn constructors_populate_production_defaults() {
         let config = config();
 
-        assert_eq!(config.batch_settings.max_rows, config.max_rows);
-        assert_eq!(config.batch_settings.flush_interval, config.flush_interval);
+        assert_eq!(config.batch_settings.max_rows, 100);
+        assert_eq!(config.batch_settings.flush_interval, Duration::from_secs(1));
         assert_eq!(config.batch_settings.max_bytes, None);
         assert_eq!(config.batch_settings.max_buffered_rows, None);
         assert_eq!(config.batch_settings.max_buffered_bytes, None);
@@ -332,7 +322,7 @@ mod tests {
     }
 
     #[test]
-    fn batch_settings_builder_updates_legacy_fields() {
+    fn batch_settings_builder_replaces_batch_settings() {
         let config = config().with_batch_settings(ClickHouseBatchSettings {
             max_rows: 10,
             max_bytes: Some(1024),
@@ -341,8 +331,8 @@ mod tests {
             flush_interval: Duration::from_secs(2),
         });
 
-        assert_eq!(config.max_rows, 10);
-        assert_eq!(config.flush_interval, Duration::from_secs(2));
+        assert_eq!(config.batch_settings.max_rows, 10);
+        assert_eq!(config.batch_settings.flush_interval, Duration::from_secs(2));
         assert_eq!(config.batch_settings.max_bytes, Some(1024));
         assert_eq!(config.batch_settings.max_buffered_rows, Some(100));
         assert_eq!(config.batch_settings.max_buffered_bytes, Some(4096));
