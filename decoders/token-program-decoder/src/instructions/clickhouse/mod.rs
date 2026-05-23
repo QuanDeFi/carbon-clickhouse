@@ -60,9 +60,8 @@ use {
     super::TokenProgramInstruction,
     carbon_core::{
         clickhouse::{
-            rows::{ClickHouseRow, ClickHouseRowContext, ClickHouseRows},
             ClickHouseAdmin, ClickHouseBatchSettings, ClickHouseConfig,
-            ClickHouseInstructionProcessor, ClickHouseManagedTable, ClickHouseSchema,
+            ClickHouseInstructionProcessor,
         },
         error::CarbonResult,
         instruction::InstructionMetadata,
@@ -115,74 +114,6 @@ pub enum TokenProgramClickHouseInstructionRow {
     ),
 }
 
-impl ClickHouseRow for TokenProgramClickHouseInstructionRow {
-    fn table_name(&self) -> &'static str {
-        match self {
-            Self::AmountToUiAmount(row) => row.table_name(),
-            Self::Approve(row) => row.table_name(),
-            Self::ApproveChecked(row) => row.table_name(),
-            Self::Batch(row) => row.table_name(),
-            Self::Burn(row) => row.table_name(),
-            Self::BurnChecked(row) => row.table_name(),
-            Self::CloseAccount(row) => row.table_name(),
-            Self::FreezeAccount(row) => row.table_name(),
-            Self::GetAccountDataSize(row) => row.table_name(),
-            Self::InitializeAccount(row) => row.table_name(),
-            Self::InitializeAccount2(row) => row.table_name(),
-            Self::InitializeAccount3(row) => row.table_name(),
-            Self::InitializeImmutableOwner(row) => row.table_name(),
-            Self::InitializeMint(row) => row.table_name(),
-            Self::InitializeMint2(row) => row.table_name(),
-            Self::InitializeMultisig(row) => row.table_name(),
-            Self::InitializeMultisig2(row) => row.table_name(),
-            Self::MintTo(row) => row.table_name(),
-            Self::MintToChecked(row) => row.table_name(),
-            Self::Revoke(row) => row.table_name(),
-            Self::SetAuthority(row) => row.table_name(),
-            Self::SyncNative(row) => row.table_name(),
-            Self::ThawAccount(row) => row.table_name(),
-            Self::Transfer(row) => row.table_name(),
-            Self::TransferChecked(row) => row.table_name(),
-            Self::UiAmountToAmount(row) => row.table_name(),
-            Self::UnwrapLamports(row) => row.table_name(),
-            Self::WithdrawExcessLamports(row) => row.table_name(),
-        }
-    }
-
-    fn partition_key(&self) -> String {
-        match self {
-            Self::AmountToUiAmount(row) => row.partition_key(),
-            Self::Approve(row) => row.partition_key(),
-            Self::ApproveChecked(row) => row.partition_key(),
-            Self::Batch(row) => row.partition_key(),
-            Self::Burn(row) => row.partition_key(),
-            Self::BurnChecked(row) => row.partition_key(),
-            Self::CloseAccount(row) => row.partition_key(),
-            Self::FreezeAccount(row) => row.partition_key(),
-            Self::GetAccountDataSize(row) => row.partition_key(),
-            Self::InitializeAccount(row) => row.partition_key(),
-            Self::InitializeAccount2(row) => row.partition_key(),
-            Self::InitializeAccount3(row) => row.partition_key(),
-            Self::InitializeImmutableOwner(row) => row.partition_key(),
-            Self::InitializeMint(row) => row.partition_key(),
-            Self::InitializeMint2(row) => row.partition_key(),
-            Self::InitializeMultisig(row) => row.partition_key(),
-            Self::InitializeMultisig2(row) => row.partition_key(),
-            Self::MintTo(row) => row.partition_key(),
-            Self::MintToChecked(row) => row.partition_key(),
-            Self::Revoke(row) => row.partition_key(),
-            Self::SetAuthority(row) => row.partition_key(),
-            Self::SyncNative(row) => row.partition_key(),
-            Self::ThawAccount(row) => row.partition_key(),
-            Self::Transfer(row) => row.partition_key(),
-            Self::TransferChecked(row) => row.partition_key(),
-            Self::UiAmountToAmount(row) => row.partition_key(),
-            Self::UnwrapLamports(row) => row.partition_key(),
-            Self::WithdrawExcessLamports(row) => row.partition_key(),
-        }
-    }
-}
-
 pub type TokenProgramClickHouseInstructionProcessor = ClickHouseInstructionProcessor<
     TokenProgramInstruction,
     TokenProgramInstructionWithClickHouseMetadata,
@@ -191,209 +122,43 @@ pub type TokenProgramClickHouseInstructionProcessor = ClickHouseInstructionProce
 
 pub struct TokenProgramClickHouseInstructionsMigration;
 
-impl ClickHouseSchema for TokenProgramClickHouseInstructionsMigration {
-    fn operations(_config: &ClickHouseConfig) -> Vec<String> {
-        let mut operations = Vec::new();
-        operations.extend(amount_to_ui_amount_row::AmountToUiAmountInstructionClickHouseRow::migration_operations(amount_to_ui_amount_row::AmountToUiAmountInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        operations.extend(
-            approve_row::ApproveInstructionClickHouseRow::migration_operations(
-                approve_row::ApproveInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(
-            approve_checked_row::ApproveCheckedInstructionClickHouseRow::migration_operations(
-                approve_checked_row::ApproveCheckedInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(
-            batch_row::BatchInstructionClickHouseRow::migration_operations(
-                batch_row::BatchInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(
-            burn_row::BurnInstructionClickHouseRow::migration_operations(
-                burn_row::BurnInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(
-            burn_checked_row::BurnCheckedInstructionClickHouseRow::migration_operations(
-                burn_checked_row::BurnCheckedInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(
-            close_account_row::CloseAccountInstructionClickHouseRow::migration_operations(
-                close_account_row::CloseAccountInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(
-            freeze_account_row::FreezeAccountInstructionClickHouseRow::migration_operations(
-                freeze_account_row::FreezeAccountInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(get_account_data_size_row::GetAccountDataSizeInstructionClickHouseRow::migration_operations(get_account_data_size_row::GetAccountDataSizeInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        operations.extend(initialize_account_row::InitializeAccountInstructionClickHouseRow::migration_operations(initialize_account_row::InitializeAccountInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        operations.extend(initialize_account2_row::InitializeAccount2InstructionClickHouseRow::migration_operations(initialize_account2_row::InitializeAccount2InstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        operations.extend(initialize_account3_row::InitializeAccount3InstructionClickHouseRow::migration_operations(initialize_account3_row::InitializeAccount3InstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        operations.extend(initialize_immutable_owner_row::InitializeImmutableOwnerInstructionClickHouseRow::migration_operations(initialize_immutable_owner_row::InitializeImmutableOwnerInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        operations.extend(
-            initialize_mint_row::InitializeMintInstructionClickHouseRow::migration_operations(
-                initialize_mint_row::InitializeMintInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(
-            initialize_mint2_row::InitializeMint2InstructionClickHouseRow::migration_operations(
-                initialize_mint2_row::InitializeMint2InstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(initialize_multisig_row::InitializeMultisigInstructionClickHouseRow::migration_operations(initialize_multisig_row::InitializeMultisigInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        operations.extend(initialize_multisig2_row::InitializeMultisig2InstructionClickHouseRow::migration_operations(initialize_multisig2_row::InitializeMultisig2InstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        operations.extend(
-            mint_to_row::MintToInstructionClickHouseRow::migration_operations(
-                mint_to_row::MintToInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(
-            mint_to_checked_row::MintToCheckedInstructionClickHouseRow::migration_operations(
-                mint_to_checked_row::MintToCheckedInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(
-            revoke_row::RevokeInstructionClickHouseRow::migration_operations(
-                revoke_row::RevokeInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(
-            set_authority_row::SetAuthorityInstructionClickHouseRow::migration_operations(
-                set_authority_row::SetAuthorityInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(
-            sync_native_row::SyncNativeInstructionClickHouseRow::migration_operations(
-                sync_native_row::SyncNativeInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(
-            thaw_account_row::ThawAccountInstructionClickHouseRow::migration_operations(
-                thaw_account_row::ThawAccountInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(
-            transfer_row::TransferInstructionClickHouseRow::migration_operations(
-                transfer_row::TransferInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(
-            transfer_checked_row::TransferCheckedInstructionClickHouseRow::migration_operations(
-                transfer_checked_row::TransferCheckedInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(ui_amount_to_amount_row::UiAmountToAmountInstructionClickHouseRow::migration_operations(ui_amount_to_amount_row::UiAmountToAmountInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        operations.extend(
-            unwrap_lamports_row::UnwrapLamportsInstructionClickHouseRow::migration_operations(
-                unwrap_lamports_row::UnwrapLamportsInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(withdraw_excess_lamports_row::WithdrawExcessLamportsInstructionClickHouseRow::migration_operations(withdraw_excess_lamports_row::WithdrawExcessLamportsInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        operations
+carbon_core::clickhouse_row_dispatch!(
+    instruction
+    TokenProgramClickHouseInstructionRow,
+    TokenProgramClickHouseInstructionsMigration,
+    TokenProgramInstructionWithClickHouseMetadata,
+    TokenProgramInstruction,
+    {
+        AmountToUiAmount => amount_to_ui_amount_row::AmountToUiAmountInstructionClickHouseRow,
+        Approve => approve_row::ApproveInstructionClickHouseRow,
+        ApproveChecked => approve_checked_row::ApproveCheckedInstructionClickHouseRow,
+        Batch => batch_row::BatchInstructionClickHouseRow,
+        Burn => burn_row::BurnInstructionClickHouseRow,
+        BurnChecked => burn_checked_row::BurnCheckedInstructionClickHouseRow,
+        CloseAccount => close_account_row::CloseAccountInstructionClickHouseRow,
+        FreezeAccount => freeze_account_row::FreezeAccountInstructionClickHouseRow,
+        GetAccountDataSize => get_account_data_size_row::GetAccountDataSizeInstructionClickHouseRow,
+        InitializeAccount => initialize_account_row::InitializeAccountInstructionClickHouseRow,
+        InitializeAccount2 => initialize_account2_row::InitializeAccount2InstructionClickHouseRow,
+        InitializeAccount3 => initialize_account3_row::InitializeAccount3InstructionClickHouseRow,
+        InitializeImmutableOwner => initialize_immutable_owner_row::InitializeImmutableOwnerInstructionClickHouseRow,
+        InitializeMint => initialize_mint_row::InitializeMintInstructionClickHouseRow,
+        InitializeMint2 => initialize_mint2_row::InitializeMint2InstructionClickHouseRow,
+        InitializeMultisig => initialize_multisig_row::InitializeMultisigInstructionClickHouseRow,
+        InitializeMultisig2 => initialize_multisig2_row::InitializeMultisig2InstructionClickHouseRow,
+        MintTo => mint_to_row::MintToInstructionClickHouseRow,
+        MintToChecked => mint_to_checked_row::MintToCheckedInstructionClickHouseRow,
+        Revoke => revoke_row::RevokeInstructionClickHouseRow,
+        SetAuthority => set_authority_row::SetAuthorityInstructionClickHouseRow,
+        SyncNative => sync_native_row::SyncNativeInstructionClickHouseRow,
+        ThawAccount => thaw_account_row::ThawAccountInstructionClickHouseRow,
+        Transfer => transfer_row::TransferInstructionClickHouseRow,
+        TransferChecked => transfer_checked_row::TransferCheckedInstructionClickHouseRow,
+        UiAmountToAmount => ui_amount_to_amount_row::UiAmountToAmountInstructionClickHouseRow,
+        UnwrapLamports => unwrap_lamports_row::UnwrapLamportsInstructionClickHouseRow,
+        WithdrawExcessLamports => withdraw_excess_lamports_row::WithdrawExcessLamportsInstructionClickHouseRow,
     }
-
-    fn managed_tables(_config: &ClickHouseConfig) -> Vec<ClickHouseManagedTable> {
-        let mut tables = Vec::new();
-        tables.extend(amount_to_ui_amount_row::AmountToUiAmountInstructionClickHouseRow::managed_tables(amount_to_ui_amount_row::AmountToUiAmountInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        tables.extend(
-            approve_row::ApproveInstructionClickHouseRow::managed_tables(
-                approve_row::ApproveInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        tables.extend(
-            approve_checked_row::ApproveCheckedInstructionClickHouseRow::managed_tables(
-                approve_checked_row::ApproveCheckedInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        tables.extend(batch_row::BatchInstructionClickHouseRow::managed_tables(
-            batch_row::BatchInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-        ));
-        tables.extend(burn_row::BurnInstructionClickHouseRow::managed_tables(
-            burn_row::BurnInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-        ));
-        tables.extend(
-            burn_checked_row::BurnCheckedInstructionClickHouseRow::managed_tables(
-                burn_checked_row::BurnCheckedInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        tables.extend(
-            close_account_row::CloseAccountInstructionClickHouseRow::managed_tables(
-                close_account_row::CloseAccountInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        tables.extend(
-            freeze_account_row::FreezeAccountInstructionClickHouseRow::managed_tables(
-                freeze_account_row::FreezeAccountInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        tables.extend(get_account_data_size_row::GetAccountDataSizeInstructionClickHouseRow::managed_tables(get_account_data_size_row::GetAccountDataSizeInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        tables.extend(initialize_account_row::InitializeAccountInstructionClickHouseRow::managed_tables(initialize_account_row::InitializeAccountInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        tables.extend(initialize_account2_row::InitializeAccount2InstructionClickHouseRow::managed_tables(initialize_account2_row::InitializeAccount2InstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        tables.extend(initialize_account3_row::InitializeAccount3InstructionClickHouseRow::managed_tables(initialize_account3_row::InitializeAccount3InstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        tables.extend(initialize_immutable_owner_row::InitializeImmutableOwnerInstructionClickHouseRow::managed_tables(initialize_immutable_owner_row::InitializeImmutableOwnerInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        tables.extend(
-            initialize_mint_row::InitializeMintInstructionClickHouseRow::managed_tables(
-                initialize_mint_row::InitializeMintInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        tables.extend(
-            initialize_mint2_row::InitializeMint2InstructionClickHouseRow::managed_tables(
-                initialize_mint2_row::InitializeMint2InstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        tables.extend(initialize_multisig_row::InitializeMultisigInstructionClickHouseRow::managed_tables(initialize_multisig_row::InitializeMultisigInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        tables.extend(initialize_multisig2_row::InitializeMultisig2InstructionClickHouseRow::managed_tables(initialize_multisig2_row::InitializeMultisig2InstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        tables.extend(mint_to_row::MintToInstructionClickHouseRow::managed_tables(
-            mint_to_row::MintToInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-        ));
-        tables.extend(
-            mint_to_checked_row::MintToCheckedInstructionClickHouseRow::managed_tables(
-                mint_to_checked_row::MintToCheckedInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        tables.extend(revoke_row::RevokeInstructionClickHouseRow::managed_tables(
-            revoke_row::RevokeInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-        ));
-        tables.extend(
-            set_authority_row::SetAuthorityInstructionClickHouseRow::managed_tables(
-                set_authority_row::SetAuthorityInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        tables.extend(
-            sync_native_row::SyncNativeInstructionClickHouseRow::managed_tables(
-                sync_native_row::SyncNativeInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        tables.extend(
-            thaw_account_row::ThawAccountInstructionClickHouseRow::managed_tables(
-                thaw_account_row::ThawAccountInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        tables.extend(
-            transfer_row::TransferInstructionClickHouseRow::managed_tables(
-                transfer_row::TransferInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        tables.extend(
-            transfer_checked_row::TransferCheckedInstructionClickHouseRow::managed_tables(
-                transfer_checked_row::TransferCheckedInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        tables.extend(ui_amount_to_amount_row::UiAmountToAmountInstructionClickHouseRow::managed_tables(ui_amount_to_amount_row::UiAmountToAmountInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        tables.extend(
-            unwrap_lamports_row::UnwrapLamportsInstructionClickHouseRow::managed_tables(
-                unwrap_lamports_row::UnwrapLamportsInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        tables.extend(withdraw_excess_lamports_row::WithdrawExcessLamportsInstructionClickHouseRow::managed_tables(withdraw_excess_lamports_row::WithdrawExcessLamportsInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        tables
-    }
-}
+);
 
 impl TokenProgramClickHouseInstructionsMigration {
     pub async fn run(config: &ClickHouseConfig) -> CarbonResult<()> {
@@ -424,272 +189,6 @@ impl
         ),
     ) -> Self {
         Self(value.0, value.1, value.2)
-    }
-}
-
-impl ClickHouseRows<TokenProgramClickHouseInstructionRow>
-    for TokenProgramInstructionWithClickHouseMetadata
-{
-    fn clickhouse_rows(
-        &self,
-        context: &ClickHouseRowContext,
-    ) -> Vec<TokenProgramClickHouseInstructionRow> {
-        let TokenProgramInstructionWithClickHouseMetadata(instruction, metadata, _accounts) = self;
-
-        match instruction {
-            TokenProgramInstruction::AmountToUiAmount { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::AmountToUiAmount(
-                    amount_to_ui_amount_row::AmountToUiAmountInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::Approve { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::Approve(
-                    approve_row::ApproveInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::ApproveChecked { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::ApproveChecked(
-                    approve_checked_row::ApproveCheckedInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::Batch { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::Batch(
-                    batch_row::BatchInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::Burn { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::Burn(
-                    burn_row::BurnInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::BurnChecked { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::BurnChecked(
-                    burn_checked_row::BurnCheckedInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::CloseAccount { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::CloseAccount(
-                    close_account_row::CloseAccountInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::FreezeAccount { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::FreezeAccount(
-                    freeze_account_row::FreezeAccountInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::GetAccountDataSize { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::GetAccountDataSize(
-                    get_account_data_size_row::GetAccountDataSizeInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::InitializeAccount { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::InitializeAccount(
-                    initialize_account_row::InitializeAccountInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::InitializeAccount2 { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::InitializeAccount2(
-                    initialize_account2_row::InitializeAccount2InstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::InitializeAccount3 { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::InitializeAccount3(
-                    initialize_account3_row::InitializeAccount3InstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::InitializeImmutableOwner { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::InitializeImmutableOwner(
-                    initialize_immutable_owner_row::InitializeImmutableOwnerInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::InitializeMint { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::InitializeMint(
-                    initialize_mint_row::InitializeMintInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::InitializeMint2 { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::InitializeMint2(
-                    initialize_mint2_row::InitializeMint2InstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::InitializeMultisig { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::InitializeMultisig(
-                    initialize_multisig_row::InitializeMultisigInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::InitializeMultisig2 { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::InitializeMultisig2(
-                    initialize_multisig2_row::InitializeMultisig2InstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::MintTo { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::MintTo(
-                    mint_to_row::MintToInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::MintToChecked { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::MintToChecked(
-                    mint_to_checked_row::MintToCheckedInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::Revoke { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::Revoke(
-                    revoke_row::RevokeInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::SetAuthority { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::SetAuthority(
-                    set_authority_row::SetAuthorityInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::SyncNative { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::SyncNative(
-                    sync_native_row::SyncNativeInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::ThawAccount { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::ThawAccount(
-                    thaw_account_row::ThawAccountInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::Transfer { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::Transfer(
-                    transfer_row::TransferInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::TransferChecked { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::TransferChecked(
-                    transfer_checked_row::TransferCheckedInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::UiAmountToAmount { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::UiAmountToAmount(
-                    ui_amount_to_amount_row::UiAmountToAmountInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::UnwrapLamports { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::UnwrapLamports(
-                    unwrap_lamports_row::UnwrapLamportsInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramInstruction::WithdrawExcessLamports { data, .. } => {
-                vec![TokenProgramClickHouseInstructionRow::WithdrawExcessLamports(
-                    withdraw_excess_lamports_row::WithdrawExcessLamportsInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-        }
     }
 }
 

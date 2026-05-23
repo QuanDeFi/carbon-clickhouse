@@ -5,158 +5,131 @@ use std::{
 
 use crate::metrics::{Counter, Gauge, Histogram, MetricsRegistry};
 
-macro_rules! clickhouse_metric_family {
-    (
-        $prefix:literal,
-        $singular:literal,
-        inserted: $inserted:ident,
-        failed: $failed:ident,
-        inserted_bytes: $inserted_bytes:ident,
-        failed_bytes: $failed_bytes:ident,
-        retries: $retries:ident,
-        backpressure_rejected: $backpressure_rejected:ident,
-        buffered_rows: $buffered_rows:ident,
-        buffered_bytes: $buffered_bytes:ident,
-        active_buffers: $active_buffers:ident,
-        flush_batches: $flush_batches:ident,
-        flush_failed_batches: $flush_failed_batches:ident,
-        flush_duration_millis: $flush_duration_millis:ident
-    ) => {
-        static $inserted: Counter = Counter::new(
-            concat!("clickhouse.", $prefix, ".inserted"),
-            concat!(
-                "Total number of ClickHouse ",
-                $singular,
-                " rows successfully inserted"
-            ),
-        );
-        static $failed: Counter = Counter::new(
-            concat!("clickhouse.", $prefix, ".failed"),
-            concat!(
-                "Total number of ClickHouse ",
-                $singular,
-                " rows in failed batches"
-            ),
-        );
-        static $inserted_bytes: Counter = Counter::new(
-            concat!("clickhouse.", $prefix, ".inserted_bytes"),
-            concat!(
-                "Total number of ClickHouse ",
-                $singular,
-                " bytes successfully inserted"
-            ),
-        );
-        static $failed_bytes: Counter = Counter::new(
-            concat!("clickhouse.", $prefix, ".failed_bytes"),
-            concat!(
-                "Total number of ClickHouse ",
-                $singular,
-                " bytes in failed batches"
-            ),
-        );
-        static $retries: Counter = Counter::new(
-            concat!("clickhouse.", $prefix, ".retries"),
-            concat!(
-                "Total number of ClickHouse ",
-                $singular,
-                " flush retry attempts"
-            ),
-        );
-        static $backpressure_rejected: Counter = Counter::new(
-            concat!("clickhouse.", $prefix, ".backpressure_rejected"),
-            concat!(
-                "Total number of ClickHouse ",
-                $singular,
-                " rows rejected by local backpressure"
-            ),
-        );
-        static $buffered_rows: Gauge = Gauge::new(
-            concat!("clickhouse.", $prefix, ".buffered_rows"),
-            concat!(
-                "Current number of ",
-                $singular,
-                " rows buffered in the ClickHouse sink"
-            ),
-        );
-        static $buffered_bytes: Gauge = Gauge::new(
-            concat!("clickhouse.", $prefix, ".buffered_bytes"),
-            concat!(
-                "Current number of ",
-                $singular,
-                " bytes buffered in the ClickHouse sink"
-            ),
-        );
-        static $active_buffers: Gauge = Gauge::new(
-            concat!("clickhouse.", $prefix, ".active_buffers"),
-            concat!(
-                "Current number of active ",
-                $singular,
-                " ClickHouse buffers"
-            ),
-        );
-        static $flush_batches: Counter = Counter::new(
-            concat!("clickhouse.", $prefix, ".flush.batches"),
-            concat!(
-                "Total number of successful ClickHouse ",
-                $singular,
-                " flush batches"
-            ),
-        );
-        static $flush_failed_batches: Counter = Counter::new(
-            concat!("clickhouse.", $prefix, ".flush.failed_batches"),
-            concat!(
-                "Total number of failed ClickHouse ",
-                $singular,
-                " flush batches"
-            ),
-        );
-        static $flush_duration_millis: LazyLock<Histogram> = LazyLock::new(|| {
-            Histogram::new(
-                concat!("clickhouse.", $prefix, ".flush.duration_milliseconds"),
-                concat!(
-                    "Duration of ClickHouse ",
-                    $singular,
-                    " flush operations in milliseconds"
-                ),
-                vec![1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0],
-            )
-        });
-    };
-}
-
-clickhouse_metric_family!(
-    "instructions",
-    "instruction",
-    inserted: CLICKHOUSE_INSTRUCTIONS_INSERTED,
-    failed: CLICKHOUSE_INSTRUCTIONS_FAILED,
-    inserted_bytes: CLICKHOUSE_INSTRUCTIONS_INSERTED_BYTES,
-    failed_bytes: CLICKHOUSE_INSTRUCTIONS_FAILED_BYTES,
-    retries: CLICKHOUSE_INSTRUCTIONS_RETRIES,
-    backpressure_rejected: CLICKHOUSE_INSTRUCTIONS_BACKPRESSURE_REJECTED,
-    buffered_rows: CLICKHOUSE_INSTRUCTIONS_BUFFERED_ROWS,
-    buffered_bytes: CLICKHOUSE_INSTRUCTIONS_BUFFERED_BYTES,
-    active_buffers: CLICKHOUSE_INSTRUCTIONS_ACTIVE_BUFFERS,
-    flush_batches: CLICKHOUSE_INSTRUCTIONS_FLUSH_BATCHES,
-    flush_failed_batches: CLICKHOUSE_INSTRUCTIONS_FLUSH_FAILED_BATCHES,
-    flush_duration_millis: CLICKHOUSE_INSTRUCTIONS_FLUSH_DURATION_MILLIS
+static CLICKHOUSE_INSTRUCTIONS_INSERTED: Counter = Counter::new(
+    "clickhouse.instructions.inserted",
+    "Total number of ClickHouse instruction rows successfully inserted",
 );
 
-clickhouse_metric_family!(
-    "accounts",
-    "account",
-    inserted: CLICKHOUSE_ACCOUNTS_INSERTED,
-    failed: CLICKHOUSE_ACCOUNTS_FAILED,
-    inserted_bytes: CLICKHOUSE_ACCOUNTS_INSERTED_BYTES,
-    failed_bytes: CLICKHOUSE_ACCOUNTS_FAILED_BYTES,
-    retries: CLICKHOUSE_ACCOUNTS_RETRIES,
-    backpressure_rejected: CLICKHOUSE_ACCOUNTS_BACKPRESSURE_REJECTED,
-    buffered_rows: CLICKHOUSE_ACCOUNTS_BUFFERED_ROWS,
-    buffered_bytes: CLICKHOUSE_ACCOUNTS_BUFFERED_BYTES,
-    active_buffers: CLICKHOUSE_ACCOUNTS_ACTIVE_BUFFERS,
-    flush_batches: CLICKHOUSE_ACCOUNTS_FLUSH_BATCHES,
-    flush_failed_batches: CLICKHOUSE_ACCOUNTS_FLUSH_FAILED_BATCHES,
-    flush_duration_millis: CLICKHOUSE_ACCOUNTS_FLUSH_DURATION_MILLIS
+static CLICKHOUSE_INSTRUCTIONS_FAILED: Counter = Counter::new(
+    "clickhouse.instructions.failed",
+    "Total number of ClickHouse instruction rows in failed batches",
 );
+
+static CLICKHOUSE_INSTRUCTIONS_INSERTED_BYTES: Counter = Counter::new(
+    "clickhouse.instructions.inserted_bytes",
+    "Total number of ClickHouse instruction bytes successfully inserted",
+);
+
+static CLICKHOUSE_INSTRUCTIONS_FAILED_BYTES: Counter = Counter::new(
+    "clickhouse.instructions.failed_bytes",
+    "Total number of ClickHouse instruction bytes in failed batches",
+);
+
+static CLICKHOUSE_INSTRUCTIONS_RETRIES: Counter = Counter::new(
+    "clickhouse.instructions.retries",
+    "Total number of ClickHouse instruction flush retry attempts",
+);
+
+static CLICKHOUSE_INSTRUCTIONS_BACKPRESSURE_REJECTED: Counter = Counter::new(
+    "clickhouse.instructions.backpressure_rejected",
+    "Total number of ClickHouse instruction rows rejected by local backpressure",
+);
+
+static CLICKHOUSE_INSTRUCTIONS_BUFFERED_ROWS: Gauge = Gauge::new(
+    "clickhouse.instructions.buffered_rows",
+    "Current number of instruction rows buffered in the ClickHouse sink",
+);
+
+static CLICKHOUSE_INSTRUCTIONS_BUFFERED_BYTES: Gauge = Gauge::new(
+    "clickhouse.instructions.buffered_bytes",
+    "Current number of instruction bytes buffered in the ClickHouse sink",
+);
+
+static CLICKHOUSE_INSTRUCTIONS_ACTIVE_BUFFERS: Gauge = Gauge::new(
+    "clickhouse.instructions.active_buffers",
+    "Current number of active instruction ClickHouse buffers",
+);
+
+static CLICKHOUSE_INSTRUCTIONS_FLUSH_BATCHES: Counter = Counter::new(
+    "clickhouse.instructions.flush.batches",
+    "Total number of successful ClickHouse instruction flush batches",
+);
+
+static CLICKHOUSE_INSTRUCTIONS_FLUSH_FAILED_BATCHES: Counter = Counter::new(
+    "clickhouse.instructions.flush.failed_batches",
+    "Total number of failed ClickHouse instruction flush batches",
+);
+
+static CLICKHOUSE_INSTRUCTIONS_FLUSH_DURATION_MILLIS: LazyLock<Histogram> = LazyLock::new(|| {
+    Histogram::new(
+        "clickhouse.instructions.flush.duration_milliseconds",
+        "Duration of ClickHouse instruction flush operations in milliseconds",
+        vec![1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0],
+    )
+});
+
+static CLICKHOUSE_ACCOUNTS_INSERTED: Counter = Counter::new(
+    "clickhouse.accounts.inserted",
+    "Total number of ClickHouse account rows successfully inserted",
+);
+
+static CLICKHOUSE_ACCOUNTS_FAILED: Counter = Counter::new(
+    "clickhouse.accounts.failed",
+    "Total number of ClickHouse account rows in failed batches",
+);
+
+static CLICKHOUSE_ACCOUNTS_INSERTED_BYTES: Counter = Counter::new(
+    "clickhouse.accounts.inserted_bytes",
+    "Total number of ClickHouse account bytes successfully inserted",
+);
+
+static CLICKHOUSE_ACCOUNTS_FAILED_BYTES: Counter = Counter::new(
+    "clickhouse.accounts.failed_bytes",
+    "Total number of ClickHouse account bytes in failed batches",
+);
+
+static CLICKHOUSE_ACCOUNTS_RETRIES: Counter = Counter::new(
+    "clickhouse.accounts.retries",
+    "Total number of ClickHouse account flush retry attempts",
+);
+
+static CLICKHOUSE_ACCOUNTS_BACKPRESSURE_REJECTED: Counter = Counter::new(
+    "clickhouse.accounts.backpressure_rejected",
+    "Total number of ClickHouse account rows rejected by local backpressure",
+);
+
+static CLICKHOUSE_ACCOUNTS_BUFFERED_ROWS: Gauge = Gauge::new(
+    "clickhouse.accounts.buffered_rows",
+    "Current number of account rows buffered in the ClickHouse sink",
+);
+
+static CLICKHOUSE_ACCOUNTS_BUFFERED_BYTES: Gauge = Gauge::new(
+    "clickhouse.accounts.buffered_bytes",
+    "Current number of account bytes buffered in the ClickHouse sink",
+);
+
+static CLICKHOUSE_ACCOUNTS_ACTIVE_BUFFERS: Gauge = Gauge::new(
+    "clickhouse.accounts.active_buffers",
+    "Current number of active account ClickHouse buffers",
+);
+
+static CLICKHOUSE_ACCOUNTS_FLUSH_BATCHES: Counter = Counter::new(
+    "clickhouse.accounts.flush.batches",
+    "Total number of successful ClickHouse account flush batches",
+);
+
+static CLICKHOUSE_ACCOUNTS_FLUSH_FAILED_BATCHES: Counter = Counter::new(
+    "clickhouse.accounts.flush.failed_batches",
+    "Total number of failed ClickHouse account flush batches",
+);
+
+static CLICKHOUSE_ACCOUNTS_FLUSH_DURATION_MILLIS: LazyLock<Histogram> = LazyLock::new(|| {
+    Histogram::new(
+        "clickhouse.accounts.flush.duration_milliseconds",
+        "Duration of ClickHouse account flush operations in milliseconds",
+        vec![1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0],
+    )
+});
 
 static REGISTER_CLICKHOUSE_METRICS: Once = Once::new();
 
@@ -182,32 +155,33 @@ struct ClickHouseMetricSet {
     flush_duration_millis: &'static LazyLock<Histogram>,
 }
 
-impl ClickHouseMetricSet {
-    fn register(self, registry: &MetricsRegistry) {
-        registry.register_counter(self.inserted);
-        registry.register_counter(self.failed);
-        registry.register_counter(self.inserted_bytes);
-        registry.register_counter(self.failed_bytes);
-        registry.register_counter(self.retries);
-        registry.register_counter(self.backpressure_rejected);
-        registry.register_gauge(self.buffered_rows);
-        registry.register_gauge(self.buffered_bytes);
-        registry.register_gauge(self.active_buffers);
-        registry.register_counter(self.flush_batches);
-        registry.register_counter(self.flush_failed_batches);
-        registry.register_histogram(self.flush_duration_millis);
-    }
-}
-
 pub fn register_clickhouse_metrics() {
     REGISTER_CLICKHOUSE_METRICS.call_once(|| {
         let registry = MetricsRegistry::global();
-        for family in [
-            ClickHouseMetricsFamily::Instructions,
-            ClickHouseMetricsFamily::Accounts,
-        ] {
-            family.metrics().register(registry);
-        }
+        registry.register_counter(&CLICKHOUSE_INSTRUCTIONS_INSERTED);
+        registry.register_counter(&CLICKHOUSE_INSTRUCTIONS_FAILED);
+        registry.register_counter(&CLICKHOUSE_INSTRUCTIONS_INSERTED_BYTES);
+        registry.register_counter(&CLICKHOUSE_INSTRUCTIONS_FAILED_BYTES);
+        registry.register_counter(&CLICKHOUSE_INSTRUCTIONS_RETRIES);
+        registry.register_counter(&CLICKHOUSE_INSTRUCTIONS_BACKPRESSURE_REJECTED);
+        registry.register_gauge(&CLICKHOUSE_INSTRUCTIONS_BUFFERED_ROWS);
+        registry.register_gauge(&CLICKHOUSE_INSTRUCTIONS_BUFFERED_BYTES);
+        registry.register_gauge(&CLICKHOUSE_INSTRUCTIONS_ACTIVE_BUFFERS);
+        registry.register_counter(&CLICKHOUSE_INSTRUCTIONS_FLUSH_BATCHES);
+        registry.register_counter(&CLICKHOUSE_INSTRUCTIONS_FLUSH_FAILED_BATCHES);
+        registry.register_histogram(&CLICKHOUSE_INSTRUCTIONS_FLUSH_DURATION_MILLIS);
+        registry.register_counter(&CLICKHOUSE_ACCOUNTS_INSERTED);
+        registry.register_counter(&CLICKHOUSE_ACCOUNTS_FAILED);
+        registry.register_counter(&CLICKHOUSE_ACCOUNTS_INSERTED_BYTES);
+        registry.register_counter(&CLICKHOUSE_ACCOUNTS_FAILED_BYTES);
+        registry.register_counter(&CLICKHOUSE_ACCOUNTS_RETRIES);
+        registry.register_counter(&CLICKHOUSE_ACCOUNTS_BACKPRESSURE_REJECTED);
+        registry.register_gauge(&CLICKHOUSE_ACCOUNTS_BUFFERED_ROWS);
+        registry.register_gauge(&CLICKHOUSE_ACCOUNTS_BUFFERED_BYTES);
+        registry.register_gauge(&CLICKHOUSE_ACCOUNTS_ACTIVE_BUFFERS);
+        registry.register_counter(&CLICKHOUSE_ACCOUNTS_FLUSH_BATCHES);
+        registry.register_counter(&CLICKHOUSE_ACCOUNTS_FLUSH_FAILED_BATCHES);
+        registry.register_histogram(&CLICKHOUSE_ACCOUNTS_FLUSH_DURATION_MILLIS);
     });
 }
 
