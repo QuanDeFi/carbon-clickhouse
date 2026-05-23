@@ -671,36 +671,30 @@ fn enum_prefix_len(input: &str) -> Option<usize> {
 
 fn matching_paren(input: &str, open: usize) -> Option<usize> {
     let mut depth = 0usize;
-    let mut in_string = false;
-    let mut escaped = false;
+    let mut close = None;
 
-    for (offset, ch) in input[open..].char_indices() {
-        let index = open + offset;
-        if in_string {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == '\'' {
-                in_string = false;
-            }
-            continue;
+    scan_clickhouse_chars(&input[open..], |offset, ch, in_string| {
+        if close.is_some() || in_string {
+            return;
         }
+        let index = open + offset;
 
         match ch {
-            '\'' => in_string = true,
             '(' => depth += 1,
             ')' => {
-                depth = depth.checked_sub(1)?;
+                let Some(next_depth) = depth.checked_sub(1) else {
+                    return;
+                };
+                depth = next_depth;
                 if depth == 0 {
-                    return Some(index);
+                    close = Some(index);
                 }
             }
             _ => {}
         }
-    }
+    });
 
-    None
+    close
 }
 
 fn parse_enum_values(body: &str) -> Option<Vec<(String, i32)>> {
@@ -711,28 +705,8 @@ fn parse_enum_values(body: &str) -> Option<Vec<(String, i32)>> {
             continue;
         }
 
-        let mut chars = entry.char_indices();
-        if chars.next()?.1 != '\'' {
-            return None;
-        }
-
-        let mut escaped = false;
-        let mut value = String::new();
-        let mut end_quote = None;
-        for (index, ch) in chars {
-            if escaped {
-                value.push(ch);
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == '\'' {
-                end_quote = Some(index);
-                break;
-            } else {
-                value.push(ch);
-            }
-        }
-        let rest = entry[end_quote? + 1..].trim();
+        let (value, after_quote) = parse_single_quoted_prefix(entry)?;
+        let rest = entry[after_quote..].trim();
         let rest = rest.strip_prefix('=')?.trim();
         let numeric = rest.parse::<i32>().ok()?;
         values.push((value, numeric));
@@ -744,30 +718,13 @@ fn parse_enum_values(body: &str) -> Option<Vec<(String, i32)>> {
 fn split_top_level_commas(input: &str) -> Vec<&str> {
     let mut parts = Vec::new();
     let mut start = 0usize;
-    let mut in_string = false;
-    let mut escaped = false;
 
-    for (index, ch) in input.char_indices() {
-        if in_string {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == '\'' {
-                in_string = false;
-            }
-            continue;
+    scan_clickhouse_chars(input, |index, ch, in_string| {
+        if !in_string && ch == ',' {
+            parts.push(&input[start..index]);
+            start = index + 1;
         }
-
-        match ch {
-            '\'' => in_string = true,
-            ',' => {
-                parts.push(&input[start..index]);
-                start = index + 1;
-            }
-            _ => {}
-        }
-    }
+    });
     parts.push(&input[start..]);
     parts
 }
@@ -785,12 +742,21 @@ fn enum_is_subset_with_same_values(live: &[(String, i32)], expected: &[(String, 
 
 fn normalize_clickhouse_type(input: &str) -> String {
     let mut output = String::with_capacity(input.len());
+    scan_clickhouse_chars(input, |_, ch, in_string| {
+        if in_string || !ch.is_whitespace() {
+            output.push(ch);
+        }
+    });
+    output
+}
+
+fn scan_clickhouse_chars(input: &str, mut visit: impl FnMut(usize, char, bool)) {
     let mut in_string = false;
     let mut escaped = false;
 
-    for ch in input.chars() {
+    for (index, ch) in input.char_indices() {
         if in_string {
-            output.push(ch);
+            visit(index, ch, true);
             if escaped {
                 escaped = false;
             } else if ch == '\\' {
@@ -803,13 +769,35 @@ fn normalize_clickhouse_type(input: &str) -> String {
 
         if ch == '\'' {
             in_string = true;
-            output.push(ch);
-        } else if !ch.is_whitespace() {
-            output.push(ch);
+            visit(index, ch, true);
+        } else {
+            visit(index, ch, false);
+        }
+    }
+}
+
+fn parse_single_quoted_prefix(input: &str) -> Option<(String, usize)> {
+    let mut chars = input.char_indices();
+    if chars.next()?.1 != '\'' {
+        return None;
+    }
+
+    let mut escaped = false;
+    let mut value = String::new();
+    for (index, ch) in chars {
+        if escaped {
+            value.push(ch);
+            escaped = false;
+        } else if ch == '\\' {
+            escaped = true;
+        } else if ch == '\'' {
+            return Some((value, index + ch.len_utf8()));
+        } else {
+            value.push(ch);
         }
     }
 
-    output
+    None
 }
 
 #[cfg(test)]

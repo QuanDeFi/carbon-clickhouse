@@ -393,6 +393,268 @@ where
         .to_string()
 }
 
+#[macro_export]
+macro_rules! __impl_clickhouse_landing_row {
+    ($row:ident, $table_options:expr) => {
+        impl $row {
+            fn column_specs() -> Vec<$crate::clickhouse::ClickHouseColumnSpec> {
+                let mut columns = Self::COMMON_COLUMNS.to_vec();
+                columns.extend_from_slice(Self::PAYLOAD_COLUMNS);
+                columns
+            }
+
+            fn table_options() -> $crate::clickhouse::ClickHouseTableOptions {
+                ($table_options)()
+            }
+
+            pub fn migration_operations(table_name: &str) -> Vec<String> {
+                let columns = Self::column_specs();
+                $crate::clickhouse::clickhouse_migration_operations(
+                    table_name,
+                    &columns,
+                    &Self::table_options(),
+                )
+            }
+
+            pub fn managed_tables(
+                table_name: &str,
+            ) -> Vec<$crate::clickhouse::ClickHouseManagedTable> {
+                let columns = Self::column_specs();
+                $crate::clickhouse::clickhouse_managed_tables(
+                    table_name,
+                    &columns,
+                    &Self::table_options(),
+                )
+            }
+        }
+
+        impl $crate::clickhouse::rows::ClickHouseTable for $row {
+            fn table() -> &'static str {
+                Self::DEFAULT_TABLE_NAME
+            }
+
+            fn columns() -> Vec<&'static str> {
+                let columns = Self::column_specs();
+                $crate::clickhouse::clickhouse_column_names(&columns)
+            }
+
+            fn create_table_sql(table_name: &str) -> String {
+                let columns = Self::column_specs();
+                let options = Self::table_options();
+                $crate::clickhouse::clickhouse_create_table_sql(
+                    table_name,
+                    &columns,
+                    &options.engine,
+                    options.local_engine.is_none(),
+                    &options,
+                )
+            }
+        }
+
+        impl $crate::clickhouse::rows::ClickHouseRow for $row {
+            fn table_name(&self) -> &'static str {
+                <$row as $crate::clickhouse::rows::ClickHouseTable>::table()
+            }
+
+            fn partition_key(&self) -> String {
+                self.metadata.partition_key()
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_clickhouse_instruction_row {
+    ($row:ident, $table_options:expr) => {
+        $crate::__impl_clickhouse_landing_row!($row, $table_options);
+    };
+}
+
+#[macro_export]
+macro_rules! impl_clickhouse_event_row {
+    ($row:ident, $table_options:expr) => {
+        $crate::__impl_clickhouse_landing_row!($row, $table_options);
+    };
+}
+
+#[macro_export]
+macro_rules! impl_clickhouse_account_row {
+    ($row:ident, $table_options:expr) => {
+        $crate::__impl_clickhouse_landing_row!($row, $table_options);
+    };
+}
+
+#[macro_export]
+macro_rules! clickhouse_row_dispatch {
+    (
+        instruction $enum:ident,
+        $migration:ident,
+        $metadata:ident,
+        $instruction:ident,
+        {
+            $($variant:ident => $row:ty),+ $(,)?
+        }
+        events $event_enum:ident {
+            $($event_variant:ident : $source_event_variant:ident => $event_row:ty),+ $(,)?
+        }
+    ) => {
+        $crate::clickhouse_row_dispatch!(
+            $enum,
+            $migration,
+            {
+                $($variant => $row,)+
+                $($event_variant => $event_row,)+
+            }
+        );
+
+        impl $crate::clickhouse::rows::ClickHouseRows<$enum> for $metadata {
+            fn clickhouse_rows(
+                &self,
+                context: &$crate::clickhouse::rows::ClickHouseRowContext,
+            ) -> Vec<$enum> {
+                let $metadata(instruction, metadata, _accounts) = self;
+
+                match instruction {
+                    $(
+                        $instruction::$variant { data, .. } => {
+                            vec![$enum::$variant(<$row>::from_parts(
+                                data.clone(),
+                                metadata,
+                                context,
+                            ))]
+                        }
+                    )+
+                    $instruction::CpiEvent { data, .. } => match data {
+                        $(
+                            $event_enum::$source_event_variant(event) => {
+                                vec![$enum::$event_variant(<$event_row>::from_parts(
+                                    event.clone(),
+                                    metadata,
+                                    context,
+                                ))]
+                            }
+                        )+
+                    },
+                }
+            }
+        }
+    };
+    (
+        instruction $enum:ident,
+        $migration:ident,
+        $metadata:ident,
+        $instruction:ident,
+        {
+            $($variant:ident => $row:ty),+ $(,)?
+        }
+    ) => {
+        $crate::clickhouse_row_dispatch!($enum, $migration, { $($variant => $row),+ });
+
+        impl $crate::clickhouse::rows::ClickHouseRows<$enum> for $metadata {
+            fn clickhouse_rows(
+                &self,
+                context: &$crate::clickhouse::rows::ClickHouseRowContext,
+            ) -> Vec<$enum> {
+                let $metadata(instruction, metadata, _accounts) = self;
+
+                match instruction {
+                    $(
+                        $instruction::$variant { data, .. } => {
+                            vec![$enum::$variant(<$row>::from_parts(
+                                data.clone(),
+                                metadata,
+                                context,
+                            ))]
+                        }
+                    )+
+                }
+            }
+        }
+    };
+    (
+        account $enum:ident,
+        $migration:ident,
+        $metadata:ident,
+        $account:ident,
+        {
+            $($variant:ident => $row:ty),+ $(,)?
+        }
+    ) => {
+        $crate::clickhouse_row_dispatch!($enum, $migration, { $($variant => $row),+ });
+
+        impl $crate::clickhouse::rows::ClickHouseRows<$enum> for $metadata {
+            fn clickhouse_rows(
+                &self,
+                context: &$crate::clickhouse::rows::ClickHouseRowContext,
+            ) -> Vec<$enum> {
+                let $metadata(decoded_account, metadata) = self;
+
+                match &decoded_account.data {
+                    $(
+                        $account::$variant(account) => {
+                            vec![$enum::$variant(<$row>::from_parts(
+                                *account.clone(),
+                                decoded_account,
+                                metadata,
+                                context,
+                            ))]
+                        }
+                    )+
+                }
+            }
+        }
+    };
+    (
+        $enum:ident,
+        $migration:ident,
+        {
+            $($variant:ident => $row:ty),+ $(,)?
+        }
+    ) => {
+        impl $crate::clickhouse::rows::ClickHouseRow for $enum {
+            fn table_name(&self) -> &'static str {
+                match self {
+                    $(
+                        Self::$variant(row) => row.table_name(),
+                    )+
+                }
+            }
+
+            fn partition_key(&self) -> String {
+                match self {
+                    $(
+                        Self::$variant(row) => row.partition_key(),
+                    )+
+                }
+            }
+        }
+
+        impl $crate::clickhouse::ClickHouseSchema for $migration {
+            fn operations(_config: &$crate::clickhouse::ClickHouseConfig) -> Vec<String> {
+                let mut operations = Vec::new();
+                $(
+                    operations.extend(<$row>::migration_operations(
+                        <$row as $crate::clickhouse::rows::ClickHouseTable>::table(),
+                    ));
+                )+
+                operations
+            }
+
+            fn managed_tables(
+                _config: &$crate::clickhouse::ClickHouseConfig,
+            ) -> Vec<$crate::clickhouse::ClickHouseManagedTable> {
+                let mut tables = Vec::new();
+                $(
+                    tables.extend(<$row>::managed_tables(
+                        <$row as $crate::clickhouse::rows::ClickHouseTable>::table(),
+                    ));
+                )+
+                tables
+            }
+        }
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::{deterministic_account_id, deterministic_event_id, deterministic_instruction_id};

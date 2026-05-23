@@ -124,7 +124,7 @@ const CLICKHOUSE_EVENT_COMMON_COLUMNS = [
 
 function collectClickHouseHelpers(target: Map<string, string>, helperDefinitions: string[]) {
     for (const definition of helperDefinitions) {
-        const match = definition.match(/pub struct\s+([A-Za-z0-9_]+)/);
+        const match = definition.match(/pub (?:struct|const)\s+([A-Za-z0-9_]+)/);
         if (!match) {
             throw new Error(`Unable to identify generated ClickHouse helper name:\n${definition}`);
         }
@@ -918,7 +918,13 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                                 }),
                             );
                         }
-                        map.add('src/accounts/clickhouse/mod.rs', render('accountsClickHouseMod.njk', ctx));
+                        map.add(
+                            'src/accounts/clickhouse/mod.rs',
+                            render('accountsClickHouseMod.njk', {
+                                ...ctx,
+                                clickHouseDdl: getClickHouseDdlContext(options.withClickHouse, 'account'),
+                            }),
+                        );
                     }
                     if (options.withGraphql !== false) {
                         const accountsGraphqlTemplate =
@@ -954,7 +960,13 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                                     }),
                                 );
                             }
-                            map.add('src/instructions/clickhouse/mod.rs', render('instructionsClickHouseMod.njk', ctx));
+                            map.add(
+                                'src/instructions/clickhouse/mod.rs',
+                                render('instructionsClickHouseMod.njk', {
+                                    ...ctx,
+                                    clickHouseDdl: getClickHouseDdlContext(options.withClickHouse, 'instruction'),
+                                }),
+                            );
                         }
                         if (options.withGraphql !== false) {
                             const instructionsGraphqlTemplate =

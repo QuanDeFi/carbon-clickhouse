@@ -17,13 +17,61 @@ use crate::{
 
 pub use crate::clickhouse::metrics::register_clickhouse_metrics;
 
+struct ClickHouseProcessorInner<R>
+where
+    R: ClickHouseRow,
+{
+    row_context: ClickHouseRowContext,
+    writer: ClickHouseBatchWriter<R>,
+    metrics_family: ClickHouseMetricsFamily,
+}
+
+impl<R> ClickHouseProcessorInner<R>
+where
+    R: ClickHouseRow,
+{
+    fn new(config: ClickHouseConfig, metrics_family: ClickHouseMetricsFamily) -> Self {
+        register_clickhouse_metrics();
+        Self {
+            row_context: config.row_context(),
+            writer: ClickHouseBatchWriter::<R>::new_with_metrics(config, metrics_family),
+            metrics_family,
+        }
+    }
+
+    fn row_context(&self) -> &ClickHouseRowContext {
+        &self.row_context
+    }
+
+    async fn flush(&mut self) -> CarbonResult<usize> {
+        self.writer.flush().await.map(|outcome| outcome.rows)
+    }
+
+    async fn buffer_rows(&mut self, rows: Vec<R>) -> CarbonResult<()> {
+        for row in rows {
+            match self.writer.buffer_row(row).await {
+                Ok(ClickHouseBufferOutcome::Buffered { buffered_rows }) => {
+                    record_buffered_rows(self.metrics_family, buffered_rows);
+                }
+                Ok(ClickHouseBufferOutcome::Flushed(_)) => {}
+                Err(error) => return Err(error),
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn shutdown(&mut self) -> CarbonResult<()> {
+        self.writer.shutdown().await.map(|_| ())
+    }
+}
+
 pub struct ClickHouseInstructionProcessor<T, W, R>
 where
     R: ClickHouseRow,
     W: ClickHouseRows<R>,
 {
-    row_context: ClickHouseRowContext,
-    writer: ClickHouseBatchWriter<R>,
+    inner: ClickHouseProcessorInner<R>,
     _phantom: PhantomData<(T, W)>,
 }
 
@@ -33,19 +81,14 @@ where
     W: ClickHouseRows<R>,
 {
     pub fn new(config: ClickHouseConfig) -> Self {
-        register_clickhouse_metrics();
         Self {
-            row_context: config.row_context(),
-            writer: ClickHouseBatchWriter::<R>::new_with_metrics(
-                config,
-                ClickHouseMetricsFamily::Instructions,
-            ),
+            inner: ClickHouseProcessorInner::new(config, ClickHouseMetricsFamily::Instructions),
             _phantom: PhantomData,
         }
     }
 
     pub async fn flush(&mut self) -> CarbonResult<usize> {
-        self.writer.flush().await.map(|outcome| outcome.rows)
+        self.inner.flush().await
     }
 }
 
@@ -62,27 +105,12 @@ where
             input.metadata.clone(),
             input.raw_instruction.accounts.clone(),
         ));
-        let rows = wrapper.clickhouse_rows(&self.row_context);
-
-        if rows.is_empty() {
-            return Ok(());
-        }
-
-        for row in rows {
-            match self.writer.buffer_row(row).await {
-                Ok(ClickHouseBufferOutcome::Buffered { buffered_rows }) => {
-                    record_buffered_rows(ClickHouseMetricsFamily::Instructions, buffered_rows);
-                }
-                Ok(ClickHouseBufferOutcome::Flushed(_)) => {}
-                Err(error) => return Err(error),
-            }
-        }
-
-        Ok(())
+        let rows = wrapper.clickhouse_rows(self.inner.row_context());
+        self.inner.buffer_rows(rows).await
     }
 
     async fn finalize(&mut self) -> CarbonResult<()> {
-        self.writer.shutdown().await.map(|_| ())
+        self.inner.shutdown().await
     }
 }
 
@@ -91,8 +119,7 @@ where
     R: ClickHouseRow,
     W: ClickHouseRows<R>,
 {
-    row_context: ClickHouseRowContext,
-    writer: ClickHouseBatchWriter<R>,
+    inner: ClickHouseProcessorInner<R>,
     _phantom: PhantomData<(T, W)>,
 }
 
@@ -102,19 +129,14 @@ where
     W: ClickHouseRows<R>,
 {
     pub fn new(config: ClickHouseConfig) -> Self {
-        register_clickhouse_metrics();
         Self {
-            row_context: config.row_context(),
-            writer: ClickHouseBatchWriter::<R>::new_with_metrics(
-                config,
-                ClickHouseMetricsFamily::Accounts,
-            ),
+            inner: ClickHouseProcessorInner::new(config, ClickHouseMetricsFamily::Accounts),
             _phantom: PhantomData,
         }
     }
 
     pub async fn flush(&mut self) -> CarbonResult<usize> {
-        self.writer.flush().await.map(|outcome| outcome.rows)
+        self.inner.flush().await
     }
 }
 
@@ -126,27 +148,12 @@ where
 {
     async fn process(&mut self, input: &AccountProcessorInputType<'_, T>) -> CarbonResult<()> {
         let wrapper = W::from((input.decoded_account.clone(), input.metadata.clone()));
-        let rows = wrapper.clickhouse_rows(&self.row_context);
-
-        if rows.is_empty() {
-            return Ok(());
-        }
-
-        for row in rows {
-            match self.writer.buffer_row(row).await {
-                Ok(ClickHouseBufferOutcome::Buffered { buffered_rows }) => {
-                    record_buffered_rows(ClickHouseMetricsFamily::Accounts, buffered_rows);
-                }
-                Ok(ClickHouseBufferOutcome::Flushed(_)) => {}
-                Err(error) => return Err(error),
-            }
-        }
-
-        Ok(())
+        let rows = wrapper.clickhouse_rows(self.inner.row_context());
+        self.inner.buffer_rows(rows).await
     }
 
     async fn finalize(&mut self) -> CarbonResult<()> {
-        self.writer.shutdown().await.map(|_| ())
+        self.inner.shutdown().await
     }
 }
 
@@ -340,7 +347,7 @@ mod tests {
         >::new(config());
 
         processor.finalize().await.unwrap();
-        assert_eq!(processor.writer.buffered_rows(), 0);
+        assert_eq!(processor.inner.writer.buffered_rows(), 0);
     }
 
     #[tokio::test]
@@ -358,7 +365,7 @@ mod tests {
 
         processor.process(&input).await.unwrap();
 
-        assert_eq!(processor.writer.buffered_rows(), 1);
+        assert_eq!(processor.inner.writer.buffered_rows(), 1);
     }
 
     #[tokio::test]
@@ -367,7 +374,7 @@ mod tests {
             ClickHouseAccountProcessor::<DummyAccount, EmptyAccountWrapper, DummyRow>::new(config());
 
         processor.finalize().await.unwrap();
-        assert_eq!(processor.writer.buffered_rows(), 0);
+        assert_eq!(processor.inner.writer.buffered_rows(), 0);
     }
 
     #[tokio::test]
@@ -391,7 +398,7 @@ mod tests {
         processor.finalize().await.unwrap();
 
         let requests = server.await.unwrap().join("\n");
-        assert_eq!(processor.writer.buffered_rows(), 0);
+        assert_eq!(processor.inner.writer.buffered_rows(), 0);
         assert!(requests.contains("dummy_accounts"));
         assert!(counter_value("clickhouse.accounts.inserted") > before_inserted);
         assert_eq!(gauge_value("clickhouse.accounts.buffered_rows"), 0.0);

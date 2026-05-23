@@ -2,19 +2,19 @@
 pub mod token_ledger_row;
 
 pub use self::token_ledger_row::TokenLedgerAccountClickHouseRow;
-use {
-    super::JupiterSwapAccount,
-    carbon_core::{
-        account::{AccountMetadata, DecodedAccount},
-        clickhouse::{
-            rows::{ClickHouseRow, ClickHouseRowContext, ClickHouseRows},
-            ClickHouseAccountProcessor, ClickHouseAdmin, ClickHouseBatchSettings, ClickHouseConfig,
-            ClickHouseManagedTable, ClickHouseSchema,
-        },
-        error::CarbonResult,
+
+use std::time::Duration;
+
+use carbon_core::{
+    account::{AccountMetadata, DecodedAccount},
+    clickhouse::{
+        ClickHouseAccountProcessor, ClickHouseAdmin, ClickHouseBatchSettings, ClickHouseConfig,
+        ClickHouseTableOptions,
     },
-    std::time::Duration,
+    error::CarbonResult,
 };
+
+use super::JupiterSwapAccount;
 
 pub const DEFAULT_DATABASE: &str = "default";
 pub const DEFAULT_SOURCE_NAME: &str = "block_crawler";
@@ -23,24 +23,23 @@ pub const DEFAULT_DECODER_VERSION: &str = "v1";
 pub const DEFAULT_BATCH_MAX_ROWS: usize = 500;
 pub const DEFAULT_BATCH_FLUSH_INTERVAL_MS: u64 = 1_000;
 
+pub(crate) fn clickhouse_account_table_options() -> ClickHouseTableOptions {
+    ClickHouseTableOptions {
+        on_cluster_clause: r#""#,
+        engine: r#"MergeTree"#.to_string(),
+        local_engine: None,
+        local_table_suffix: r#"_local"#,
+        partition_by: r#"partition_slot"#,
+        order_by: r#"(program_id, family_name, account_id, slot)"#,
+        ttl_clause: r#""#,
+        settings_clause: r#" SETTINGS non_replicated_deduplication_window = 1000"#,
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(untagged)]
 pub enum JupiterSwapClickHouseAccountRow {
     TokenLedger(token_ledger_row::TokenLedgerAccountClickHouseRow),
-}
-
-impl ClickHouseRow for JupiterSwapClickHouseAccountRow {
-    fn table_name(&self) -> &'static str {
-        match self {
-            Self::TokenLedger(row) => row.table_name(),
-        }
-    }
-
-    fn partition_key(&self) -> String {
-        match self {
-            Self::TokenLedger(row) => row.partition_key(),
-        }
-    }
 }
 
 pub type JupiterSwapClickHouseAccountProcessor = ClickHouseAccountProcessor<
@@ -51,27 +50,16 @@ pub type JupiterSwapClickHouseAccountProcessor = ClickHouseAccountProcessor<
 
 pub struct JupiterSwapClickHouseAccountsMigration;
 
-impl ClickHouseSchema for JupiterSwapClickHouseAccountsMigration {
-    fn operations(_config: &ClickHouseConfig) -> Vec<String> {
-        let mut operations = Vec::new();
-        operations.extend(
-            token_ledger_row::TokenLedgerAccountClickHouseRow::migration_operations(
-                token_ledger_row::TokenLedgerAccountClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations
+carbon_core::clickhouse_row_dispatch!(
+    account
+    JupiterSwapClickHouseAccountRow,
+    JupiterSwapClickHouseAccountsMigration,
+    JupiterSwapAccountWithClickHouseMetadata,
+    JupiterSwapAccount,
+    {
+        TokenLedger => token_ledger_row::TokenLedgerAccountClickHouseRow,
     }
-
-    fn managed_tables(_config: &ClickHouseConfig) -> Vec<ClickHouseManagedTable> {
-        let mut tables = Vec::new();
-        tables.extend(
-            token_ledger_row::TokenLedgerAccountClickHouseRow::managed_tables(
-                token_ledger_row::TokenLedgerAccountClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        tables
-    }
-}
+);
 
 impl JupiterSwapClickHouseAccountsMigration {
     pub async fn run(config: &ClickHouseConfig) -> CarbonResult<()> {
@@ -91,28 +79,6 @@ impl From<(DecodedAccount<JupiterSwapAccount>, AccountMetadata)>
 {
     fn from(value: (DecodedAccount<JupiterSwapAccount>, AccountMetadata)) -> Self {
         Self(value.0, value.1)
-    }
-}
-
-impl ClickHouseRows<JupiterSwapClickHouseAccountRow> for JupiterSwapAccountWithClickHouseMetadata {
-    fn clickhouse_rows(
-        &self,
-        context: &ClickHouseRowContext,
-    ) -> Vec<JupiterSwapClickHouseAccountRow> {
-        let JupiterSwapAccountWithClickHouseMetadata(decoded_account, metadata) = self;
-
-        match &decoded_account.data {
-            JupiterSwapAccount::TokenLedger(account) => {
-                vec![JupiterSwapClickHouseAccountRow::TokenLedger(
-                    token_ledger_row::TokenLedgerAccountClickHouseRow::from_parts(
-                        *account.clone(),
-                        decoded_account,
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-        }
     }
 }
 

@@ -27,16 +27,20 @@ use std::time::Duration;
 
 use carbon_core::{
     clickhouse::{
-        rows::{ClickHouseRow, ClickHouseRowContext, ClickHouseRows},
         ClickHouseAdmin, ClickHouseBatchSettings, ClickHouseConfig, ClickHouseInstructionProcessor,
-        ClickHouseManagedTable, ClickHouseSchema,
+        ClickHouseTableOptions,
     },
     error::CarbonResult,
     instruction::InstructionMetadata,
 };
 use solana_instruction::AccountMeta;
 
-use super::{{ program.name | pascalCase }}Instruction;
+use super::{
+{% if hasAnchorEvents %}
+    CpiEvent,
+{% endif %}
+    {{ program.name | pascalCase }}Instruction,
+};
 
 pub const DEFAULT_DATABASE: &str = "default";
 pub const DEFAULT_SOURCE_NAME: &str = "block_crawler";
@@ -44,6 +48,23 @@ pub const DEFAULT_MODE: &str = "backfill";
 pub const DEFAULT_DECODER_VERSION: &str = "v1";
 pub const DEFAULT_BATCH_MAX_ROWS: usize = 500;
 pub const DEFAULT_BATCH_FLUSH_INTERVAL_MS: u64 = 1_000;
+
+pub(crate) fn clickhouse_instruction_table_options() -> ClickHouseTableOptions {
+    ClickHouseTableOptions {
+        on_cluster_clause: r#"{{ clickHouseDdl.onClusterClause }}"#,
+        engine: r#"{{ clickHouseDdl.engine }}"#.to_string(),
+{% if clickHouseDdl.createLocalTable %}
+        local_engine: Some(r#"{{ clickHouseDdl.localEngine }}"#.to_string()),
+{% else %}
+        local_engine: None,
+{% endif %}
+        local_table_suffix: r#"{{ clickHouseDdl.localTableSuffix }}"#,
+        partition_by: r#"{{ clickHouseDdl.partitionBy }}"#,
+        order_by: r#"{{ clickHouseDdl.orderBy }}"#,
+        ttl_clause: r#"{{ clickHouseDdl.ttlClause }}"#,
+        settings_clause: r#"{{ clickHouseDdl.settingsClause }}"#,
+    }
+}
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(untagged)]
@@ -58,34 +79,6 @@ pub enum {{ program.name | pascalCase }}ClickHouseInstructionRow {
 {% endif %}
 }
 
-impl ClickHouseRow for {{ program.name | pascalCase }}ClickHouseInstructionRow {
-    fn table_name(&self) -> &'static str {
-        match self {
-{% for instruction in instructionsToExport | sort(false, false, 'name') %}
-            Self::{{ instruction.name | pascalCase }}(row) => row.table_name(),
-{% endfor %}
-{% if hasAnchorEvents %}
-{% for event in events | sort(false, false, 'name') %}
-            Self::{{ event.name | pascalCase }}Event(row) => row.table_name(),
-{% endfor %}
-{% endif %}
-        }
-    }
-
-    fn partition_key(&self) -> String {
-        match self {
-{% for instruction in instructionsToExport | sort(false, false, 'name') %}
-            Self::{{ instruction.name | pascalCase }}(row) => row.partition_key(),
-{% endfor %}
-{% if hasAnchorEvents %}
-{% for event in events | sort(false, false, 'name') %}
-            Self::{{ event.name | pascalCase }}Event(row) => row.partition_key(),
-{% endfor %}
-{% endif %}
-        }
-    }
-}
-
 pub type {{ program.name | pascalCase }}ClickHouseInstructionProcessor = ClickHouseInstructionProcessor<
     {{ program.name | pascalCase }}Instruction,
     {{ program.name | pascalCase }}InstructionWithClickHouseMetadata,
@@ -94,33 +87,27 @@ pub type {{ program.name | pascalCase }}ClickHouseInstructionProcessor = ClickHo
 
 pub struct {{ program.name | pascalCase }}ClickHouseInstructionsMigration;
 
-impl ClickHouseSchema for {{ program.name | pascalCase }}ClickHouseInstructionsMigration {
-    fn operations(_config: &ClickHouseConfig) -> Vec<String> {
-        let mut operations = Vec::new();
+carbon_core::clickhouse_row_dispatch!(
+    instruction
+    {{ program.name | pascalCase }}ClickHouseInstructionRow,
+    {{ program.name | pascalCase }}ClickHouseInstructionsMigration,
+    {{ program.name | pascalCase }}InstructionWithClickHouseMetadata,
+    {{ program.name | pascalCase }}Instruction,
+    {
 {% for instruction in instructionsToExport | sort(false, false, 'name') %}
-        operations.extend({{ macros.escapeRustKeyword(instruction.name | snakeCase) }}_row::{{ instruction.name | pascalCase }}InstructionClickHouseRow::migration_operations({{ macros.escapeRustKeyword(instruction.name | snakeCase) }}_row::{{ instruction.name | pascalCase }}InstructionClickHouseRow::DEFAULT_TABLE_NAME));
+        {{ instruction.name | pascalCase }} => {{ macros.escapeRustKeyword(instruction.name | snakeCase) }}_row::{{ instruction.name | pascalCase }}InstructionClickHouseRow,
 {% endfor %}
 {% if hasAnchorEvents %}
-{% for event in events | sort(false, false, 'name') %}
-        operations.extend({{ macros.escapeRustKeyword(event.name | snakeCase) }}_event_row::{{ event.name | pascalCase }}EventClickHouseRow::migration_operations({{ macros.escapeRustKeyword(event.name | snakeCase) }}_event_row::{{ event.name | pascalCase }}EventClickHouseRow::DEFAULT_TABLE_NAME));
-{% endfor %}
-{% endif %}
-        operations
     }
-
-    fn managed_tables(_config: &ClickHouseConfig) -> Vec<ClickHouseManagedTable> {
-        let mut tables = Vec::new();
-{% for instruction in instructionsToExport | sort(false, false, 'name') %}
-        tables.extend({{ macros.escapeRustKeyword(instruction.name | snakeCase) }}_row::{{ instruction.name | pascalCase }}InstructionClickHouseRow::managed_tables({{ macros.escapeRustKeyword(instruction.name | snakeCase) }}_row::{{ instruction.name | pascalCase }}InstructionClickHouseRow::DEFAULT_TABLE_NAME));
-{% endfor %}
-{% if hasAnchorEvents %}
+    events CpiEvent {
 {% for event in events | sort(false, false, 'name') %}
-        tables.extend({{ macros.escapeRustKeyword(event.name | snakeCase) }}_event_row::{{ event.name | pascalCase }}EventClickHouseRow::managed_tables({{ macros.escapeRustKeyword(event.name | snakeCase) }}_event_row::{{ event.name | pascalCase }}EventClickHouseRow::DEFAULT_TABLE_NAME));
+        {{ event.name | pascalCase }}Event: {{ event.name | pascalCase }} => {{ macros.escapeRustKeyword(event.name | snakeCase) }}_event_row::{{ event.name | pascalCase }}EventClickHouseRow,
 {% endfor %}
-{% endif %}
-        tables
     }
-}
+{% else %}
+    }
+{% endif %}
+);
 
 impl {{ program.name | pascalCase }}ClickHouseInstructionsMigration {
     pub async fn run(config: &ClickHouseConfig) -> CarbonResult<()> {
@@ -141,43 +128,6 @@ impl From<({{ program.name | pascalCase }}Instruction, InstructionMetadata, Vec<
 {
     fn from(value: ({{ program.name | pascalCase }}Instruction, InstructionMetadata, Vec<AccountMeta>)) -> Self {
         Self(value.0, value.1, value.2)
-    }
-}
-
-impl ClickHouseRows<{{ program.name | pascalCase }}ClickHouseInstructionRow>
-    for {{ program.name | pascalCase }}InstructionWithClickHouseMetadata
-{
-    fn clickhouse_rows(&self, context: &ClickHouseRowContext) -> Vec<{{ program.name | pascalCase }}ClickHouseInstructionRow> {
-        let {{ program.name | pascalCase }}InstructionWithClickHouseMetadata(instruction, metadata, _accounts) = self;
-
-        match instruction {
-{% for instruction in instructionsToExport | sort(false, false, 'name') %}
-            {{ program.name | pascalCase }}Instruction::{{ instruction.name | pascalCase }} { data, .. } => {
-                vec![{{ program.name | pascalCase }}ClickHouseInstructionRow::{{ instruction.name | pascalCase }}(
-                    {{ macros.escapeRustKeyword(instruction.name | snakeCase) }}_row::{{ instruction.name | pascalCase }}InstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-{% endfor %}
-{% if hasAnchorEvents %}
-            {{ program.name | pascalCase }}Instruction::CpiEvent { data, .. } => match data {
-{% for event in events | sort(false, false, 'name') %}
-                super::CpiEvent::{{ event.name | pascalCase }}(event) => {
-                    vec![{{ program.name | pascalCase }}ClickHouseInstructionRow::{{ event.name | pascalCase }}Event(
-                        {{ macros.escapeRustKeyword(event.name | snakeCase) }}_event_row::{{ event.name | pascalCase }}EventClickHouseRow::from_parts(
-                            event.clone(),
-                            metadata,
-                            context,
-                        ),
-                    )]
-                }
-{% endfor %}
-            },
-{% endif %}
-        }
     }
 }
 

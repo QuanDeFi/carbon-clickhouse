@@ -24,43 +24,43 @@ pub mod swap_event_event_row;
 pub mod swaps_event_event_row;
 pub mod types;
 
-pub use self::{
-    best_swap_out_amount_violation_event_row::BestSwapOutAmountViolationEventClickHouseRow,
-    candidate_swap_quote_error_event_row::CandidateSwapQuoteErrorEventClickHouseRow,
-    candidate_swap_results_event_row::CandidateSwapResultsEventClickHouseRow,
-    claim_row::ClaimInstructionClickHouseRow, claim_token_row::ClaimTokenInstructionClickHouseRow,
-    close_token_row::CloseTokenInstructionClickHouseRow,
-    close_wsol_token_account_row::CloseWsolTokenAccountInstructionClickHouseRow,
-    create_token_account_row::CreateTokenAccountInstructionClickHouseRow,
-    create_token_ledger_row::CreateTokenLedgerInstructionClickHouseRow,
-    exact_out_route_row::ExactOutRouteInstructionClickHouseRow,
-    exact_out_route_v2_row::ExactOutRouteV2InstructionClickHouseRow,
-    fee_event_event_row::FeeEventEventClickHouseRow, route_row::RouteInstructionClickHouseRow,
-    route_v2_row::RouteV2InstructionClickHouseRow,
-    route_with_token_ledger_row::RouteWithTokenLedgerInstructionClickHouseRow,
-    set_token_ledger_row::SetTokenLedgerInstructionClickHouseRow,
-    shared_accounts_exact_out_route_row::SharedAccountsExactOutRouteInstructionClickHouseRow,
-    shared_accounts_exact_out_route_v2_row::SharedAccountsExactOutRouteV2InstructionClickHouseRow,
-    shared_accounts_route_row::SharedAccountsRouteInstructionClickHouseRow,
-    shared_accounts_route_v2_row::SharedAccountsRouteV2InstructionClickHouseRow,
-    shared_accounts_route_with_token_ledger_row::SharedAccountsRouteWithTokenLedgerInstructionClickHouseRow,
-    swap_event_event_row::SwapEventEventClickHouseRow,
-    swaps_event_event_row::SwapsEventEventClickHouseRow,
-};
-use {
-    super::JupiterSwapInstruction,
-    carbon_core::{
-        clickhouse::{
-            rows::{ClickHouseRow, ClickHouseRowContext, ClickHouseRows},
-            ClickHouseAdmin, ClickHouseBatchSettings, ClickHouseConfig,
-            ClickHouseInstructionProcessor, ClickHouseManagedTable, ClickHouseSchema,
-        },
-        error::CarbonResult,
-        instruction::InstructionMetadata,
+pub use self::best_swap_out_amount_violation_event_row::BestSwapOutAmountViolationEventClickHouseRow;
+pub use self::candidate_swap_quote_error_event_row::CandidateSwapQuoteErrorEventClickHouseRow;
+pub use self::candidate_swap_results_event_row::CandidateSwapResultsEventClickHouseRow;
+pub use self::claim_row::ClaimInstructionClickHouseRow;
+pub use self::claim_token_row::ClaimTokenInstructionClickHouseRow;
+pub use self::close_token_row::CloseTokenInstructionClickHouseRow;
+pub use self::close_wsol_token_account_row::CloseWsolTokenAccountInstructionClickHouseRow;
+pub use self::create_token_account_row::CreateTokenAccountInstructionClickHouseRow;
+pub use self::create_token_ledger_row::CreateTokenLedgerInstructionClickHouseRow;
+pub use self::exact_out_route_row::ExactOutRouteInstructionClickHouseRow;
+pub use self::exact_out_route_v2_row::ExactOutRouteV2InstructionClickHouseRow;
+pub use self::fee_event_event_row::FeeEventEventClickHouseRow;
+pub use self::route_row::RouteInstructionClickHouseRow;
+pub use self::route_v2_row::RouteV2InstructionClickHouseRow;
+pub use self::route_with_token_ledger_row::RouteWithTokenLedgerInstructionClickHouseRow;
+pub use self::set_token_ledger_row::SetTokenLedgerInstructionClickHouseRow;
+pub use self::shared_accounts_exact_out_route_row::SharedAccountsExactOutRouteInstructionClickHouseRow;
+pub use self::shared_accounts_exact_out_route_v2_row::SharedAccountsExactOutRouteV2InstructionClickHouseRow;
+pub use self::shared_accounts_route_row::SharedAccountsRouteInstructionClickHouseRow;
+pub use self::shared_accounts_route_v2_row::SharedAccountsRouteV2InstructionClickHouseRow;
+pub use self::shared_accounts_route_with_token_ledger_row::SharedAccountsRouteWithTokenLedgerInstructionClickHouseRow;
+pub use self::swap_event_event_row::SwapEventEventClickHouseRow;
+pub use self::swaps_event_event_row::SwapsEventEventClickHouseRow;
+
+use std::time::Duration;
+
+use carbon_core::{
+    clickhouse::{
+        ClickHouseAdmin, ClickHouseBatchSettings, ClickHouseConfig, ClickHouseInstructionProcessor,
+        ClickHouseTableOptions,
     },
-    solana_instruction::AccountMeta,
-    std::time::Duration,
+    error::CarbonResult,
+    instruction::InstructionMetadata,
 };
+use solana_instruction::AccountMeta;
+
+use super::{CpiEvent, JupiterSwapInstruction};
 
 pub const DEFAULT_DATABASE: &str = "default";
 pub const DEFAULT_SOURCE_NAME: &str = "block_crawler";
@@ -68,6 +68,19 @@ pub const DEFAULT_MODE: &str = "backfill";
 pub const DEFAULT_DECODER_VERSION: &str = "v1";
 pub const DEFAULT_BATCH_MAX_ROWS: usize = 500;
 pub const DEFAULT_BATCH_FLUSH_INTERVAL_MS: u64 = 1_000;
+
+pub(crate) fn clickhouse_instruction_table_options() -> ClickHouseTableOptions {
+    ClickHouseTableOptions {
+        on_cluster_clause: r#""#,
+        engine: r#"MergeTree"#.to_string(),
+        local_engine: None,
+        local_table_suffix: r#"_local"#,
+        partition_by: r#"toYear(partition_time)"#,
+        order_by: r#"(program_id, family_name, instruction_id, slot)"#,
+        ttl_clause: r#""#,
+        settings_clause: r#" SETTINGS non_replicated_deduplication_window = 1000"#,
+    }
+}
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(untagged)]
@@ -97,64 +110,6 @@ pub enum JupiterSwapClickHouseInstructionRow {
     SwapsEventEvent(swaps_event_event_row::SwapsEventEventClickHouseRow),
 }
 
-impl ClickHouseRow for JupiterSwapClickHouseInstructionRow {
-    fn table_name(&self) -> &'static str {
-        match self {
-            Self::Claim(row) => row.table_name(),
-            Self::ClaimToken(row) => row.table_name(),
-            Self::CloseToken(row) => row.table_name(),
-            Self::CloseWsolTokenAccount(row) => row.table_name(),
-            Self::CreateTokenAccount(row) => row.table_name(),
-            Self::CreateTokenLedger(row) => row.table_name(),
-            Self::ExactOutRoute(row) => row.table_name(),
-            Self::ExactOutRouteV2(row) => row.table_name(),
-            Self::Route(row) => row.table_name(),
-            Self::RouteV2(row) => row.table_name(),
-            Self::RouteWithTokenLedger(row) => row.table_name(),
-            Self::SetTokenLedger(row) => row.table_name(),
-            Self::SharedAccountsExactOutRoute(row) => row.table_name(),
-            Self::SharedAccountsExactOutRouteV2(row) => row.table_name(),
-            Self::SharedAccountsRoute(row) => row.table_name(),
-            Self::SharedAccountsRouteV2(row) => row.table_name(),
-            Self::SharedAccountsRouteWithTokenLedger(row) => row.table_name(),
-            Self::BestSwapOutAmountViolationEvent(row) => row.table_name(),
-            Self::CandidateSwapQuoteErrorEvent(row) => row.table_name(),
-            Self::CandidateSwapResultsEvent(row) => row.table_name(),
-            Self::FeeEventEvent(row) => row.table_name(),
-            Self::SwapEventEvent(row) => row.table_name(),
-            Self::SwapsEventEvent(row) => row.table_name(),
-        }
-    }
-
-    fn partition_key(&self) -> String {
-        match self {
-            Self::Claim(row) => row.partition_key(),
-            Self::ClaimToken(row) => row.partition_key(),
-            Self::CloseToken(row) => row.partition_key(),
-            Self::CloseWsolTokenAccount(row) => row.partition_key(),
-            Self::CreateTokenAccount(row) => row.partition_key(),
-            Self::CreateTokenLedger(row) => row.partition_key(),
-            Self::ExactOutRoute(row) => row.partition_key(),
-            Self::ExactOutRouteV2(row) => row.partition_key(),
-            Self::Route(row) => row.partition_key(),
-            Self::RouteV2(row) => row.partition_key(),
-            Self::RouteWithTokenLedger(row) => row.partition_key(),
-            Self::SetTokenLedger(row) => row.partition_key(),
-            Self::SharedAccountsExactOutRoute(row) => row.partition_key(),
-            Self::SharedAccountsExactOutRouteV2(row) => row.partition_key(),
-            Self::SharedAccountsRoute(row) => row.partition_key(),
-            Self::SharedAccountsRouteV2(row) => row.partition_key(),
-            Self::SharedAccountsRouteWithTokenLedger(row) => row.partition_key(),
-            Self::BestSwapOutAmountViolationEvent(row) => row.partition_key(),
-            Self::CandidateSwapQuoteErrorEvent(row) => row.partition_key(),
-            Self::CandidateSwapResultsEvent(row) => row.partition_key(),
-            Self::FeeEventEvent(row) => row.partition_key(),
-            Self::SwapEventEvent(row) => row.partition_key(),
-            Self::SwapsEventEvent(row) => row.partition_key(),
-        }
-    }
-}
-
 pub type JupiterSwapClickHouseInstructionProcessor = ClickHouseInstructionProcessor<
     JupiterSwapInstruction,
     JupiterSwapInstructionWithClickHouseMetadata,
@@ -163,147 +118,40 @@ pub type JupiterSwapClickHouseInstructionProcessor = ClickHouseInstructionProces
 
 pub struct JupiterSwapClickHouseInstructionsMigration;
 
-impl ClickHouseSchema for JupiterSwapClickHouseInstructionsMigration {
-    fn operations(_config: &ClickHouseConfig) -> Vec<String> {
-        let mut operations = Vec::new();
-        operations.extend(
-            claim_row::ClaimInstructionClickHouseRow::migration_operations(
-                claim_row::ClaimInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(
-            claim_token_row::ClaimTokenInstructionClickHouseRow::migration_operations(
-                claim_token_row::ClaimTokenInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(
-            close_token_row::CloseTokenInstructionClickHouseRow::migration_operations(
-                close_token_row::CloseTokenInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(close_wsol_token_account_row::CloseWsolTokenAccountInstructionClickHouseRow::migration_operations(close_wsol_token_account_row::CloseWsolTokenAccountInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        operations.extend(create_token_account_row::CreateTokenAccountInstructionClickHouseRow::migration_operations(create_token_account_row::CreateTokenAccountInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        operations.extend(create_token_ledger_row::CreateTokenLedgerInstructionClickHouseRow::migration_operations(create_token_ledger_row::CreateTokenLedgerInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        operations.extend(
-            exact_out_route_row::ExactOutRouteInstructionClickHouseRow::migration_operations(
-                exact_out_route_row::ExactOutRouteInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(
-            exact_out_route_v2_row::ExactOutRouteV2InstructionClickHouseRow::migration_operations(
-                exact_out_route_v2_row::ExactOutRouteV2InstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(
-            route_row::RouteInstructionClickHouseRow::migration_operations(
-                route_row::RouteInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(
-            route_v2_row::RouteV2InstructionClickHouseRow::migration_operations(
-                route_v2_row::RouteV2InstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(route_with_token_ledger_row::RouteWithTokenLedgerInstructionClickHouseRow::migration_operations(route_with_token_ledger_row::RouteWithTokenLedgerInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        operations.extend(
-            set_token_ledger_row::SetTokenLedgerInstructionClickHouseRow::migration_operations(
-                set_token_ledger_row::SetTokenLedgerInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(shared_accounts_exact_out_route_row::SharedAccountsExactOutRouteInstructionClickHouseRow::migration_operations(shared_accounts_exact_out_route_row::SharedAccountsExactOutRouteInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        operations.extend(shared_accounts_exact_out_route_v2_row::SharedAccountsExactOutRouteV2InstructionClickHouseRow::migration_operations(shared_accounts_exact_out_route_v2_row::SharedAccountsExactOutRouteV2InstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        operations.extend(shared_accounts_route_row::SharedAccountsRouteInstructionClickHouseRow::migration_operations(shared_accounts_route_row::SharedAccountsRouteInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        operations.extend(shared_accounts_route_v2_row::SharedAccountsRouteV2InstructionClickHouseRow::migration_operations(shared_accounts_route_v2_row::SharedAccountsRouteV2InstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        operations.extend(shared_accounts_route_with_token_ledger_row::SharedAccountsRouteWithTokenLedgerInstructionClickHouseRow::migration_operations(shared_accounts_route_with_token_ledger_row::SharedAccountsRouteWithTokenLedgerInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        operations.extend(best_swap_out_amount_violation_event_row::BestSwapOutAmountViolationEventClickHouseRow::migration_operations(best_swap_out_amount_violation_event_row::BestSwapOutAmountViolationEventClickHouseRow::DEFAULT_TABLE_NAME));
-        operations.extend(candidate_swap_quote_error_event_row::CandidateSwapQuoteErrorEventClickHouseRow::migration_operations(candidate_swap_quote_error_event_row::CandidateSwapQuoteErrorEventClickHouseRow::DEFAULT_TABLE_NAME));
-        operations.extend(candidate_swap_results_event_row::CandidateSwapResultsEventClickHouseRow::migration_operations(candidate_swap_results_event_row::CandidateSwapResultsEventClickHouseRow::DEFAULT_TABLE_NAME));
-        operations.extend(
-            fee_event_event_row::FeeEventEventClickHouseRow::migration_operations(
-                fee_event_event_row::FeeEventEventClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(
-            swap_event_event_row::SwapEventEventClickHouseRow::migration_operations(
-                swap_event_event_row::SwapEventEventClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(
-            swaps_event_event_row::SwapsEventEventClickHouseRow::migration_operations(
-                swaps_event_event_row::SwapsEventEventClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations
+carbon_core::clickhouse_row_dispatch!(
+    instruction
+    JupiterSwapClickHouseInstructionRow,
+    JupiterSwapClickHouseInstructionsMigration,
+    JupiterSwapInstructionWithClickHouseMetadata,
+    JupiterSwapInstruction,
+    {
+        Claim => claim_row::ClaimInstructionClickHouseRow,
+        ClaimToken => claim_token_row::ClaimTokenInstructionClickHouseRow,
+        CloseToken => close_token_row::CloseTokenInstructionClickHouseRow,
+        CloseWsolTokenAccount => close_wsol_token_account_row::CloseWsolTokenAccountInstructionClickHouseRow,
+        CreateTokenAccount => create_token_account_row::CreateTokenAccountInstructionClickHouseRow,
+        CreateTokenLedger => create_token_ledger_row::CreateTokenLedgerInstructionClickHouseRow,
+        ExactOutRoute => exact_out_route_row::ExactOutRouteInstructionClickHouseRow,
+        ExactOutRouteV2 => exact_out_route_v2_row::ExactOutRouteV2InstructionClickHouseRow,
+        Route => route_row::RouteInstructionClickHouseRow,
+        RouteV2 => route_v2_row::RouteV2InstructionClickHouseRow,
+        RouteWithTokenLedger => route_with_token_ledger_row::RouteWithTokenLedgerInstructionClickHouseRow,
+        SetTokenLedger => set_token_ledger_row::SetTokenLedgerInstructionClickHouseRow,
+        SharedAccountsExactOutRoute => shared_accounts_exact_out_route_row::SharedAccountsExactOutRouteInstructionClickHouseRow,
+        SharedAccountsExactOutRouteV2 => shared_accounts_exact_out_route_v2_row::SharedAccountsExactOutRouteV2InstructionClickHouseRow,
+        SharedAccountsRoute => shared_accounts_route_row::SharedAccountsRouteInstructionClickHouseRow,
+        SharedAccountsRouteV2 => shared_accounts_route_v2_row::SharedAccountsRouteV2InstructionClickHouseRow,
+        SharedAccountsRouteWithTokenLedger => shared_accounts_route_with_token_ledger_row::SharedAccountsRouteWithTokenLedgerInstructionClickHouseRow,
     }
-
-    fn managed_tables(_config: &ClickHouseConfig) -> Vec<ClickHouseManagedTable> {
-        let mut tables = Vec::new();
-        tables.extend(claim_row::ClaimInstructionClickHouseRow::managed_tables(
-            claim_row::ClaimInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-        ));
-        tables.extend(
-            claim_token_row::ClaimTokenInstructionClickHouseRow::managed_tables(
-                claim_token_row::ClaimTokenInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        tables.extend(
-            close_token_row::CloseTokenInstructionClickHouseRow::managed_tables(
-                close_token_row::CloseTokenInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        tables.extend(close_wsol_token_account_row::CloseWsolTokenAccountInstructionClickHouseRow::managed_tables(close_wsol_token_account_row::CloseWsolTokenAccountInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        tables.extend(create_token_account_row::CreateTokenAccountInstructionClickHouseRow::managed_tables(create_token_account_row::CreateTokenAccountInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        tables.extend(create_token_ledger_row::CreateTokenLedgerInstructionClickHouseRow::managed_tables(create_token_ledger_row::CreateTokenLedgerInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        tables.extend(
-            exact_out_route_row::ExactOutRouteInstructionClickHouseRow::managed_tables(
-                exact_out_route_row::ExactOutRouteInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        tables.extend(
-            exact_out_route_v2_row::ExactOutRouteV2InstructionClickHouseRow::managed_tables(
-                exact_out_route_v2_row::ExactOutRouteV2InstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        tables.extend(route_row::RouteInstructionClickHouseRow::managed_tables(
-            route_row::RouteInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-        ));
-        tables.extend(
-            route_v2_row::RouteV2InstructionClickHouseRow::managed_tables(
-                route_v2_row::RouteV2InstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        tables.extend(route_with_token_ledger_row::RouteWithTokenLedgerInstructionClickHouseRow::managed_tables(route_with_token_ledger_row::RouteWithTokenLedgerInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        tables.extend(
-            set_token_ledger_row::SetTokenLedgerInstructionClickHouseRow::managed_tables(
-                set_token_ledger_row::SetTokenLedgerInstructionClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        tables.extend(shared_accounts_exact_out_route_row::SharedAccountsExactOutRouteInstructionClickHouseRow::managed_tables(shared_accounts_exact_out_route_row::SharedAccountsExactOutRouteInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        tables.extend(shared_accounts_exact_out_route_v2_row::SharedAccountsExactOutRouteV2InstructionClickHouseRow::managed_tables(shared_accounts_exact_out_route_v2_row::SharedAccountsExactOutRouteV2InstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        tables.extend(shared_accounts_route_row::SharedAccountsRouteInstructionClickHouseRow::managed_tables(shared_accounts_route_row::SharedAccountsRouteInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        tables.extend(shared_accounts_route_v2_row::SharedAccountsRouteV2InstructionClickHouseRow::managed_tables(shared_accounts_route_v2_row::SharedAccountsRouteV2InstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        tables.extend(shared_accounts_route_with_token_ledger_row::SharedAccountsRouteWithTokenLedgerInstructionClickHouseRow::managed_tables(shared_accounts_route_with_token_ledger_row::SharedAccountsRouteWithTokenLedgerInstructionClickHouseRow::DEFAULT_TABLE_NAME));
-        tables.extend(best_swap_out_amount_violation_event_row::BestSwapOutAmountViolationEventClickHouseRow::managed_tables(best_swap_out_amount_violation_event_row::BestSwapOutAmountViolationEventClickHouseRow::DEFAULT_TABLE_NAME));
-        tables.extend(candidate_swap_quote_error_event_row::CandidateSwapQuoteErrorEventClickHouseRow::managed_tables(candidate_swap_quote_error_event_row::CandidateSwapQuoteErrorEventClickHouseRow::DEFAULT_TABLE_NAME));
-        tables.extend(candidate_swap_results_event_row::CandidateSwapResultsEventClickHouseRow::managed_tables(candidate_swap_results_event_row::CandidateSwapResultsEventClickHouseRow::DEFAULT_TABLE_NAME));
-        tables.extend(
-            fee_event_event_row::FeeEventEventClickHouseRow::managed_tables(
-                fee_event_event_row::FeeEventEventClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        tables.extend(
-            swap_event_event_row::SwapEventEventClickHouseRow::managed_tables(
-                swap_event_event_row::SwapEventEventClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        tables.extend(
-            swaps_event_event_row::SwapsEventEventClickHouseRow::managed_tables(
-                swaps_event_event_row::SwapsEventEventClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        tables
+    events CpiEvent {
+        BestSwapOutAmountViolationEvent: BestSwapOutAmountViolation => best_swap_out_amount_violation_event_row::BestSwapOutAmountViolationEventClickHouseRow,
+        CandidateSwapQuoteErrorEvent: CandidateSwapQuoteError => candidate_swap_quote_error_event_row::CandidateSwapQuoteErrorEventClickHouseRow,
+        CandidateSwapResultsEvent: CandidateSwapResults => candidate_swap_results_event_row::CandidateSwapResultsEventClickHouseRow,
+        FeeEventEvent: FeeEvent => fee_event_event_row::FeeEventEventClickHouseRow,
+        SwapEventEvent: SwapEvent => swap_event_event_row::SwapEventEventClickHouseRow,
+        SwapsEventEvent: SwapsEvent => swaps_event_event_row::SwapsEventEventClickHouseRow,
     }
-}
+);
 
 impl JupiterSwapClickHouseInstructionsMigration {
     pub async fn run(config: &ClickHouseConfig) -> CarbonResult<()> {
@@ -334,229 +182,6 @@ impl
         ),
     ) -> Self {
         Self(value.0, value.1, value.2)
-    }
-}
-
-impl ClickHouseRows<JupiterSwapClickHouseInstructionRow>
-    for JupiterSwapInstructionWithClickHouseMetadata
-{
-    fn clickhouse_rows(
-        &self,
-        context: &ClickHouseRowContext,
-    ) -> Vec<JupiterSwapClickHouseInstructionRow> {
-        let JupiterSwapInstructionWithClickHouseMetadata(instruction, metadata, _accounts) = self;
-
-        match instruction {
-            JupiterSwapInstruction::Claim { data, .. } => {
-                vec![JupiterSwapClickHouseInstructionRow::Claim(
-                    claim_row::ClaimInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            JupiterSwapInstruction::ClaimToken { data, .. } => {
-                vec![JupiterSwapClickHouseInstructionRow::ClaimToken(
-                    claim_token_row::ClaimTokenInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            JupiterSwapInstruction::CloseToken { data, .. } => {
-                vec![JupiterSwapClickHouseInstructionRow::CloseToken(
-                    close_token_row::CloseTokenInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            JupiterSwapInstruction::CloseWsolTokenAccount { data, .. } => {
-                vec![JupiterSwapClickHouseInstructionRow::CloseWsolTokenAccount(
-                    close_wsol_token_account_row::CloseWsolTokenAccountInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            JupiterSwapInstruction::CreateTokenAccount { data, .. } => {
-                vec![JupiterSwapClickHouseInstructionRow::CreateTokenAccount(
-                    create_token_account_row::CreateTokenAccountInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            JupiterSwapInstruction::CreateTokenLedger { data, .. } => {
-                vec![JupiterSwapClickHouseInstructionRow::CreateTokenLedger(
-                    create_token_ledger_row::CreateTokenLedgerInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            JupiterSwapInstruction::ExactOutRoute { data, .. } => {
-                vec![JupiterSwapClickHouseInstructionRow::ExactOutRoute(
-                    exact_out_route_row::ExactOutRouteInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            JupiterSwapInstruction::ExactOutRouteV2 { data, .. } => {
-                vec![JupiterSwapClickHouseInstructionRow::ExactOutRouteV2(
-                    exact_out_route_v2_row::ExactOutRouteV2InstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            JupiterSwapInstruction::Route { data, .. } => {
-                vec![JupiterSwapClickHouseInstructionRow::Route(
-                    route_row::RouteInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            JupiterSwapInstruction::RouteV2 { data, .. } => {
-                vec![JupiterSwapClickHouseInstructionRow::RouteV2(
-                    route_v2_row::RouteV2InstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            JupiterSwapInstruction::RouteWithTokenLedger { data, .. } => {
-                vec![JupiterSwapClickHouseInstructionRow::RouteWithTokenLedger(
-                    route_with_token_ledger_row::RouteWithTokenLedgerInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            JupiterSwapInstruction::SetTokenLedger { data, .. } => {
-                vec![JupiterSwapClickHouseInstructionRow::SetTokenLedger(
-                    set_token_ledger_row::SetTokenLedgerInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            JupiterSwapInstruction::SharedAccountsExactOutRoute { data, .. } => {
-                vec![JupiterSwapClickHouseInstructionRow::SharedAccountsExactOutRoute(
-                    shared_accounts_exact_out_route_row::SharedAccountsExactOutRouteInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            JupiterSwapInstruction::SharedAccountsExactOutRouteV2 { data, .. } => {
-                vec![JupiterSwapClickHouseInstructionRow::SharedAccountsExactOutRouteV2(
-                    shared_accounts_exact_out_route_v2_row::SharedAccountsExactOutRouteV2InstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            JupiterSwapInstruction::SharedAccountsRoute { data, .. } => {
-                vec![JupiterSwapClickHouseInstructionRow::SharedAccountsRoute(
-                    shared_accounts_route_row::SharedAccountsRouteInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            JupiterSwapInstruction::SharedAccountsRouteV2 { data, .. } => {
-                vec![JupiterSwapClickHouseInstructionRow::SharedAccountsRouteV2(
-                    shared_accounts_route_v2_row::SharedAccountsRouteV2InstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            JupiterSwapInstruction::SharedAccountsRouteWithTokenLedger { data, .. } => {
-                vec![JupiterSwapClickHouseInstructionRow::SharedAccountsRouteWithTokenLedger(
-                    shared_accounts_route_with_token_ledger_row::SharedAccountsRouteWithTokenLedgerInstructionClickHouseRow::from_parts(
-                        data.clone(),
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            JupiterSwapInstruction::CpiEvent { data, .. } => match data {
-                super::CpiEvent::BestSwapOutAmountViolation(event) => {
-                    vec![JupiterSwapClickHouseInstructionRow::BestSwapOutAmountViolationEvent(
-                        best_swap_out_amount_violation_event_row::BestSwapOutAmountViolationEventClickHouseRow::from_parts(
-                            event.clone(),
-                            metadata,
-                            context,
-                        ),
-                    )]
-                }
-                super::CpiEvent::CandidateSwapQuoteError(event) => {
-                    vec![JupiterSwapClickHouseInstructionRow::CandidateSwapQuoteErrorEvent(
-                        candidate_swap_quote_error_event_row::CandidateSwapQuoteErrorEventClickHouseRow::from_parts(
-                            event.clone(),
-                            metadata,
-                            context,
-                        ),
-                    )]
-                }
-                super::CpiEvent::CandidateSwapResults(event) => {
-                    vec![JupiterSwapClickHouseInstructionRow::CandidateSwapResultsEvent(
-                        candidate_swap_results_event_row::CandidateSwapResultsEventClickHouseRow::from_parts(
-                            event.clone(),
-                            metadata,
-                            context,
-                        ),
-                    )]
-                }
-                super::CpiEvent::FeeEvent(event) => {
-                    vec![JupiterSwapClickHouseInstructionRow::FeeEventEvent(
-                        fee_event_event_row::FeeEventEventClickHouseRow::from_parts(
-                            event.clone(),
-                            metadata,
-                            context,
-                        ),
-                    )]
-                }
-                super::CpiEvent::SwapEvent(event) => {
-                    vec![JupiterSwapClickHouseInstructionRow::SwapEventEvent(
-                        swap_event_event_row::SwapEventEventClickHouseRow::from_parts(
-                            event.clone(),
-                            metadata,
-                            context,
-                        ),
-                    )]
-                }
-                super::CpiEvent::SwapsEvent(event) => {
-                    vec![JupiterSwapClickHouseInstructionRow::SwapsEventEvent(
-                        swaps_event_event_row::SwapsEventEventClickHouseRow::from_parts(
-                            event.clone(),
-                            metadata,
-                            context,
-                        ),
-                    )]
-                }
-            },
-        }
     }
 }
 

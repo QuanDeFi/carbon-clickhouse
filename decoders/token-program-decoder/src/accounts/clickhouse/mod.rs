@@ -12,9 +12,8 @@ use {
     carbon_core::{
         account::{AccountMetadata, DecodedAccount},
         clickhouse::{
-            rows::{ClickHouseRow, ClickHouseRowContext, ClickHouseRows},
             ClickHouseAccountProcessor, ClickHouseAdmin, ClickHouseBatchSettings, ClickHouseConfig,
-            ClickHouseManagedTable, ClickHouseSchema,
+            ClickHouseTableOptions,
         },
         error::CarbonResult,
     },
@@ -28,30 +27,25 @@ pub const DEFAULT_DECODER_VERSION: &str = "v1";
 pub const DEFAULT_BATCH_MAX_ROWS: usize = 500;
 pub const DEFAULT_BATCH_FLUSH_INTERVAL_MS: u64 = 1_000;
 
+pub(crate) fn clickhouse_account_table_options() -> ClickHouseTableOptions {
+    ClickHouseTableOptions {
+        on_cluster_clause: r#""#,
+        engine: r#"MergeTree"#.to_string(),
+        local_engine: None,
+        local_table_suffix: r#"_local"#,
+        partition_by: r#"partition_slot"#,
+        order_by: r#"(program_id, family_name, account_id, slot)"#,
+        ttl_clause: r#""#,
+        settings_clause: r#" SETTINGS non_replicated_deduplication_window = 1000"#,
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(untagged)]
 pub enum TokenProgramClickHouseAccountRow {
     Mint(mint_row::MintAccountClickHouseRow),
     Multisig(multisig_row::MultisigAccountClickHouseRow),
     Token(token_row::TokenAccountClickHouseRow),
-}
-
-impl ClickHouseRow for TokenProgramClickHouseAccountRow {
-    fn table_name(&self) -> &'static str {
-        match self {
-            Self::Mint(row) => row.table_name(),
-            Self::Multisig(row) => row.table_name(),
-            Self::Token(row) => row.table_name(),
-        }
-    }
-
-    fn partition_key(&self) -> String {
-        match self {
-            Self::Mint(row) => row.partition_key(),
-            Self::Multisig(row) => row.partition_key(),
-            Self::Token(row) => row.partition_key(),
-        }
-    }
 }
 
 pub type TokenProgramClickHouseAccountProcessor = ClickHouseAccountProcessor<
@@ -62,37 +56,18 @@ pub type TokenProgramClickHouseAccountProcessor = ClickHouseAccountProcessor<
 
 pub struct TokenProgramClickHouseAccountsMigration;
 
-impl ClickHouseSchema for TokenProgramClickHouseAccountsMigration {
-    fn operations(_config: &ClickHouseConfig) -> Vec<String> {
-        let mut operations = Vec::new();
-        operations.extend(mint_row::MintAccountClickHouseRow::migration_operations(
-            mint_row::MintAccountClickHouseRow::DEFAULT_TABLE_NAME,
-        ));
-        operations.extend(
-            multisig_row::MultisigAccountClickHouseRow::migration_operations(
-                multisig_row::MultisigAccountClickHouseRow::DEFAULT_TABLE_NAME,
-            ),
-        );
-        operations.extend(token_row::TokenAccountClickHouseRow::migration_operations(
-            token_row::TokenAccountClickHouseRow::DEFAULT_TABLE_NAME,
-        ));
-        operations
+carbon_core::clickhouse_row_dispatch!(
+    account
+    TokenProgramClickHouseAccountRow,
+    TokenProgramClickHouseAccountsMigration,
+    TokenProgramAccountWithClickHouseMetadata,
+    TokenProgramAccount,
+    {
+        Mint => mint_row::MintAccountClickHouseRow,
+        Multisig => multisig_row::MultisigAccountClickHouseRow,
+        Token => token_row::TokenAccountClickHouseRow,
     }
-
-    fn managed_tables(_config: &ClickHouseConfig) -> Vec<ClickHouseManagedTable> {
-        let mut tables = Vec::new();
-        tables.extend(mint_row::MintAccountClickHouseRow::managed_tables(
-            mint_row::MintAccountClickHouseRow::DEFAULT_TABLE_NAME,
-        ));
-        tables.extend(multisig_row::MultisigAccountClickHouseRow::managed_tables(
-            multisig_row::MultisigAccountClickHouseRow::DEFAULT_TABLE_NAME,
-        ));
-        tables.extend(token_row::TokenAccountClickHouseRow::managed_tables(
-            token_row::TokenAccountClickHouseRow::DEFAULT_TABLE_NAME,
-        ));
-        tables
-    }
-}
+);
 
 impl TokenProgramClickHouseAccountsMigration {
     pub async fn run(config: &ClickHouseConfig) -> CarbonResult<()> {
@@ -112,50 +87,6 @@ impl From<(DecodedAccount<TokenProgramAccount>, AccountMetadata)>
 {
     fn from(value: (DecodedAccount<TokenProgramAccount>, AccountMetadata)) -> Self {
         Self(value.0, value.1)
-    }
-}
-
-impl ClickHouseRows<TokenProgramClickHouseAccountRow>
-    for TokenProgramAccountWithClickHouseMetadata
-{
-    fn clickhouse_rows(
-        &self,
-        context: &ClickHouseRowContext,
-    ) -> Vec<TokenProgramClickHouseAccountRow> {
-        let TokenProgramAccountWithClickHouseMetadata(decoded_account, metadata) = self;
-
-        match &decoded_account.data {
-            TokenProgramAccount::Mint(account) => {
-                vec![TokenProgramClickHouseAccountRow::Mint(
-                    mint_row::MintAccountClickHouseRow::from_parts(
-                        *account.clone(),
-                        decoded_account,
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramAccount::Multisig(account) => {
-                vec![TokenProgramClickHouseAccountRow::Multisig(
-                    multisig_row::MultisigAccountClickHouseRow::from_parts(
-                        *account.clone(),
-                        decoded_account,
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-            TokenProgramAccount::Token(account) => {
-                vec![TokenProgramClickHouseAccountRow::Token(
-                    token_row::TokenAccountClickHouseRow::from_parts(
-                        *account.clone(),
-                        decoded_account,
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-        }
     }
 }
 

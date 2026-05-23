@@ -5,6 +5,7 @@ export type ClickHouseFlattenedField = {
     rustPath: string;
     rowType: string;
     clickHouseColumnType: string;
+    clickHouseColumnTypeExpr?: string;
     expr: string;
     docs: string[];
 };
@@ -17,6 +18,8 @@ export type ClickHouseRowPlan = {
 type ClickHouseMappedValue = {
     rowType: string;
     clickHouseColumnType: string;
+    clickHouseColumnTypeExpr?: string;
+    clickHouseColumnTypeConst?: string;
     expr: string;
     defaultExpr: string;
     nullableSafe: boolean;
@@ -26,12 +29,14 @@ type ClickHouseFieldSpec = {
     name: string;
     rowType: string;
     clickHouseColumnType: string;
+    clickHouseColumnTypeExpr?: string;
     expr: string;
     defaultExpr: string;
 };
 
 type HelperContext = {
     helpers: Map<string, string>;
+    ddlConstants: Map<string, string>;
     emitting: Set<string>;
 };
 
@@ -74,11 +79,13 @@ export class ClickHouseRowMapper {
         seen: Set<string>,
         options: ClickHouseRowPlanOptions = {},
     ): ClickHouseRowPlan {
-        const helperContext: HelperContext = { helpers: new Map(), emitting: new Set() };
+        const helperContext: HelperContext = { helpers: new Map(), ddlConstants: new Map(), emitting: new Set() };
         const fields = this.flattenTypeWithContext(typeNode, prefix, docsPrefix, seen, helperContext, options);
         return {
             fields,
-            helperDefinitions: [...helperContext.helpers.values()],
+            helperDefinitions: [...helperContext.ddlConstants.entries()].map(([name, ddl]) => `pub const ${name}: &str = r#"${ddl}"#;`).concat([
+                ...helperContext.helpers.values(),
+            ]),
         };
     }
 
@@ -142,6 +149,7 @@ export class ClickHouseRowMapper {
                 rustPath: prefix.join('.'),
                 rowType: spec.rowType,
                 clickHouseColumnType: spec.clickHouseColumnType,
+                clickHouseColumnTypeExpr: spec.clickHouseColumnTypeExpr,
                 docs: docsPrefix,
                 expr: spec.expr,
             }));
@@ -156,6 +164,7 @@ export class ClickHouseRowMapper {
                 rustPath: prefix.join('.'),
                 rowType: mapped.rowType,
                 clickHouseColumnType: mapped.clickHouseColumnType,
+                clickHouseColumnTypeExpr: mapped.clickHouseColumnTypeExpr,
                 docs: docsPrefix,
                 expr: mapped.expr,
             },
@@ -229,9 +238,18 @@ export class ClickHouseRowMapper {
                 };
             }
             const inner = this.mapValue(innerType, 'value', helperContext, undefined, true);
+            const clickHouseColumnType = `Array(${inner.clickHouseColumnType})`;
+            const clickHouseColumnTypeConst = inner.clickHouseColumnTypeConst
+                ? this.arrayDdlConstName(inner.clickHouseColumnTypeConst)
+                : undefined;
+            if (clickHouseColumnTypeConst) {
+                this.setDdlConstant(helperContext, clickHouseColumnTypeConst, clickHouseColumnType);
+            }
             return {
                 rowType: `Vec<${inner.rowType}>`,
-                clickHouseColumnType: `Array(${inner.clickHouseColumnType})`,
+                clickHouseColumnType,
+                clickHouseColumnTypeExpr: clickHouseColumnTypeConst,
+                clickHouseColumnTypeConst,
                 expr: `${source}.iter().map(|value| ${inner.expr}).collect()`,
                 defaultExpr: 'Vec::new()',
                 nullableSafe: false,
@@ -240,9 +258,18 @@ export class ClickHouseRowMapper {
 
         if (isNode(unwrapped, 'arrayTypeNode')) {
             const inner = this.mapValue(unwrapped.item, 'value', helperContext, undefined, true);
+            const clickHouseColumnType = `Array(${inner.clickHouseColumnType})`;
+            const clickHouseColumnTypeConst = inner.clickHouseColumnTypeConst
+                ? this.arrayDdlConstName(inner.clickHouseColumnTypeConst)
+                : undefined;
+            if (clickHouseColumnTypeConst) {
+                this.setDdlConstant(helperContext, clickHouseColumnTypeConst, clickHouseColumnType);
+            }
             return {
                 rowType: `Vec<${inner.rowType}>`,
-                clickHouseColumnType: `Array(${inner.clickHouseColumnType})`,
+                clickHouseColumnType,
+                clickHouseColumnTypeExpr: clickHouseColumnTypeConst,
+                clickHouseColumnTypeConst,
                 expr: `${source}.iter().map(|value| ${inner.expr}).collect()`,
                 defaultExpr: 'Vec::new()',
                 nullableSafe: false,
@@ -341,9 +368,15 @@ export class ClickHouseRowMapper {
             helperContext.emitting.delete(helperName);
         }
 
+        const clickHouseColumnType = this.helperTupleType(helperName, typeNode, helperContext);
+        const clickHouseColumnTypeConst = this.ddlConstName(helperName);
+        this.setDdlConstant(helperContext, clickHouseColumnTypeConst, clickHouseColumnType);
+
         return {
             rowType: helperName,
-            clickHouseColumnType: this.helperTupleType(helperName, typeNode, helperContext),
+            clickHouseColumnType,
+            clickHouseColumnTypeExpr: clickHouseColumnTypeConst,
+            clickHouseColumnTypeConst,
             expr: `${helperName}::from(${sourceRef ? source : `&${source}`})`,
             defaultExpr: `${helperName}::default()`,
             nullableSafe: false,
@@ -360,9 +393,15 @@ export class ClickHouseRowMapper {
             helperContext.emitting.delete(helperName);
         }
 
+        const clickHouseColumnType = this.helperTupleType(helperName, typeNode, helperContext);
+        const clickHouseColumnTypeConst = this.ddlConstName(helperName);
+        this.setDdlConstant(helperContext, clickHouseColumnTypeConst, clickHouseColumnType);
+
         return {
             rowType: helperName,
-            clickHouseColumnType: this.helperTupleType(helperName, typeNode, helperContext),
+            clickHouseColumnType,
+            clickHouseColumnTypeExpr: clickHouseColumnTypeConst,
+            clickHouseColumnTypeConst,
             expr: this.renderStructLiteral(helperName, source, typeNode, helperContext),
             defaultExpr: `${helperName}::default()`,
             nullableSafe: false,
@@ -386,9 +425,15 @@ export class ClickHouseRowMapper {
             helperContext.emitting.delete(helperName);
         }
 
+        const clickHouseColumnType = this.helperTupleType(helperName, typeNode, helperContext);
+        const clickHouseColumnTypeConst = this.ddlConstName(helperName);
+        this.setDdlConstant(helperContext, clickHouseColumnTypeConst, clickHouseColumnType);
+
         return {
             rowType: helperName,
-            clickHouseColumnType: this.helperTupleType(helperName, typeNode, helperContext),
+            clickHouseColumnType,
+            clickHouseColumnTypeExpr: clickHouseColumnTypeConst,
+            clickHouseColumnTypeConst,
             expr: `${helperName}::from(${sourceRef ? source : `&${source}`})`,
             defaultExpr: `${helperName}::default()`,
             nullableSafe: false,
@@ -405,9 +450,15 @@ export class ClickHouseRowMapper {
             helperContext.emitting.delete(helperName);
         }
 
+        const clickHouseColumnType = this.helperTupleType(helperName, typeNode, helperContext);
+        const clickHouseColumnTypeConst = this.ddlConstName(helperName);
+        this.setDdlConstant(helperContext, clickHouseColumnTypeConst, clickHouseColumnType);
+
         return {
             rowType: helperName,
-            clickHouseColumnType: this.helperTupleType(helperName, typeNode, helperContext),
+            clickHouseColumnType,
+            clickHouseColumnTypeExpr: clickHouseColumnTypeConst,
+            clickHouseColumnTypeConst,
             expr: this.renderStructLiteral(helperName, source, typeNode, helperContext),
             defaultExpr: `${helperName}::default()`,
             nullableSafe: false,
@@ -445,9 +496,15 @@ export class ClickHouseRowMapper {
             helperContext.emitting.delete(helperName);
         }
 
+        const clickHouseColumnType = this.payloadEnumTupleType(typeNode, helperContext);
+        const clickHouseColumnTypeConst = this.ddlConstName(helperName);
+        this.setDdlConstant(helperContext, clickHouseColumnTypeConst, clickHouseColumnType);
+
         return {
             rowType: helperName,
-            clickHouseColumnType: this.payloadEnumTupleType(typeNode, helperContext),
+            clickHouseColumnType,
+            clickHouseColumnTypeExpr: clickHouseColumnTypeConst,
+            clickHouseColumnTypeConst,
             expr: `${helperName}::from(${sourceRef ? source : `&${source}`})`,
             defaultExpr: `${helperName}::default()`,
             nullableSafe: false,
@@ -462,6 +519,7 @@ export class ClickHouseRowMapper {
                     name: 'value',
                     rowType: mapped.rowType,
                     clickHouseColumnType: mapped.clickHouseColumnType,
+                    clickHouseColumnTypeExpr: mapped.clickHouseColumnTypeExpr,
                     expr: mapped.expr,
                     defaultExpr: mapped.defaultExpr,
                 },
@@ -481,6 +539,7 @@ export class ClickHouseRowMapper {
                     name: fieldName,
                     rowType: mapped.rowType,
                     clickHouseColumnType: mapped.clickHouseColumnType,
+                    clickHouseColumnTypeExpr: mapped.clickHouseColumnTypeExpr,
                     expr: mapped.expr,
                     defaultExpr: mapped.defaultExpr,
                 });
@@ -497,6 +556,7 @@ export class ClickHouseRowMapper {
                     name: 'value',
                     rowType: mapped.rowType,
                     clickHouseColumnType: mapped.clickHouseColumnType,
+                    clickHouseColumnTypeExpr: mapped.clickHouseColumnTypeExpr,
                     expr: mapped.expr,
                     defaultExpr: mapped.defaultExpr,
                 },
@@ -517,6 +577,7 @@ export class ClickHouseRowMapper {
                     name: fieldName,
                     rowType: mapped.rowType,
                     clickHouseColumnType: mapped.clickHouseColumnType,
+                    clickHouseColumnTypeExpr: mapped.clickHouseColumnTypeExpr,
                     expr: mapped.expr,
                     defaultExpr: mapped.defaultExpr,
                 },
@@ -555,6 +616,7 @@ export class ClickHouseRowMapper {
                 name: fieldName,
                 rowType: mapped.rowType,
                 clickHouseColumnType: mapped.clickHouseColumnType,
+                clickHouseColumnTypeExpr: mapped.clickHouseColumnTypeExpr,
                 expr: `${source}.as_ref().map(|value| ${mapped.expr}).unwrap_or_default()`,
                 defaultExpr: mapped.defaultExpr,
             },
@@ -587,6 +649,7 @@ export class ClickHouseRowMapper {
                 name: group.outputName,
                 rowType: mapped.rowType,
                 clickHouseColumnType: mapped.clickHouseColumnType,
+                clickHouseColumnTypeExpr: mapped.clickHouseColumnTypeExpr,
                 expr: mapped.defaultExpr,
                 defaultExpr: mapped.defaultExpr,
             },
@@ -1073,6 +1136,23 @@ impl serde::Serialize for ${helperName} {
     }
 }`,
         );
+    }
+
+    private ddlConstName(helperName: string): string {
+        const base = helperName.replace(/^ClickHouse/, '');
+        return `${snakeCase(base).toUpperCase()}_DDL`;
+    }
+
+    private arrayDdlConstName(innerConstName: string): string {
+        return innerConstName.replace(/_DDL$/, '_ARRAY_DDL');
+    }
+
+    private setDdlConstant(helperContext: HelperContext, name: string, ddl: string): void {
+        const existing = helperContext.ddlConstants.get(name);
+        if (existing && existing !== ddl) {
+            throw new Error(`Conflicting ClickHouse DDL constant ${name}: ${existing} != ${ddl}`);
+        }
+        helperContext.ddlConstants.set(name, ddl);
     }
 
     private resolveDefinedType(name: string): TypeNode | null {

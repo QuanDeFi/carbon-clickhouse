@@ -70,6 +70,7 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
         events: [{ name: 'swapEvent' }],
         hasAnchorEvents: true,
         hasClickHouseInstructionTypes: true,
+        clickHouseDdl: defaultInstructionDdl,
     });
 
     assert.match(output, /pub mod types;/);
@@ -82,17 +83,14 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
     assert.doesNotMatch(output, /pub use self::swap_event_event_row::\*/);
     assert.match(output, /SwapInstructionClickHouseRow/);
     assert.match(output, /SwapEventEventClickHouseRow/);
-    assert.match(output, /ClickHouseRows<DemoProgramClickHouseInstructionRow>/);
-    assert.match(output, /DemoProgramInstruction::Swap/);
-    assert.match(output, /super::CpiEvent::SwapEvent/);
-    assert.match(output, /migration_operations\(swap_row::SwapInstructionClickHouseRow::DEFAULT_TABLE_NAME\)/);
-    assert.match(
-        output,
-        /migration_operations\(swap_event_event_row::SwapEventEventClickHouseRow::DEFAULT_TABLE_NAME\)/,
-    );
-    assert.match(output, /SwapInstructionClickHouseRow::managed_tables/);
-    assert.match(output, /SwapEventEventClickHouseRow::managed_tables/);
-    assert.match(output, /fn managed_tables\(_config: &ClickHouseConfig\) -> Vec<ClickHouseManagedTable>/);
+    assert.match(output, /instruction\s+DemoProgramClickHouseInstructionRow/);
+    assert.match(output, /DemoProgramInstructionWithClickHouseMetadata/);
+    assert.match(output, /DemoProgramInstruction/);
+    assert.match(output, /events CpiEvent/);
+    assert.match(output, /carbon_core::clickhouse_row_dispatch!/);
+    assert.match(output, /Swap => swap_row::SwapInstructionClickHouseRow/);
+    assert.match(output, /SwapEventEvent: SwapEvent => swap_event_event_row::SwapEventEventClickHouseRow/);
+    assert.match(output, /fn clickhouse_instruction_table_options\(\) -> ClickHouseTableOptions/);
 }
 
 {
@@ -100,6 +98,7 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
         program,
         accountsToExport: [{ name: 'mint' }, { name: 'token' }],
         hasClickHouseAccountTypes: true,
+        clickHouseDdl: defaultAccountDdl,
     });
 
     assert.match(output, /pub mod types;/);
@@ -109,13 +108,13 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
     assert.match(output, /pub use self::token_row::TokenAccountClickHouseRow;/);
     assert.doesNotMatch(output, /pub use self::mint_row::\*/);
     assert.doesNotMatch(output, /pub use self::token_row::\*/);
-    assert.match(output, /MintAccountClickHouseRow::migration_operations/);
-    assert.match(output, /TokenAccountClickHouseRow::migration_operations/);
-    assert.match(output, /MintAccountClickHouseRow::managed_tables/);
-    assert.match(output, /TokenAccountClickHouseRow::managed_tables/);
-    assert.match(output, /fn managed_tables\(_config: &ClickHouseConfig\) -> Vec<ClickHouseManagedTable>/);
+    assert.match(output, /carbon_core::clickhouse_row_dispatch!/);
+    assert.match(output, /account\s+DemoProgramClickHouseAccountRow/);
+    assert.match(output, /Mint => mint_row::MintAccountClickHouseRow/);
+    assert.match(output, /Token => token_row::TokenAccountClickHouseRow/);
+    assert.match(output, /fn clickhouse_account_table_options\(\) -> ClickHouseTableOptions/);
     assert.match(output, /ClickHouseAccountProcessor</);
-    assert.match(output, /DemoProgramAccount::Mint/);
+    assert.match(output, /DemoProgramAccount/);
 }
 
 {
@@ -125,6 +124,51 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
 
     assert.match(output, /use carbon_core::clickhouse::rows::clickhouse_enum_variant;/);
     assert.match(output, /pub struct ClickHouseSharedHelper/);
+}
+
+{
+    const mapper = new ClickHouseRowMapper({
+        getDefinedTypesMap: () =>
+            new Map([
+                [
+                    'routePlanStep',
+                    {
+                        type: {
+                            kind: 'structTypeNode',
+                            fields: [
+                                {
+                                    kind: 'structFieldTypeNode',
+                                    name: 'percent',
+                                    type: { kind: 'numberTypeNode', format: 'u8', endian: 'le' },
+                                },
+                            ],
+                        },
+                    },
+                ],
+            ]),
+    });
+    const plan = mapper.planType(
+        {
+            kind: 'structTypeNode',
+            fields: [
+                {
+                    kind: 'structFieldTypeNode',
+                    name: 'routePlan',
+                    type: {
+                        kind: 'arrayTypeNode',
+                        item: { kind: 'definedTypeLinkNode', name: 'routePlanStep' },
+                    },
+                },
+            ],
+        },
+        [],
+        [],
+        new Set(),
+    );
+
+    assert.equal(plan.fields[0].clickHouseColumnType, 'Array(Tuple(percent UInt8))');
+    assert.equal(plan.fields[0].clickHouseColumnTypeExpr, 'ROUTE_PLAN_STEP_ARRAY_DDL');
+    assert.ok(plan.helperDefinitions.includes('pub const ROUTE_PLAN_STEP_ARRAY_DDL: &str = r#"Array(Tuple(percent UInt8))"#;'));
 }
 
 {
@@ -141,12 +185,7 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
     assert.match(output, /#\[serde\(flatten\)\]/);
     assert.match(output, /pub amount: u64/);
     assert.match(output, /ClickHouseColumnSpec::new\("amount", r#"UInt64"#\)/);
-    assert.match(output, /pub fn managed_tables\(table_name: &str\) -> Vec<ClickHouseManagedTable>/);
-    assert.match(output, /clickhouse_migration_operations\(table_name, &columns, &Self::table_options\(\)\)/);
-    assert.match(output, /clickhouse_managed_tables\(table_name, &columns, &Self::table_options\(\)\)/);
-    assert.match(output, /partition_by: r#"partition_slot"#/);
-    assert.match(output, /order_by: r#"\(program_id, family_name, account_id, slot\)"#/);
-    assert.match(output, /settings_clause: r#" SETTINGS non_replicated_deduplication_window = 1000"#/);
+    assert.match(output, /carbon_core::impl_clickhouse_account_row!/);
     assert.match(output, /demo_program_mint_account_landing/);
 }
 
@@ -182,10 +221,7 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
         output,
         /ClickHouseColumnSpec::new\("swap_events", r#"Array\(Tuple\(input_mint String, input_amount UInt64\)\)"#\)/,
     );
-    assert.match(output, /pub fn managed_tables\(table_name: &str\) -> Vec<ClickHouseManagedTable>/);
-    assert.match(output, /partition_by: r#"toYear\(partition_time\)"#/);
-    assert.match(output, /order_by: r#"\(program_id, family_name, event_id, slot\)"#/);
-    assert.match(output, /settings_clause: r#" SETTINGS non_replicated_deduplication_window = 1000"#/);
+    assert.match(output, /carbon_core::impl_clickhouse_event_row!/);
     assert.match(output, /pub fn from_parts/);
     assert.doesNotMatch(output, /data JSON/);
 }
@@ -217,15 +253,24 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
         clickHouseDdl: replicatedDdl,
     });
 
-    assert.match(replicatedOutput, /ON CLUSTER prod_cluster/);
+    const replicatedModOutput = render('instructionsClickHouseMod.njk', {
+        program,
+        instructionsToExport: [{ name: 'swap' }],
+        events: [],
+        hasAnchorEvents: false,
+        hasClickHouseInstructionTypes: false,
+        clickHouseDdl: replicatedDdl,
+    });
+
+    assert.match(replicatedModOutput, /ON CLUSTER prod_cluster/);
     assert.match(
-        replicatedOutput,
+        replicatedModOutput,
         /engine: r#"ReplicatedMergeTree\('\/clickhouse\/\{\{cluster\}\}\/\{table_name\}', '\{\{replica\}\}'\)"#\.to_string\(\)/,
     );
-    assert.match(replicatedOutput, /partition_by: r#"toYYYYMM\(partition_time\)"#/);
-    assert.match(replicatedOutput, /order_by: r#"\(program_id, slot, instruction_id\)"#/);
-    assert.match(replicatedOutput, /ttl_clause: r#" TTL partition_time \+ INTERVAL 30 DAY"#/);
-    assert.match(replicatedOutput, /settings_clause: r#" SETTINGS index_granularity = 8192"#/);
+    assert.match(replicatedModOutput, /partition_by: r#"toYYYYMM\(partition_time\)"#/);
+    assert.match(replicatedModOutput, /order_by: r#"\(program_id, slot, instruction_id\)"#/);
+    assert.match(replicatedModOutput, /ttl_clause: r#" TTL partition_time \+ INTERVAL 30 DAY"#/);
+    assert.match(replicatedModOutput, /settings_clause: r#" SETTINGS index_granularity = 8192"#/);
     assert.match(
         replicatedOutput,
         /ClickHouseColumnSpec::with_ddl_type\("amount", r#"UInt64"#, r#"UInt64 CODEC\(ZSTD\(3\)\)"#\)/,
@@ -242,11 +287,12 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
         },
         'instruction',
     );
-    const distributedOutput = render('clickhouseRowPage.njk', {
+    const distributedOutput = render('instructionsClickHouseMod.njk', {
         program,
-        entityName: 'swap',
-        isAccount: false,
-        flatFields: [typedField],
+        instructionsToExport: [{ name: 'swap' }],
+        events: [],
+        hasAnchorEvents: false,
+        hasClickHouseInstructionTypes: false,
         clickHouseDdl: distributedDdl,
     });
 
@@ -256,8 +302,6 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
         distributedOutput,
         /Distributed\('prod_cluster', 'analytics', '\{table_name\}_local', cityHash64\(instruction_id\)\)/,
     );
-    assert.match(distributedOutput, /clickhouse_create_table_sql\(/);
-    assert.match(distributedOutput, /options\.local_engine\.is_none\(\)/);
 
     const mergeTreeDdl = getClickHouseDdlContext(
         {
@@ -266,11 +310,12 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
         },
         'instruction',
     );
-    const mergeTreeOutput = render('clickhouseRowPage.njk', {
+    const mergeTreeOutput = render('instructionsClickHouseMod.njk', {
         program,
-        entityName: 'swap',
-        isAccount: false,
-        flatFields: [typedField],
+        instructionsToExport: [{ name: 'swap' }],
+        events: [],
+        hasAnchorEvents: false,
+        hasClickHouseInstructionTypes: false,
         clickHouseDdl: mergeTreeDdl,
     });
 

@@ -18,9 +18,8 @@ use std::time::Duration;
 use carbon_core::{
     account::{AccountMetadata, DecodedAccount},
     clickhouse::{
-        rows::{ClickHouseRow, ClickHouseRowContext, ClickHouseRows},
         ClickHouseAccountProcessor, ClickHouseAdmin, ClickHouseBatchSettings, ClickHouseConfig,
-        ClickHouseManagedTable, ClickHouseSchema,
+        ClickHouseTableOptions,
     },
     error::CarbonResult,
 };
@@ -34,30 +33,29 @@ pub const DEFAULT_DECODER_VERSION: &str = "v1";
 pub const DEFAULT_BATCH_MAX_ROWS: usize = 500;
 pub const DEFAULT_BATCH_FLUSH_INTERVAL_MS: u64 = 1_000;
 
+pub(crate) fn clickhouse_account_table_options() -> ClickHouseTableOptions {
+    ClickHouseTableOptions {
+        on_cluster_clause: r#"{{ clickHouseDdl.onClusterClause }}"#,
+        engine: r#"{{ clickHouseDdl.engine }}"#.to_string(),
+{% if clickHouseDdl.createLocalTable %}
+        local_engine: Some(r#"{{ clickHouseDdl.localEngine }}"#.to_string()),
+{% else %}
+        local_engine: None,
+{% endif %}
+        local_table_suffix: r#"{{ clickHouseDdl.localTableSuffix }}"#,
+        partition_by: r#"{{ clickHouseDdl.partitionBy }}"#,
+        order_by: r#"{{ clickHouseDdl.orderBy }}"#,
+        ttl_clause: r#"{{ clickHouseDdl.ttlClause }}"#,
+        settings_clause: r#"{{ clickHouseDdl.settingsClause }}"#,
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(untagged)]
 pub enum {{ program.name | pascalCase }}ClickHouseAccountRow {
 {% for account in accountsToExport | sort(false, false, 'name') %}
     {{ account.name | pascalCase }}({{ macros.escapeRustKeyword(account.name | snakeCase) }}_row::{{ account.name | pascalCase }}AccountClickHouseRow),
 {% endfor %}
-}
-
-impl ClickHouseRow for {{ program.name | pascalCase }}ClickHouseAccountRow {
-    fn table_name(&self) -> &'static str {
-        match self {
-{% for account in accountsToExport | sort(false, false, 'name') %}
-            Self::{{ account.name | pascalCase }}(row) => row.table_name(),
-{% endfor %}
-        }
-    }
-
-    fn partition_key(&self) -> String {
-        match self {
-{% for account in accountsToExport | sort(false, false, 'name') %}
-            Self::{{ account.name | pascalCase }}(row) => row.partition_key(),
-{% endfor %}
-        }
-    }
 }
 
 pub type {{ program.name | pascalCase }}ClickHouseAccountProcessor = ClickHouseAccountProcessor<
@@ -68,23 +66,18 @@ pub type {{ program.name | pascalCase }}ClickHouseAccountProcessor = ClickHouseA
 
 pub struct {{ program.name | pascalCase }}ClickHouseAccountsMigration;
 
-impl ClickHouseSchema for {{ program.name | pascalCase }}ClickHouseAccountsMigration {
-    fn operations(_config: &ClickHouseConfig) -> Vec<String> {
-        let mut operations = Vec::new();
+carbon_core::clickhouse_row_dispatch!(
+    account
+    {{ program.name | pascalCase }}ClickHouseAccountRow,
+    {{ program.name | pascalCase }}ClickHouseAccountsMigration,
+    {{ program.name | pascalCase }}AccountWithClickHouseMetadata,
+    {{ program.name | pascalCase }}Account,
+    {
 {% for account in accountsToExport | sort(false, false, 'name') %}
-        operations.extend({{ macros.escapeRustKeyword(account.name | snakeCase) }}_row::{{ account.name | pascalCase }}AccountClickHouseRow::migration_operations({{ macros.escapeRustKeyword(account.name | snakeCase) }}_row::{{ account.name | pascalCase }}AccountClickHouseRow::DEFAULT_TABLE_NAME));
+        {{ account.name | pascalCase }} => {{ macros.escapeRustKeyword(account.name | snakeCase) }}_row::{{ account.name | pascalCase }}AccountClickHouseRow,
 {% endfor %}
-        operations
     }
-
-    fn managed_tables(_config: &ClickHouseConfig) -> Vec<ClickHouseManagedTable> {
-        let mut tables = Vec::new();
-{% for account in accountsToExport | sort(false, false, 'name') %}
-        tables.extend({{ macros.escapeRustKeyword(account.name | snakeCase) }}_row::{{ account.name | pascalCase }}AccountClickHouseRow::managed_tables({{ macros.escapeRustKeyword(account.name | snakeCase) }}_row::{{ account.name | pascalCase }}AccountClickHouseRow::DEFAULT_TABLE_NAME));
-{% endfor %}
-        tables
-    }
-}
+);
 
 impl {{ program.name | pascalCase }}ClickHouseAccountsMigration {
     pub async fn run(config: &ClickHouseConfig) -> CarbonResult<()> {
@@ -104,29 +97,6 @@ impl From<(DecodedAccount<{{ program.name | pascalCase }}Account>, AccountMetada
 {
     fn from(value: (DecodedAccount<{{ program.name | pascalCase }}Account>, AccountMetadata)) -> Self {
         Self(value.0, value.1)
-    }
-}
-
-impl ClickHouseRows<{{ program.name | pascalCase }}ClickHouseAccountRow>
-    for {{ program.name | pascalCase }}AccountWithClickHouseMetadata
-{
-    fn clickhouse_rows(&self, context: &ClickHouseRowContext) -> Vec<{{ program.name | pascalCase }}ClickHouseAccountRow> {
-        let {{ program.name | pascalCase }}AccountWithClickHouseMetadata(decoded_account, metadata) = self;
-
-        match &decoded_account.data {
-{% for account in accountsToExport | sort(false, false, 'name') %}
-            {{ program.name | pascalCase }}Account::{{ account.name | pascalCase }}(account) => {
-                vec![{{ program.name | pascalCase }}ClickHouseAccountRow::{{ account.name | pascalCase }}(
-                    {{ macros.escapeRustKeyword(account.name | snakeCase) }}_row::{{ account.name | pascalCase }}AccountClickHouseRow::from_parts(
-                        *account.clone(),
-                        decoded_account,
-                        metadata,
-                        context,
-                    ),
-                )]
-            }
-{% endfor %}
-        }
     }
 }
 
