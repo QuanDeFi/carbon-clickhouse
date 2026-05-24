@@ -70,7 +70,4 @@ impl MintAccountClickHouseRow {
     }
 }
 
-carbon_core::impl_clickhouse_account_row!(
-    MintAccountClickHouseRow,
-    super::clickhouse_account_table_options
-);
+carbon_core::impl_clickhouse_account_row!(MintAccountClickHouseRow);

@@ -456,22 +456,22 @@ macro_rules! __impl_clickhouse_landing_row {
 
 #[macro_export]
 macro_rules! impl_clickhouse_instruction_row {
-    ($row:ident, $table_options:expr) => {
-        $crate::__impl_clickhouse_landing_row!($row, $table_options);
+    ($row:ident) => {
+        $crate::__impl_clickhouse_landing_row!($row, super::clickhouse_instruction_table_options);
     };
 }
 
 #[macro_export]
 macro_rules! impl_clickhouse_event_row {
-    ($row:ident, $table_options:expr) => {
-        $crate::__impl_clickhouse_landing_row!($row, $table_options);
+    ($row:ident) => {
+        $crate::__impl_clickhouse_landing_row!($row, super::clickhouse_event_table_options);
     };
 }
 
 #[macro_export]
 macro_rules! impl_clickhouse_account_row {
-    ($row:ident, $table_options:expr) => {
-        $crate::__impl_clickhouse_landing_row!($row, $table_options);
+    ($row:ident) => {
+        $crate::__impl_clickhouse_landing_row!($row, super::clickhouse_account_table_options);
     };
 }
 

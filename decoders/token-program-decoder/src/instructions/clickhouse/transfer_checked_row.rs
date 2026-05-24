@@ -55,7 +55,4 @@ impl TransferCheckedInstructionClickHouseRow {
     }
 }
 
-carbon_core::impl_clickhouse_instruction_row!(
-    TransferCheckedInstructionClickHouseRow,
-    super::clickhouse_instruction_table_options
-);
+carbon_core::impl_clickhouse_instruction_row!(TransferCheckedInstructionClickHouseRow);

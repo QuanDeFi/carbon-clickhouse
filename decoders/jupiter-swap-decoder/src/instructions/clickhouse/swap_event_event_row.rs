@@ -63,7 +63,4 @@ impl SwapEventEventClickHouseRow {
     }
 }
 
-carbon_core::impl_clickhouse_event_row!(
-    SwapEventEventClickHouseRow,
-    super::clickhouse_event_table_options
-);
+carbon_core::impl_clickhouse_event_row!(SwapEventEventClickHouseRow);

@@ -65,7 +65,4 @@ impl MultisigAccountClickHouseRow {
     }
 }
 
-carbon_core::impl_clickhouse_account_row!(
-    MultisigAccountClickHouseRow,
-    super::clickhouse_account_table_options
-);
+carbon_core::impl_clickhouse_account_row!(MultisigAccountClickHouseRow);

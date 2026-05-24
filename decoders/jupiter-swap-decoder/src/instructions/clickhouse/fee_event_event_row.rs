@@ -57,7 +57,4 @@ impl FeeEventEventClickHouseRow {
     }
 }
 
-carbon_core::impl_clickhouse_event_row!(
-    FeeEventEventClickHouseRow,
-    super::clickhouse_event_table_options
-);
+carbon_core::impl_clickhouse_event_row!(FeeEventEventClickHouseRow);

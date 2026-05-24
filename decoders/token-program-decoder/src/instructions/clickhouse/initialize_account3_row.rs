@@ -51,7 +51,4 @@ impl InitializeAccount3InstructionClickHouseRow {
     }
 }
 
-carbon_core::impl_clickhouse_instruction_row!(
-    InitializeAccount3InstructionClickHouseRow,
-    super::clickhouse_instruction_table_options
-);
+carbon_core::impl_clickhouse_instruction_row!(InitializeAccount3InstructionClickHouseRow);

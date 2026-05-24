@@ -77,6 +77,5 @@ impl SharedAccountsExactOutRouteV2InstructionClickHouseRow {
 }
 
 carbon_core::impl_clickhouse_instruction_row!(
-    SharedAccountsExactOutRouteV2InstructionClickHouseRow,
-    super::clickhouse_instruction_table_options
+    SharedAccountsExactOutRouteV2InstructionClickHouseRow
 );

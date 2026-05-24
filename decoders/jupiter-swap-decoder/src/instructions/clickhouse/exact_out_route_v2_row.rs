@@ -72,7 +72,4 @@ impl ExactOutRouteV2InstructionClickHouseRow {
     }
 }
 
-carbon_core::impl_clickhouse_instruction_row!(
-    ExactOutRouteV2InstructionClickHouseRow,
-    super::clickhouse_instruction_table_options
-);
+carbon_core::impl_clickhouse_instruction_row!(ExactOutRouteV2InstructionClickHouseRow);

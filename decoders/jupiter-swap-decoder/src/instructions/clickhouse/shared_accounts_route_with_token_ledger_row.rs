@@ -71,6 +71,5 @@ impl SharedAccountsRouteWithTokenLedgerInstructionClickHouseRow {
 }
 
 carbon_core::impl_clickhouse_instruction_row!(
-    SharedAccountsRouteWithTokenLedgerInstructionClickHouseRow,
-    super::clickhouse_instruction_table_options
+    SharedAccountsRouteWithTokenLedgerInstructionClickHouseRow
 );

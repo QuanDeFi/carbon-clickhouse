@@ -107,14 +107,8 @@ impl {{ entityName | pascalCase }}{% if isAccount %}Account{% else %}Instruction
 }
 
 {% if isAccount %}
-carbon_core::impl_clickhouse_account_row!(
-    {{ entityName | pascalCase }}AccountClickHouseRow,
-    super::clickhouse_account_table_options
-);
+carbon_core::impl_clickhouse_account_row!({{ entityName | pascalCase }}AccountClickHouseRow);
 {% else %}
-carbon_core::impl_clickhouse_instruction_row!(
-    {{ entityName | pascalCase }}InstructionClickHouseRow,
-    super::clickhouse_instruction_table_options
-);
+carbon_core::impl_clickhouse_instruction_row!({{ entityName | pascalCase }}InstructionClickHouseRow);
 {% endif %}
 {% endblock %}

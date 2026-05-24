@@ -55,7 +55,4 @@ impl MintToCheckedInstructionClickHouseRow {
     }
 }
 
-carbon_core::impl_clickhouse_instruction_row!(
-    MintToCheckedInstructionClickHouseRow,
-    super::clickhouse_instruction_table_options
-);
+carbon_core::impl_clickhouse_instruction_row!(MintToCheckedInstructionClickHouseRow);

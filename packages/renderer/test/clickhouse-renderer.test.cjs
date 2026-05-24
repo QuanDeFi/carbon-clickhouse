@@ -188,8 +188,23 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
     assert.match(output, /#\[serde\(flatten\)\]/);
     assert.match(output, /pub amount: u64/);
     assert.match(output, /ClickHouseColumnSpec::new\("amount", r#"UInt64"#\)/);
-    assert.match(output, /carbon_core::impl_clickhouse_account_row!/);
+    assert.match(output, /carbon_core::impl_clickhouse_account_row!\(\s*MintAccountClickHouseRow\s*\);/);
+    assert.doesNotMatch(output, /impl_clickhouse_account_row!\(\s*MintAccountClickHouseRow\s*,/);
     assert.match(output, /demo_program_mint_account_landing/);
+}
+
+{
+    const output = render('clickhouseRowPage.njk', {
+        program,
+        entityName: 'swap',
+        isAccount: false,
+        flatFields: [typedField],
+        clickHouseDdl: defaultInstructionDdl,
+    });
+
+    assert.match(output, /pub struct SwapInstructionClickHouseRow/);
+    assert.match(output, /carbon_core::impl_clickhouse_instruction_row!\(\s*SwapInstructionClickHouseRow\s*\);/);
+    assert.doesNotMatch(output, /impl_clickhouse_instruction_row!\(\s*SwapInstructionClickHouseRow\s*,/);
 }
 
 {
@@ -224,8 +239,8 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
         output,
         /ClickHouseColumnSpec::new\("swap_events", r#"Array\(Tuple\(input_mint String, input_amount UInt64\)\)"#\)/,
     );
-    assert.match(output, /carbon_core::impl_clickhouse_event_row!/);
-    assert.match(output, /super::clickhouse_event_table_options/);
+    assert.match(output, /carbon_core::impl_clickhouse_event_row!\(\s*SwapsEventEventClickHouseRow\s*\);/);
+    assert.doesNotMatch(output, /impl_clickhouse_event_row!\(\s*SwapsEventEventClickHouseRow\s*,/);
     assert.match(output, /pub fn from_parts/);
     assert.doesNotMatch(output, /data JSON/);
 }
@@ -330,6 +345,24 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
         mergeTreeOutput,
         /settings_clause: r#" SETTINGS index_granularity = 8192, non_replicated_deduplication_window = 1000"#/,
     );
+
+    const customEventDdl = getClickHouseDdlContext(
+        {
+            orderBy: { event: ['event_id', 'slot'] },
+        },
+        'event',
+    );
+    const customEventOutput = render('instructionsClickHouseMod.njk', {
+        program,
+        instructionsToExport: [{ name: 'swap' }],
+        events: [{ name: 'swapEvent' }],
+        hasAnchorEvents: true,
+        hasClickHouseInstructionTypes: false,
+        clickHouseDdl: defaultInstructionDdl,
+        clickHouseEventDdl: customEventDdl,
+    });
+
+    assert.match(customEventOutput, /order_by: r#"\(event_id, slot\)"#/);
 }
 
 {
