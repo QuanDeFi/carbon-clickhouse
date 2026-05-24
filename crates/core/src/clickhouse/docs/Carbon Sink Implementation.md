@@ -92,7 +92,6 @@ Rows receive sink metadata through `ClickHouseRowContext`, which contains `sourc
 
 Schema/bootstrap execution uses:
 
-- `ClickHouseSchema::operations(config) -> Vec<String>` for ordered schema operations.
 - `ClickHouseSchema::managed_tables(config) -> Vec<ClickHouseManagedTable>` for generated managed tables with expected column definitions.
 - `ClickHouseAdmin::execute_query(...)` for a single query.
 - `ClickHouseAdmin::execute_queries(...)` for explicit ordered query lists.
@@ -100,7 +99,7 @@ Schema/bootstrap execution uses:
 
 Schema execution uses the same `ClickHouseConfig` endpoint, database, auth, and HTTP client settings as data inserts. Schema queries include `date_time_input_format=best_effort`.
 
-When a schema exposes managed table metadata, `ClickHouseAdmin::execute_schema::<S>()` creates missing tables, adds missing generated columns, validates live table layout, and compares live ClickHouse column types against generated expected types before rows are inserted.
+`ClickHouseAdmin::execute_schema::<S>()` creates missing managed tables, adds missing generated columns, validates live table layout, and compares live ClickHouse column types against generated expected types before rows are inserted.
 
 Schema reconciliation is intentionally fixed and opinionated:
 
@@ -153,7 +152,7 @@ Examples should call these generated helpers. They should not duplicate decoder-
 Generated setup helpers use decoder defaults:
 
 - `clickhouse_config_from_database_url(...)` builds a `ClickHouseConfig` from `DATABASE_URL`.
-- `bootstrap_clickhouse_from_database_url(...)` executes the decoder's generated schema operations and returns the config.
+- `bootstrap_clickhouse_from_database_url(...)` executes the decoder's generated managed schema reconciliation and returns the config.
 - `clickhouse_processor(config)` constructs the generated processor alias.
 - `setup_clickhouse(...)` bootstraps schema and returns the generated processor in one call.
 
@@ -505,7 +504,7 @@ The same metadata is used for pre-ingest drift validation, so generated DDL and
 runtime schema checks stay aligned. The renderer does not generate destructive
 type-change migrations.
 
-For `distributed` DDL mode, generated schema operations create and alter the local table first, then create and alter the distributed table. The distributed table omits local `MergeTree` clauses because storage lives in the generated local table. Additive column operations are emitted for both local and distributed tables.
+For `distributed` DDL mode, generated managed schema metadata creates and reconciles the local table first, then creates and reconciles the distributed table. The distributed table omits local `MergeTree` clauses because storage lives in the generated local table. Additive column operations are emitted for both local and distributed tables.
 
 Column codecs are applied by column name to both common metadata columns and payload columns wherever the name matches `columnCodecs`.
 

@@ -2,20 +2,6 @@
 {% import "macros.njk" as macros %}
 
 {% block main %}
-{% macro columnSpec(field) -%}
-{% if clickHouseDdl.columnCodecs[field.column] -%}
-{% if field.clickHouseColumnTypeExpr -%}
-ClickHouseColumnSpec::with_ddl_type("{{ field.column }}", {{ field.clickHouseColumnTypeExpr }}, r#"{{ field.clickHouseColumnType }} CODEC({{ clickHouseDdl.columnCodecs[field.column] }})"#)
-{%- else -%}
-ClickHouseColumnSpec::with_ddl_type("{{ field.column }}", r#"{{ field.clickHouseColumnType }}"#, r#"{{ field.clickHouseColumnType }} CODEC({{ clickHouseDdl.columnCodecs[field.column] }})"#)
-{%- endif %}
-{%- elif field.clickHouseColumnTypeExpr -%}
-ClickHouseColumnSpec::new("{{ field.column }}", {{ field.clickHouseColumnTypeExpr }})
-{%- else -%}
-ClickHouseColumnSpec::new("{{ field.column }}", r#"{{ field.clickHouseColumnType }}"#)
-{%- endif %}
-{%- endmacro %}
-
 use carbon_core::{
     clickhouse::{
         ClickHouseColumnSpec,
@@ -47,7 +33,7 @@ impl {{ event.name | pascalCase }}EventClickHouseRow {
     pub const COMMON_COLUMNS: &'static [ClickHouseColumnSpec] = CLICKHOUSE_EVENT_COMMON_COLUMNS;
     pub const PAYLOAD_COLUMNS: &'static [ClickHouseColumnSpec] = &[
 {% for field in flatFields %}
-        {{ columnSpec(field) }},
+        {{ macros.clickHouseColumnSpec(field, clickHouseDdl) }},
 {% endfor %}
     ];
 

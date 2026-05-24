@@ -3,14 +3,15 @@ pub mod config;
 pub(crate) mod http;
 pub mod metrics;
 pub mod processors;
+pub(crate) mod retry;
 pub mod rows;
 pub mod writer;
 
 pub use admin::{
     clickhouse_add_column_sql, clickhouse_column_definitions, clickhouse_column_names,
-    clickhouse_create_table_sql, clickhouse_managed_tables, clickhouse_migration_operations,
-    clickhouse_modify_settings_sql, ClickHouseAdmin, ClickHouseColumnDefinition,
-    ClickHouseColumnSpec, ClickHouseManagedTable, ClickHouseSchema, ClickHouseTableOptions,
+    clickhouse_create_table_sql, clickhouse_managed_tables, clickhouse_modify_settings_sql,
+    ClickHouseAdmin, ClickHouseColumnDefinition, ClickHouseColumnSpec, ClickHouseManagedTable,
+    ClickHouseSchema, ClickHouseTableOptions,
 };
 pub use config::{
     ClickHouseAsyncInsertSettings, ClickHouseBatchSettings, ClickHouseConfig,

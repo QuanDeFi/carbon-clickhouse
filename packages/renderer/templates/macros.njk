@@ -67,6 +67,20 @@
 #[derive(Debug, Clone, carbon_core::borsh::BorshSerialize, carbon_core::borsh::BorshDeserialize, PartialEq)]
 {%- endmacro %}
 
+{% macro clickHouseColumnSpec(field, clickHouseDdl) -%}
+{% if clickHouseDdl.columnCodecs[field.column] -%}
+{% if field.clickHouseColumnTypeExpr -%}
+ClickHouseColumnSpec::with_ddl_type("{{ field.column }}", {{ field.clickHouseColumnTypeExpr }}, r#"{{ field.clickHouseColumnType }} CODEC({{ clickHouseDdl.columnCodecs[field.column] }})"#)
+{%- else -%}
+ClickHouseColumnSpec::with_ddl_type("{{ field.column }}", r#"{{ field.clickHouseColumnType }}"#, r#"{{ field.clickHouseColumnType }} CODEC({{ clickHouseDdl.columnCodecs[field.column] }})"#)
+{%- endif %}
+{%- elif field.clickHouseColumnTypeExpr -%}
+ClickHouseColumnSpec::new("{{ field.column }}", {{ field.clickHouseColumnTypeExpr }})
+{%- else -%}
+ClickHouseColumnSpec::new("{{ field.column }}", r#"{{ field.clickHouseColumnType }}"#)
+{%- endif %}
+{%- endmacro %}
+
 {# Derives for optional bool newtypes (e.g. OptionBool) with custom BorshDeserialize. #}
 {% macro optionalBoolDerives() -%}
 #[derive(Debug, Clone, Copy, PartialEq, borsh::BorshSerialize)]

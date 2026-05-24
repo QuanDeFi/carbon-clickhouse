@@ -2,20 +2,6 @@
 {% import "macros.njk" as macros %}
 
 {% block main %}
-{% macro columnSpec(field) -%}
-{% if clickHouseDdl.columnCodecs[field.column] -%}
-{% if field.clickHouseColumnTypeExpr -%}
-ClickHouseColumnSpec::with_ddl_type("{{ field.column }}", {{ field.clickHouseColumnTypeExpr }}, r#"{{ field.clickHouseColumnType }} CODEC({{ clickHouseDdl.columnCodecs[field.column] }})"#)
-{%- else -%}
-ClickHouseColumnSpec::with_ddl_type("{{ field.column }}", r#"{{ field.clickHouseColumnType }}"#, r#"{{ field.clickHouseColumnType }} CODEC({{ clickHouseDdl.columnCodecs[field.column] }})"#)
-{%- endif %}
-{%- elif field.clickHouseColumnTypeExpr -%}
-ClickHouseColumnSpec::new("{{ field.column }}", {{ field.clickHouseColumnTypeExpr }})
-{%- else -%}
-ClickHouseColumnSpec::new("{{ field.column }}", r#"{{ field.clickHouseColumnType }}"#)
-{%- endif %}
-{%- endmacro %}
-
 use carbon_core::{
 {% if isAccount %}
     account::{AccountMetadata, DecodedAccount},
@@ -66,7 +52,7 @@ impl {{ entityName | pascalCase }}{% if isAccount %}Account{% else %}Instruction
 {% endif %}
     pub const PAYLOAD_COLUMNS: &'static [ClickHouseColumnSpec] = &[
 {% for field in flatFields %}
-        {{ columnSpec(field) }},
+        {{ macros.clickHouseColumnSpec(field, clickHouseDdl) }},
 {% endfor %}
     ];
 

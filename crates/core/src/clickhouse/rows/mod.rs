@@ -407,15 +407,6 @@ macro_rules! __impl_clickhouse_landing_row {
                 ($table_options)()
             }
 
-            pub fn migration_operations(table_name: &str) -> Vec<String> {
-                let columns = Self::column_specs();
-                $crate::clickhouse::clickhouse_migration_operations(
-                    table_name,
-                    &columns,
-                    &Self::table_options(),
-                )
-            }
-
             pub fn managed_tables(
                 table_name: &str,
             ) -> Vec<$crate::clickhouse::ClickHouseManagedTable> {
@@ -630,16 +621,6 @@ macro_rules! clickhouse_row_dispatch {
         }
 
         impl $crate::clickhouse::ClickHouseSchema for $migration {
-            fn operations(_config: &$crate::clickhouse::ClickHouseConfig) -> Vec<String> {
-                let mut operations = Vec::new();
-                $(
-                    operations.extend(<$row>::migration_operations(
-                        <$row as $crate::clickhouse::rows::ClickHouseTable>::table(),
-                    ));
-                )+
-                operations
-            }
-
             fn managed_tables(
                 _config: &$crate::clickhouse::ClickHouseConfig,
             ) -> Vec<$crate::clickhouse::ClickHouseManagedTable> {

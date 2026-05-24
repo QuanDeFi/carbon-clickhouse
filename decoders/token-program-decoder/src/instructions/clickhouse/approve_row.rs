@@ -4,13 +4,11 @@
 use carbon_core::clickhouse::rows::clickhouse_enum_variant;
 use carbon_core::{
     clickhouse::{
-        clickhouse_column_names, clickhouse_create_table_sql, clickhouse_managed_tables,
-        clickhouse_migration_operations,
         rows::{
-            ClickHouseInstructionLandingMetadata, ClickHouseRow, ClickHouseRowContext,
-            ClickHouseTable, CLICKHOUSE_INSTRUCTION_COMMON_COLUMNS,
+            ClickHouseInstructionLandingMetadata, ClickHouseRowContext,
+            CLICKHOUSE_INSTRUCTION_COMMON_COLUMNS,
         },
-        ClickHouseColumnSpec, ClickHouseManagedTable, ClickHouseTableOptions,
+        ClickHouseColumnSpec,
     },
     instruction::InstructionMetadata,
 };
@@ -50,66 +48,9 @@ impl ApproveInstructionClickHouseRow {
             amount: source.amount,
         }
     }
-
-    fn column_specs() -> Vec<ClickHouseColumnSpec> {
-        let mut columns = Self::COMMON_COLUMNS.to_vec();
-        columns.extend_from_slice(Self::PAYLOAD_COLUMNS);
-        columns
-    }
-
-    fn table_options() -> ClickHouseTableOptions {
-        ClickHouseTableOptions {
-            on_cluster_clause: r#""#,
-            engine: r#"MergeTree"#.to_string(),
-            local_engine: None,
-            local_table_suffix: r#"_local"#,
-            partition_by: r#"toYear(partition_time)"#,
-            order_by: r#"(program_id, family_name, instruction_id, slot)"#,
-            ttl_clause: r#""#,
-            settings_clause: r#" SETTINGS non_replicated_deduplication_window = 1000"#,
-        }
-    }
-
-    pub fn migration_operations(table_name: &str) -> Vec<String> {
-        let columns = Self::column_specs();
-        clickhouse_migration_operations(table_name, &columns, &Self::table_options())
-    }
-
-    pub fn managed_tables(table_name: &str) -> Vec<ClickHouseManagedTable> {
-        let columns = Self::column_specs();
-        clickhouse_managed_tables(table_name, &columns, &Self::table_options())
-    }
 }
 
-impl ClickHouseTable for ApproveInstructionClickHouseRow {
-    fn table() -> &'static str {
-        Self::DEFAULT_TABLE_NAME
-    }
-
-    fn columns() -> Vec<&'static str> {
-        let columns = Self::column_specs();
-        clickhouse_column_names(&columns)
-    }
-
-    fn create_table_sql(table_name: &str) -> String {
-        let columns = Self::column_specs();
-        let options = Self::table_options();
-        clickhouse_create_table_sql(
-            table_name,
-            &columns,
-            &options.engine,
-            options.local_engine.is_none(),
-            &options,
-        )
-    }
-}
-
-impl ClickHouseRow for ApproveInstructionClickHouseRow {
-    fn table_name(&self) -> &'static str {
-        Self::table()
-    }
-
-    fn partition_key(&self) -> String {
-        self.metadata.partition_key()
-    }
-}
+carbon_core::impl_clickhouse_instruction_row!(
+    ApproveInstructionClickHouseRow,
+    super::clickhouse_instruction_table_options
+);

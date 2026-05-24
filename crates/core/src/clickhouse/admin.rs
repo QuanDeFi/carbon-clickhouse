@@ -2,17 +2,14 @@ use crate::{
     clickhouse::{
         config::ClickHouseQuerySetting,
         http::{client_from_config, post_query, post_query_text, ClickHouseHttpError},
+        retry::{clickhouse_retry_delay, should_retry_clickhouse},
         ClickHouseConfig,
     },
     error::{CarbonResult, Error},
 };
 
 pub trait ClickHouseSchema {
-    fn operations(config: &ClickHouseConfig) -> Vec<String>;
-
-    fn managed_tables(_config: &ClickHouseConfig) -> Vec<ClickHouseManagedTable> {
-        Vec::new()
-    }
+    fn managed_tables(config: &ClickHouseConfig) -> Vec<ClickHouseManagedTable>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,7 +96,7 @@ impl ClickHouseAdmin {
             match post_query(&self.client, &self.config, query, &settings).await {
                 Ok(()) => return Ok(()),
                 Err(error) if should_retry_admin_query(&error, attempt, &self.config) => {
-                    tokio::time::sleep(admin_retry_delay(&self.config, attempt)).await;
+                    tokio::time::sleep(clickhouse_retry_delay(&self.config, attempt)).await;
                     attempt += 1;
                 }
                 Err(error) => return Err(Error::from(error)),
@@ -120,10 +117,6 @@ impl ClickHouseAdmin {
 
     pub async fn execute_schema<S: ClickHouseSchema>(&self) -> CarbonResult<()> {
         let managed_tables = S::managed_tables(&self.config);
-        if managed_tables.is_empty() {
-            return self.execute_queries(S::operations(&self.config)).await;
-        }
-
         self.execute_managed_tables(&managed_tables).await
     }
 
@@ -247,7 +240,7 @@ impl ClickHouseAdmin {
             match post_query_text(&self.client, &self.config, query, &settings).await {
                 Ok(body) => return Ok(body),
                 Err(error) if should_retry_admin_query(&error, attempt, &self.config) => {
-                    tokio::time::sleep(admin_retry_delay(&self.config, attempt)).await;
+                    tokio::time::sleep(clickhouse_retry_delay(&self.config, attempt)).await;
                     attempt += 1;
                 }
                 Err(error) => return Err(Error::from(error)),
@@ -261,83 +254,11 @@ fn should_retry_admin_query(
     attempt: usize,
     config: &ClickHouseConfig,
 ) -> bool {
-    error.kind.is_retryable() && attempt < config.retry_settings.max_retries
-}
-
-fn admin_retry_delay(config: &ClickHouseConfig, attempt: usize) -> std::time::Duration {
-    let base = config.retry_settings.initial_backoff;
-    let multiplier = 1u32.checked_shl(attempt.min(16) as u32).unwrap_or(u32::MAX);
-    let mut delay = base
-        .saturating_mul(multiplier)
-        .min(config.retry_settings.max_backoff);
-
-    if config.retry_settings.jitter && !delay.is_zero() {
-        let jitter_nanos = delay.as_nanos().saturating_div(10).min(u64::MAX as u128) as u64;
-        if jitter_nanos > 0 {
-            delay = delay.saturating_add(std::time::Duration::from_nanos(pseudo_jitter_nanos(
-                jitter_nanos,
-            )));
-        }
-    }
-
-    delay.min(config.retry_settings.max_backoff)
-}
-
-fn pseudo_jitter_nanos(max: u64) -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.subsec_nanos() as u64 % max)
-        .unwrap_or_default()
+    should_retry_clickhouse(error, attempt, config.retry_settings.max_retries)
 }
 
 pub fn clickhouse_column_names(columns: &[ClickHouseColumnSpec]) -> Vec<&'static str> {
     columns.iter().map(|column| column.name).collect()
-}
-
-pub fn clickhouse_migration_operations(
-    table_name: &str,
-    columns: &[ClickHouseColumnSpec],
-    options: &ClickHouseTableOptions,
-) -> Vec<String> {
-    let mut operations = Vec::new();
-    if let Some(local_engine) = &options.local_engine {
-        let local_table_name = local_table_name(table_name, options);
-        operations.push(clickhouse_create_table_sql(
-            &local_table_name,
-            columns,
-            local_engine,
-            true,
-            options,
-        ));
-        if let Some(sql) =
-            clickhouse_modify_settings_sql(&local_table_name, local_engine, true, options)
-        {
-            operations.push(sql);
-        }
-        operations.extend(clickhouse_add_column_sql(
-            &local_table_name,
-            columns,
-            options,
-        ));
-    }
-
-    operations.push(clickhouse_create_table_sql(
-        table_name,
-        columns,
-        &options.engine,
-        options.local_engine.is_none(),
-        options,
-    ));
-    if let Some(sql) = clickhouse_modify_settings_sql(
-        table_name,
-        &options.engine,
-        options.local_engine.is_none(),
-        options,
-    ) {
-        operations.push(sql);
-    }
-    operations.extend(clickhouse_add_column_sql(table_name, columns, options));
-    operations
 }
 
 pub fn clickhouse_managed_tables(

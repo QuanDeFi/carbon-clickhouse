@@ -5,7 +5,7 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Arc, Mutex,
     },
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant},
 };
 
 use sha2::{Digest, Sha256};
@@ -19,6 +19,7 @@ use crate::{
             record_backpressure_rejected, record_buffer_state, record_failed_flush, record_retry,
             record_successful_flush, ClickHouseMetricsFamily,
         },
+        retry::{clickhouse_retry_delay, should_retry_clickhouse},
         rows::ClickHouseRow,
     },
     error::{CarbonResult, Error},
@@ -629,7 +630,7 @@ async fn insert_batch(
             Ok(()) => return Ok(()),
             Err(error) if should_retry(&error, attempt, max_retries) => {
                 record_retry(metrics_family);
-                tokio::time::sleep(retry_delay(config, attempt)).await;
+                tokio::time::sleep(clickhouse_retry_delay(config, attempt)).await;
                 attempt += 1;
             }
             Err(error) => return Err(Error::from(error)),
@@ -670,31 +671,7 @@ fn batch_query_settings(
 }
 
 fn should_retry(error: &ClickHouseHttpError, attempt: usize, max_retries: usize) -> bool {
-    error.kind.is_retryable() && attempt < max_retries
-}
-
-fn retry_delay(config: &ClickHouseConfig, attempt: usize) -> Duration {
-    let base = config.retry_settings.initial_backoff;
-    let multiplier = 1u32.checked_shl(attempt.min(16) as u32).unwrap_or(u32::MAX);
-    let mut delay = base
-        .saturating_mul(multiplier)
-        .min(config.retry_settings.max_backoff);
-
-    if config.retry_settings.jitter && !delay.is_zero() {
-        let jitter_nanos = delay.as_nanos().saturating_div(10).min(u64::MAX as u128) as u64;
-        if jitter_nanos > 0 {
-            delay = delay.saturating_add(Duration::from_nanos(pseudo_jitter_nanos(jitter_nanos)));
-        }
-    }
-
-    delay.min(config.retry_settings.max_backoff)
-}
-
-fn pseudo_jitter_nanos(max: u64) -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.subsec_nanos() as u64 % max)
-        .unwrap_or_default()
+    should_retry_clickhouse(error, attempt, max_retries)
 }
 
 fn deduplication_token(table: &str, query: &str, body: &str) -> String {
@@ -1540,7 +1517,7 @@ mod tests {
             jitter: true,
         });
 
-        assert!(retry_delay(&config, 8) <= Duration::from_millis(100));
+        assert!(clickhouse_retry_delay(&config, 8) <= Duration::from_millis(100));
     }
 
     #[tokio::test]
