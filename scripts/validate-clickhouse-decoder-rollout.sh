@@ -317,13 +317,15 @@ version = "0.0.0"
 edition = "2021"
 
 [dependencies]
+carbon-core = { path = "${ROOT_DIR}/crates/core", features = ["clickhouse"] }
 carbon-jupiter-swap-decoder = { path = "${ROOT_DIR}/decoders/jupiter-swap-decoder", features = ["clickhouse"] }
 carbon-token-program-decoder = { path = "${ROOT_DIR}/decoders/token-program-decoder", features = ["clickhouse"] }
 tokio = { version = "1.48.0", features = ["macros", "rt", "rt-multi-thread", "time"] }
 EOF
     cp "${ROOT_DIR}/Cargo.lock" "${smoke_dir}/Cargo.lock"
 
-    cat > "${smoke_dir}/src/main.rs" <<'EOF'
+cat > "${smoke_dir}/src/main.rs" <<'EOF'
+use carbon_core::clickhouse::{ClickHouseConfig, ClickHouseSchema};
 use carbon_jupiter_swap_decoder::{
     accounts::clickhouse as jupiter_accounts,
     instructions::clickhouse as jupiter_instructions,
@@ -333,47 +335,72 @@ use carbon_token_program_decoder::{
     instructions::clickhouse as token_instructions,
 };
 
+fn append_managed_table_names<S: ClickHouseSchema>(
+    config: &ClickHouseConfig,
+    names: &mut Vec<String>,
+) {
+    names.extend(S::managed_tables(config).into_iter().map(|table| table.name));
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let database_url = std::env::var("CLICKHOUSE_DDL_SMOKE_URL")?;
     let database = std::env::var("CLICKHOUSE_DDL_SMOKE_DATABASE")?;
+    let expected_tables_file = std::env::var("CLICKHOUSE_DDL_SMOKE_EXPECTED_TABLES_FILE")?;
 
     let mut jupiter_instruction_config =
         jupiter_instructions::clickhouse_config_from_database_url(&database_url)?;
     jupiter_instruction_config.database = database.clone();
-    jupiter_instructions::JupiterSwapClickHouseInstructionsMigration::run(
-        &jupiter_instruction_config,
-    )
-    .await?;
 
     let mut jupiter_account_config =
         jupiter_accounts::clickhouse_config_from_database_url(&database_url)?;
     jupiter_account_config.database = database.clone();
-    jupiter_accounts::JupiterSwapClickHouseAccountsMigration::run(&jupiter_account_config).await?;
 
     let mut token_instruction_config =
         token_instructions::clickhouse_config_from_database_url(&database_url)?;
     token_instruction_config.database = database.clone();
-    token_instructions::TokenProgramClickHouseInstructionsMigration::run(&token_instruction_config)
-        .await?;
 
     let mut token_account_config = token_accounts::clickhouse_config_from_database_url(&database_url)?;
     token_account_config.database = database;
+
+    let mut expected_tables = Vec::new();
+    append_managed_table_names::<jupiter_instructions::JupiterSwapClickHouseInstructionsMigration>(
+        &jupiter_instruction_config,
+        &mut expected_tables,
+    );
+    append_managed_table_names::<jupiter_accounts::JupiterSwapClickHouseAccountsMigration>(
+        &jupiter_account_config,
+        &mut expected_tables,
+    );
+    append_managed_table_names::<token_instructions::TokenProgramClickHouseInstructionsMigration>(
+        &token_instruction_config,
+        &mut expected_tables,
+    );
+    append_managed_table_names::<token_accounts::TokenProgramClickHouseAccountsMigration>(
+        &token_account_config,
+        &mut expected_tables,
+    );
+    expected_tables.sort();
+    expected_tables.dedup();
+    std::fs::write(expected_tables_file, format!("{}\n", expected_tables.join("\n")))?;
+
+    jupiter_instructions::JupiterSwapClickHouseInstructionsMigration::run(
+        &jupiter_instruction_config,
+    )
+    .await?;
+    jupiter_accounts::JupiterSwapClickHouseAccountsMigration::run(&jupiter_account_config).await?;
+    token_instructions::TokenProgramClickHouseInstructionsMigration::run(&token_instruction_config)
+        .await?;
     token_accounts::TokenProgramClickHouseAccountsMigration::run(&token_account_config).await?;
 
     Ok(())
 }
 EOF
 
+    local expected_tables_file actual_tables_file
+    expected_tables_file="${smoke_dir}/expected-tables.txt"
+    actual_tables_file="${smoke_dir}/actual-tables.txt"
     local expected_tables actual_tables status event_table sorting_key
-    expected_tables="$(
-        find \
-            decoders/jupiter-swap-decoder/src/instructions/clickhouse \
-            decoders/jupiter-swap-decoder/src/accounts/clickhouse \
-            decoders/token-program-decoder/src/instructions/clickhouse \
-            decoders/token-program-decoder/src/accounts/clickhouse \
-            -maxdepth 1 -name '*_row.rs' | wc -l | tr -d '[:space:]'
-    )"
 
     clickhouse_smoke_query "DROP DATABASE IF EXISTS ${smoke_db}" >/dev/null
     clickhouse_smoke_query "CREATE DATABASE ${smoke_db}" >/dev/null
@@ -381,25 +408,31 @@ EOF
     set +e
     CLICKHOUSE_DDL_SMOKE_URL="$CLICKHOUSE_DDL_SMOKE_URL" \
         CLICKHOUSE_DDL_SMOKE_DATABASE="$smoke_db" \
+        CLICKHOUSE_DDL_SMOKE_EXPECTED_TABLES_FILE="$expected_tables_file" \
         cargo run --quiet --manifest-path "${smoke_dir}/Cargo.toml"
     status=$?
     if [[ "$status" -eq 0 ]]; then
-        actual_tables="$(clickhouse_smoke_query "SELECT count() FROM system.tables WHERE database = $(clickhouse_string_literal "$smoke_db") FORMAT TSVRaw" | tr -d '[:space:]')"
-        if [[ "$actual_tables" != "$expected_tables" ]]; then
-            echo "ClickHouse DDL smoke expected ${expected_tables} tables, found ${actual_tables}" >&2
+        clickhouse_smoke_query "SELECT name FROM system.tables WHERE database = $(clickhouse_string_literal "$smoke_db") ORDER BY name FORMAT TSVRaw" > "$actual_tables_file"
+        expected_tables="$(wc -l < "$expected_tables_file" | tr -d '[:space:]')"
+        actual_tables="$(wc -l < "$actual_tables_file" | tr -d '[:space:]')"
+        if ! diff -u "$expected_tables_file" "$actual_tables_file"; then
+            echo "ClickHouse DDL smoke created tables that differ from generated managed-table metadata" >&2
             status=1
         fi
     fi
 
     if [[ "$status" -eq 0 ]]; then
         while IFS= read -r event_table; do
+            if [[ -z "$event_table" || "$event_table" == *_instruction_landing || "$event_table" == *_account_landing ]]; then
+                continue
+            fi
             sorting_key="$(clickhouse_smoke_query "SELECT sorting_key FROM system.tables WHERE database = $(clickhouse_string_literal "$smoke_db") AND name = $(clickhouse_string_literal "$event_table") FORMAT TSVRaw" | tr -d '\n')"
             if [[ "$sorting_key" != *event_id* || "$sorting_key" == *instruction_id* ]]; then
                 echo "ClickHouse DDL smoke found invalid sorting key for ${event_table}: ${sorting_key}" >&2
                 status=1
                 break
             fi
-        done < <(sed -n 's/.*DEFAULT_TABLE_NAME:.*= "\(.*\)";/\1/p' decoders/jupiter-swap-decoder/src/instructions/clickhouse/*_event_row.rs | sort)
+        done < "$expected_tables_file"
     fi
 
     clickhouse_smoke_query "DROP DATABASE IF EXISTS ${smoke_db}" >/dev/null || true
