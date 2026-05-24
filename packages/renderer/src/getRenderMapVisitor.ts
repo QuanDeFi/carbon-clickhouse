@@ -965,6 +965,7 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                                 render('instructionsClickHouseMod.njk', {
                                     ...ctx,
                                     clickHouseDdl: getClickHouseDdlContext(options.withClickHouse, 'instruction'),
+                                    clickHouseEventDdl: getClickHouseDdlContext(options.withClickHouse, 'event'),
                                 }),
                             );
                         }

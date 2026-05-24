@@ -66,6 +66,25 @@ pub(crate) fn clickhouse_instruction_table_options() -> ClickHouseTableOptions {
     }
 }
 
+{% if hasAnchorEvents %}
+pub(crate) fn clickhouse_event_table_options() -> ClickHouseTableOptions {
+    ClickHouseTableOptions {
+        on_cluster_clause: r#"{{ clickHouseEventDdl.onClusterClause }}"#,
+        engine: r#"{{ clickHouseEventDdl.engine }}"#.to_string(),
+{% if clickHouseEventDdl.createLocalTable %}
+        local_engine: Some(r#"{{ clickHouseEventDdl.localEngine }}"#.to_string()),
+{% else %}
+        local_engine: None,
+{% endif %}
+        local_table_suffix: r#"{{ clickHouseEventDdl.localTableSuffix }}"#,
+        partition_by: r#"{{ clickHouseEventDdl.partitionBy }}"#,
+        order_by: r#"{{ clickHouseEventDdl.orderBy }}"#,
+        ttl_clause: r#"{{ clickHouseEventDdl.ttlClause }}"#,
+        settings_clause: r#"{{ clickHouseEventDdl.settingsClause }}"#,
+    }
+}
+
+{% endif %}
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(untagged)]
 pub enum {{ program.name | pascalCase }}ClickHouseInstructionRow {

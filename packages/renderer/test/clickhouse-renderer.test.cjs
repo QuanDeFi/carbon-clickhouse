@@ -71,6 +71,7 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
         hasAnchorEvents: true,
         hasClickHouseInstructionTypes: true,
         clickHouseDdl: defaultInstructionDdl,
+        clickHouseEventDdl: defaultEventDdl,
     });
 
     assert.match(output, /pub mod types;/);
@@ -91,6 +92,8 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
     assert.match(output, /Swap => swap_row::SwapInstructionClickHouseRow/);
     assert.match(output, /SwapEventEvent: SwapEvent => swap_event_event_row::SwapEventEventClickHouseRow/);
     assert.match(output, /fn clickhouse_instruction_table_options\(\) -> ClickHouseTableOptions/);
+    assert.match(output, /fn clickhouse_event_table_options\(\) -> ClickHouseTableOptions/);
+    assert.match(output, /order_by: r#"\(program_id, family_name, event_id, slot\)"#/);
 }
 
 {
@@ -222,6 +225,7 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
         /ClickHouseColumnSpec::new\("swap_events", r#"Array\(Tuple\(input_mint String, input_amount UInt64\)\)"#\)/,
     );
     assert.match(output, /carbon_core::impl_clickhouse_event_row!/);
+    assert.match(output, /super::clickhouse_event_table_options/);
     assert.match(output, /pub fn from_parts/);
     assert.doesNotMatch(output, /data JSON/);
 }
@@ -260,6 +264,7 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
         hasAnchorEvents: false,
         hasClickHouseInstructionTypes: false,
         clickHouseDdl: replicatedDdl,
+        clickHouseEventDdl: getClickHouseDdlContext(true, 'event'),
     });
 
     assert.match(replicatedModOutput, /ON CLUSTER prod_cluster/);
@@ -294,6 +299,7 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
         hasAnchorEvents: false,
         hasClickHouseInstructionTypes: false,
         clickHouseDdl: distributedDdl,
+        clickHouseEventDdl: getClickHouseDdlContext(true, 'event'),
     });
 
     assert.match(distributedOutput, /local_engine: Some\(r#"ReplicatedMergeTree/);
@@ -317,6 +323,7 @@ function assertNoGeneratedClickHouseJsonFallback(relativeDir) {
         hasAnchorEvents: false,
         hasClickHouseInstructionTypes: false,
         clickHouseDdl: mergeTreeDdl,
+        clickHouseEventDdl: getClickHouseDdlContext(true, 'event'),
     });
 
     assert.match(

@@ -82,6 +82,19 @@ pub(crate) fn clickhouse_instruction_table_options() -> ClickHouseTableOptions {
     }
 }
 
+pub(crate) fn clickhouse_event_table_options() -> ClickHouseTableOptions {
+    ClickHouseTableOptions {
+        on_cluster_clause: r#""#,
+        engine: r#"MergeTree"#.to_string(),
+        local_engine: None,
+        local_table_suffix: r#"_local"#,
+        partition_by: r#"toYear(partition_time)"#,
+        order_by: r#"(program_id, family_name, event_id, slot)"#,
+        ttl_clause: r#""#,
+        settings_clause: r#" SETTINGS non_replicated_deduplication_window = 1000"#,
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(untagged)]
 pub enum JupiterSwapClickHouseInstructionRow {
