@@ -101,7 +101,13 @@ fn register_block_crawler_metrics() {
 }
 
 fn is_skippable_block_error(error: &str) -> bool {
-    error.contains("-32001") || error.contains("-32007") || error.contains("-32009")
+    skippable_block_error_code(error).is_some()
+}
+
+fn skippable_block_error_code(error: &str) -> Option<&'static str> {
+    ["-32001", "-32007", "-32009"]
+        .into_iter()
+        .find(|code| error.contains(code))
 }
 
 fn is_retryable_block_error(error: &str) -> bool {
@@ -273,7 +279,10 @@ fn block_fetcher(
                                     // Solana permanent skip errors:
                                     // -32001 cleaned up, -32007 skipped/missing slot,
                                     // -32009 missing in long-term storage.
-                                    if is_skippable_block_error(&error) {
+                                    if let Some(error_code) = skippable_block_error_code(&error) {
+                                        log::warn!(
+                                            "Skipping block at slot {slot}: skippable RPC error {error_code}: {e:?}"
+                                        );
                                         BLOCKS_SKIPPED.inc();
                                         break None;
                                     }
@@ -421,11 +430,16 @@ mod tests {
         assert!(is_skippable_block_error(
             "-32009 LongTermStorageSlotSkipped"
         ));
+        assert_eq!(
+            skippable_block_error_code("-32009 LongTermStorageSlotSkipped"),
+            Some("-32009")
+        );
 
         assert!(!is_skippable_block_error("-32004 BlockNotAvailable"));
         assert!(!is_skippable_block_error(
             "-32014 BlockStatusNotAvailableYet"
         ));
+        assert_eq!(skippable_block_error_code("-32004 BlockNotAvailable"), None);
     }
 
     #[tokio::test]
