@@ -14,6 +14,8 @@ REGENERATE_RPC_URL=""
 REGENERATE_LIMIT=0
 SKIP_REGENERATED_COMPILE=0
 NODE_BIN="${NODE_BIN:-node}"
+RUN_CLICKHOUSE_DDL_SMOKE=0
+CLICKHOUSE_DDL_SMOKE_URL="${CLICKHOUSE_DDL_SMOKE_URL:-${DATABASE_URL:-}}"
 
 usage() {
     cat <<'EOF'
@@ -31,6 +33,8 @@ Options:
   --rpc-url URL              RPC URL for --regenerate-from-readme program-address IDL fetches.
   --regenerate-limit N       Limit regeneration checks to the first N discovered IDLs/program IDs.
   --skip-regenerated-compile Generate regenerated decoders but do not cargo check them.
+  --clickhouse-ddl-smoke     Bootstrap committed canary ClickHouse tables in a temporary database.
+  --clickhouse-url URL       URL for --clickhouse-ddl-smoke. Defaults to CLICKHOUSE_DDL_SMOKE_URL or DATABASE_URL.
   -h, --help                 Show this help.
 
 Default behavior:
@@ -44,6 +48,12 @@ Regeneration checks are opt-in and write only to a temporary directory. They use
 the local carbon-core path. The repository working tree must be unchanged after
 the script exits. Regeneration runs the built CLI with NODE_BIN, defaulting to
 node, and requires Node 20+ because current CLI dependencies require it.
+
+The ClickHouse DDL smoke is opt-in because it requires a reachable ClickHouse
+server. It creates a temporary database, runs the committed Jupiter/Token
+generated migration helpers, verifies the canary tables were created, verifies
+Jupiter event tables sort by event_id instead of instruction_id, and then drops
+the temporary database.
 EOF
 }
 
@@ -101,6 +111,18 @@ while [[ $# -gt 0 ]]; do
             SKIP_REGENERATED_COMPILE=1
             shift
             ;;
+        --clickhouse-ddl-smoke)
+            RUN_CLICKHOUSE_DDL_SMOKE=1
+            shift
+            ;;
+        --clickhouse-url)
+            CLICKHOUSE_DDL_SMOKE_URL="${2:-}"
+            if [[ -z "$CLICKHOUSE_DDL_SMOKE_URL" ]]; then
+                echo "--clickhouse-url requires a URL" >&2
+                exit 2
+            fi
+            shift 2
+            ;;
         -h|--help)
             usage
             exit 0
@@ -115,6 +137,11 @@ done
 
 if [[ "$REGENERATE_FROM_README" -eq 1 && -z "$REGENERATE_RPC_URL" ]]; then
     echo "--regenerate-from-readme requires --rpc-url" >&2
+    exit 2
+fi
+
+if [[ "$RUN_CLICKHOUSE_DDL_SMOKE" -eq 1 && -z "$CLICKHOUSE_DDL_SMOKE_URL" ]]; then
+    echo "--clickhouse-ddl-smoke requires CLICKHOUSE_DDL_SMOKE_URL, DATABASE_URL, or --clickhouse-url" >&2
     exit 2
 fi
 
@@ -257,6 +284,134 @@ run_regeneration_checks() {
     printf 'Regenerated %d ClickHouse-enabled decoder crates in a temporary directory.\n' "$count"
 }
 
+clickhouse_smoke_query() {
+    local query="$1"
+    curl -fsS "$CLICKHOUSE_DDL_SMOKE_URL" --data-binary "$query"
+}
+
+clickhouse_string_literal() {
+    printf "'%s'" "${1//\'/\'\'}"
+}
+
+ensure_temp_dir() {
+    if [[ -z "$temp_dir" ]]; then
+        temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/carbon-clickhouse-rollout.XXXXXX")"
+    fi
+}
+
+run_clickhouse_ddl_smoke() {
+    command -v curl >/dev/null || {
+        echo "--clickhouse-ddl-smoke requires curl" >&2
+        return 2
+    }
+
+    ensure_temp_dir
+    local smoke_dir="${temp_dir}/ddl-smoke"
+    local smoke_db="carbon_clickhouse_ddl_smoke_$(date +%s)_$$"
+    mkdir -p "${smoke_dir}/src"
+
+    cat > "${smoke_dir}/Cargo.toml" <<EOF
+[package]
+name = "carbon-clickhouse-ddl-smoke"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+carbon-jupiter-swap-decoder = { path = "${ROOT_DIR}/decoders/jupiter-swap-decoder", features = ["clickhouse"] }
+carbon-token-program-decoder = { path = "${ROOT_DIR}/decoders/token-program-decoder", features = ["clickhouse"] }
+tokio = { version = "1.48.0", features = ["macros", "rt", "rt-multi-thread", "time"] }
+EOF
+    cp "${ROOT_DIR}/Cargo.lock" "${smoke_dir}/Cargo.lock"
+
+    cat > "${smoke_dir}/src/main.rs" <<'EOF'
+use carbon_jupiter_swap_decoder::{
+    accounts::clickhouse as jupiter_accounts,
+    instructions::clickhouse as jupiter_instructions,
+};
+use carbon_token_program_decoder::{
+    accounts::clickhouse as token_accounts,
+    instructions::clickhouse as token_instructions,
+};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let database_url = std::env::var("CLICKHOUSE_DDL_SMOKE_URL")?;
+    let database = std::env::var("CLICKHOUSE_DDL_SMOKE_DATABASE")?;
+
+    let mut jupiter_instruction_config =
+        jupiter_instructions::clickhouse_config_from_database_url(&database_url)?;
+    jupiter_instruction_config.database = database.clone();
+    jupiter_instructions::JupiterSwapClickHouseInstructionsMigration::run(
+        &jupiter_instruction_config,
+    )
+    .await?;
+
+    let mut jupiter_account_config =
+        jupiter_accounts::clickhouse_config_from_database_url(&database_url)?;
+    jupiter_account_config.database = database.clone();
+    jupiter_accounts::JupiterSwapClickHouseAccountsMigration::run(&jupiter_account_config).await?;
+
+    let mut token_instruction_config =
+        token_instructions::clickhouse_config_from_database_url(&database_url)?;
+    token_instruction_config.database = database.clone();
+    token_instructions::TokenProgramClickHouseInstructionsMigration::run(&token_instruction_config)
+        .await?;
+
+    let mut token_account_config = token_accounts::clickhouse_config_from_database_url(&database_url)?;
+    token_account_config.database = database;
+    token_accounts::TokenProgramClickHouseAccountsMigration::run(&token_account_config).await?;
+
+    Ok(())
+}
+EOF
+
+    local expected_tables actual_tables status event_table sorting_key
+    expected_tables="$(
+        find \
+            decoders/jupiter-swap-decoder/src/instructions/clickhouse \
+            decoders/jupiter-swap-decoder/src/accounts/clickhouse \
+            decoders/token-program-decoder/src/instructions/clickhouse \
+            decoders/token-program-decoder/src/accounts/clickhouse \
+            -maxdepth 1 -name '*_row.rs' | wc -l | tr -d '[:space:]'
+    )"
+
+    clickhouse_smoke_query "DROP DATABASE IF EXISTS ${smoke_db}" >/dev/null
+    clickhouse_smoke_query "CREATE DATABASE ${smoke_db}" >/dev/null
+
+    set +e
+    CLICKHOUSE_DDL_SMOKE_URL="$CLICKHOUSE_DDL_SMOKE_URL" \
+        CLICKHOUSE_DDL_SMOKE_DATABASE="$smoke_db" \
+        cargo run --quiet --manifest-path "${smoke_dir}/Cargo.toml"
+    status=$?
+    if [[ "$status" -eq 0 ]]; then
+        actual_tables="$(clickhouse_smoke_query "SELECT count() FROM system.tables WHERE database = $(clickhouse_string_literal "$smoke_db") FORMAT TSVRaw" | tr -d '[:space:]')"
+        if [[ "$actual_tables" != "$expected_tables" ]]; then
+            echo "ClickHouse DDL smoke expected ${expected_tables} tables, found ${actual_tables}" >&2
+            status=1
+        fi
+    fi
+
+    if [[ "$status" -eq 0 ]]; then
+        while IFS= read -r event_table; do
+            sorting_key="$(clickhouse_smoke_query "SELECT sorting_key FROM system.tables WHERE database = $(clickhouse_string_literal "$smoke_db") AND name = $(clickhouse_string_literal "$event_table") FORMAT TSVRaw" | tr -d '\n')"
+            if [[ "$sorting_key" != *event_id* || "$sorting_key" == *instruction_id* ]]; then
+                echo "ClickHouse DDL smoke found invalid sorting key for ${event_table}: ${sorting_key}" >&2
+                status=1
+                break
+            fi
+        done < <(sed -n 's/.*DEFAULT_TABLE_NAME:.*= "\(.*\)";/\1/p' decoders/jupiter-swap-decoder/src/instructions/clickhouse/*_event_row.rs | sort)
+    fi
+
+    clickhouse_smoke_query "DROP DATABASE IF EXISTS ${smoke_db}" >/dev/null || true
+    set -e
+
+    if [[ "$status" -ne 0 ]]; then
+        return "$status"
+    fi
+
+    printf 'ClickHouse DDL smoke created %s canary tables in temporary database %s.\n' "$actual_tables" "$smoke_db"
+}
+
 if [[ "$SKIP_RENDERER" -eq 0 ]]; then
     pnpm --filter @sevenlabs-hq/carbon-codama-renderer test
     pnpm --filter @sevenlabs-hq/carbon-codama-renderer type-check
@@ -336,6 +491,10 @@ if [[ -n "$REGENERATE_IDL_DIR" || "$REGENERATE_FROM_README" -eq 1 ]]; then
     fi
 
     run_regeneration_checks "$entries_file"
+fi
+
+if [[ "$RUN_CLICKHOUSE_DDL_SMOKE" -eq 1 ]]; then
+    run_clickhouse_ddl_smoke
 fi
 
 if [[ "$COMPILE_ALL" -eq 1 ]]; then
