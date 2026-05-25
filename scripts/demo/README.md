@@ -1,0 +1,273 @@
+# Carbon ClickHouse Tutorial Recording Automation
+
+This folder contains deterministic automation for recording the Carbon
+ClickHouse sink tutorial. The source tutorial path is:
+
+```sh
+crates/core/src/clickhouse/docs/ClickHouse Sink Tutorial Curriculum.md
+```
+
+The runbook for recording is:
+
+```sh
+scripts/demo/runbook.yaml
+```
+
+## Architecture
+
+- Headless display: Xvfb on `${DEMO_DISPLAY:-:95}`.
+- Optional observation UI: x11vnc on `${DEMO_VNC_PORT:-5903}` and noVNC/websockify on `${DEMO_NOVNC_PORT:-6083}`.
+- Terminal scenes: wide `xterm` windows with smaller readable text and visibly typed commands.
+- Human-style browser scenes: Chromium app windows launched visibly on Xvfb, with browser chrome hidden.
+- Default recorder: FFmpeg `x11grab`.
+- Optional recorder: OBS through obs-websocket.
+- Voiceover: ElevenLabs.
+- Assembly: FFmpeg.
+
+FFmpeg x11grab is the default because this RPC node is headless and OBS is not
+required for the current environment. OBS support is implemented as an optional
+backend for machines where OBS and obs-websocket are available.
+
+## Initialize Environment
+
+Create `.env.demo.local` from the existing example env files:
+
+```sh
+scripts/demo/init-env-from-examples.sh
+```
+
+Then edit `.env.demo.local` and fill any missing values:
+
+```sh
+$EDITOR .env.demo.local
+```
+
+Do not commit `.env.demo.local`.
+
+## Install Tools
+
+```sh
+scripts/demo/install-recording-tools.sh
+```
+
+This installs or verifies system FFmpeg, optional OBS, X11 terminal tooling,
+the Python demo venv, and demo-local Playwright dependencies.
+
+## Start Display
+
+```sh
+scripts/demo/start-display.sh
+```
+
+The command prints:
+
+```text
+DISPLAY=:95
+noVNC: http://localhost:6083/vnc.html
+```
+
+noVNC is for observation only. Recording does not depend on it.
+The selected display and ports are also written to `demo-artifacts/display.env`.
+If the selected display or ports are already used by another local VNC session,
+keep that session untouched and use explicit overrides or `--auto`:
+
+```sh
+DEMO_DISPLAY=:96 DEMO_VNC_PORT=5904 DEMO_NOVNC_PORT=6084 scripts/demo/start-display.sh
+scripts/demo/start-display.sh --auto
+```
+
+## Preflight
+
+```sh
+scripts/demo/preflight.sh --no-elevenlabs
+```
+
+Use `--no-obs` when using the default FFmpeg backend:
+
+```sh
+scripts/demo/preflight.sh --no-elevenlabs --no-obs
+```
+
+## Generate Voice
+
+Free ElevenLabs accounts cannot use every library voice. The demo helper can
+query voices available to the account and select a default/free-usable voice
+without printing the voice ID:
+
+```sh
+source .venv-demo/bin/activate
+python scripts/demo/voice.py status
+python scripts/demo/voice.py voices
+python scripts/demo/voice.py select-free --write-env
+python scripts/demo/voice.py smoke
+```
+
+Generate all scene voiceovers after the smoke test passes:
+
+```sh
+source .venv-demo/bin/activate
+python scripts/demo/voice.py all
+```
+
+## Run One Scene
+
+```sh
+source .venv-demo/bin/activate
+python scripts/demo/run_scene.py scene-02-local-setup
+```
+
+For a no-voice rehearsal:
+
+```sh
+python scripts/demo/run_scene.py scene-02-local-setup --no-voice
+```
+
+## Run All Scenes
+
+```sh
+source .venv-demo/bin/activate
+python scripts/demo/run_scene.py --all
+```
+
+## Human-Style No-Audio Review
+
+Use this before final voiceover. It records a directed screen performance:
+visible terminal typing, readable pauses, browser slides, Prometheus UI, video
+validation, screenshots, contact sheet, and current review files.
+The current visual target is compact, roughly two minutes rather than a full
+end-to-end smoke-test recording.
+Terminal scenes reuse one shell, pause briefly before pressing Enter, and leave
+read time at scene boundaries so the output can be consumed.
+
+```sh
+source .venv-demo/bin/activate
+export RECORDER_BACKEND=ffmpeg_x11
+export DEMO_DISPLAY=:95 DISPLAY=:95
+export DEMO_SCREEN_SIZE=1920x1080
+export DEMO_VNC_PORT=5903 DEMO_NOVNC_PORT=6083
+DEMO_ALLOW_CLICKHOUSE_RESET=true python scripts/demo/run_human_rehearsal.py --no-voice
+```
+
+Outputs land under `demo-artifacts/review-human/`.
+
+The recorder disables mouse capture, so the cursor should not appear in the
+review videos.
+
+## Stop Display
+
+```sh
+scripts/demo/stop-display.sh
+```
+
+Only PIDs created by `start-display.sh` are stopped.
+
+## Optional OBS Backend
+
+Set these in `.env.demo.local` if you want OBS instead of the default FFmpeg
+recorder:
+
+```env
+RECORDER_BACKEND=obs
+OBS_WEBSOCKET_HOST=127.0.0.1
+OBS_WEBSOCKET_PORT=4455
+OBS_WEBSOCKET_PASSWORD=...
+```
+
+Then check:
+
+```sh
+source .venv-demo/bin/activate
+scripts/demo/start-obs.sh
+RECORDER_BACKEND=obs python scripts/demo/record.py status
+```
+
+If OBS websocket is unavailable, use:
+
+```env
+RECORDER_BACKEND=ffmpeg_x11
+```
+
+Stop the backup OBS services with:
+
+```sh
+scripts/demo/stop-obs.sh
+```
+
+## Safety Commands
+
+Detect running examples:
+
+```sh
+scripts/demo/detect-running-demo-processes.sh
+```
+
+Stop demo/example processes only when explicitly allowed:
+
+```sh
+DEMO_ALLOW_STOP_PROCESSES=true scripts/demo/stop-demo-processes.sh
+```
+
+Preview ClickHouse reset:
+
+```sh
+scripts/demo/reset-clickhouse.sh
+```
+
+Perform the reset only when explicitly allowed:
+
+```sh
+DEMO_ALLOW_CLICKHOUSE_RESET=true scripts/demo/reset-clickhouse.sh
+```
+
+The reset targets only `jupiter_swap_%landing` and
+`token_program_%account_landing` tables.
+
+## Current Environment Notes
+
+The audited machine is headless. FFmpeg x11grab is the default recorder. OBS is
+optional backup.
+
+The unmanaged `:99` display may already be occupied at `1440x1000`. For clean
+tutorial recording, use:
+
+```sh
+export DEMO_DISPLAY=:95
+export DEMO_SCREEN_SIZE=1920x1080
+export DEMO_VNC_PORT=5903
+export DEMO_NOVNC_PORT=6083
+```
+
+Before deterministic tutorial runs, reset tutorial ClickHouse tables:
+
+```sh
+DEMO_ALLOW_CLICKHOUSE_RESET=true scripts/demo/reset-clickhouse.sh
+```
+
+ElevenLabs requires an API key in `.env.demo.local`. A voice ID can be set
+manually, or `voice.py` can discover a default/free-usable voice and write it
+without printing the ID:
+
+```env
+ELEVENLABS_API_KEY=<elevenlabs-api-key>
+ELEVENLABS_VOICE_ID=<voice-id>
+ELEVENLABS_MODEL_ID=eleven_multilingual_v2
+ELEVENLABS_OUTPUT_FORMAT=mp3_44100_128
+ELEVENLABS_DISABLE_AUTO_VOICE_FALLBACK=false
+ELEVENLABS_AUTO_WRITE_VOICE_ID=false
+```
+
+```sh
+source .venv-demo/bin/activate
+python scripts/demo/voice.py select-free --write-env
+python scripts/demo/voice.py smoke
+```
+
+OBS backup recording is valid only after:
+
+```sh
+scripts/demo/start-obs.sh
+RECORDER_BACKEND=obs python scripts/demo/record.py status
+RECORDER_BACKEND=obs python scripts/demo/record.py start --scene obs-smoke
+RECORDER_BACKEND=obs python scripts/demo/record.py stop --scene obs-smoke
+scripts/demo/stop-obs.sh
+```

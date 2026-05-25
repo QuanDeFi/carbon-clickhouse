@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Carbon ClickHouse Sink Architecture</title>
+  <style>
+    :root {
+      --bg: #f5efe2;
+      --ink: #17201b;
+      --muted: #59635c;
+      --line: #9c6b38;
+      --node: #fffaf0;
+      --accent: #0f766e;
+      --accent2: #b45309;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      width: 100vw;
+      height: 100vh;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at 10% 15%, rgba(180, 83, 9, 0.15), transparent 28rem),
+        radial-gradient(circle at 90% 85%, rgba(15, 118, 110, 0.16), transparent 30rem),
+        var(--bg);
+      color: var(--ink);
+      font-family: Georgia, "Times New Roman", serif;
+    }
+    main {
+      width: 1640px;
+      height: 880px;
+      padding: 52px 64px;
+      border: 2px solid rgba(23, 32, 27, 0.18);
+      border-radius: 28px;
+      background: rgba(255, 250, 240, 0.82);
+      box-shadow: 0 32px 80px rgba(23, 32, 27, 0.15);
+    }
+    h1 {
+      margin: 0;
+      font-size: 72px;
+      letter-spacing: -2px;
+      line-height: 0.95;
+    }
+    .subtitle {
+      margin-top: 18px;
+      color: var(--muted);
+      font: 28px/1.35 "Trebuchet MS", sans-serif;
+    }
+    .flow {
+      margin-top: 52px;
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 18px;
+      align-items: stretch;
+    }
+    .node {
+      min-height: 260px;
+      padding: 24px 18px;
+      border: 2px solid rgba(23, 32, 27, 0.18);
+      border-radius: 22px;
+      background: var(--node);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      text-align: center;
+      box-shadow: 0 12px 28px rgba(23, 32, 27, 0.08);
+    }
+    .node:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      right: -25px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--line);
+      font: 700 42px/1 "Trebuchet MS", sans-serif;
+      z-index: 2;
+    }
+    .label {
+      font: 700 24px/1.18 "Trebuchet MS", sans-serif;
+      color: var(--ink);
+    }
+    .detail {
+      margin-top: 14px;
+      font: 19px/1.28 "Trebuchet MS", sans-serif;
+      color: var(--muted);
+    }
+    .node:nth-child(3), .node:nth-child(5) {
+      border-color: rgba(15, 118, 110, 0.45);
+    }
+    .node:nth-child(3) .label, .node:nth-child(5) .label {
+      color: var(--accent);
+    }
+    .node:nth-child(6) .label {
+      color: var(--accent2);
+    }
+    .footer {
+      margin-top: 54px;
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      color: var(--muted);
+      font: 22px/1.35 "Trebuchet MS", sans-serif;
+    }
+    .tag {
+      padding: 12px 18px;
+      border: 1px solid rgba(23, 32, 27, 0.16);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.42);
+      color: var(--ink);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Carbon ClickHouse Sink</h1>
+    <div class="subtitle">A typed landing-table pipeline for Solana program data.</div>
+    <section class="flow" aria-label="Architecture flow">
+      <div class="node"><div class="label">Solana RPC</div><div class="detail">bounded slots or live finalized blocks</div></div>
+      <div class="node"><div class="label">Carbon datasource</div><div class="detail">block crawler and account snapshots</div></div>
+      <div class="node"><div class="label">Generated decoder</div><div class="detail">Jupiter Swap and Token Program schemas</div></div>
+      <div class="node"><div class="label">Processor</div><div class="detail">instruction, event, and account rows</div></div>
+      <div class="node"><div class="label">ClickHouse sink</div><div class="detail">batching, retry, schema reconciliation</div></div>
+      <div class="node"><div class="label">Typed landing tables</div><div class="detail">append-only data for analysis</div></div>
+      <div class="node"><div class="label">Observability</div><div class="detail">Prometheus and Grafana</div></div>
+    </section>
+    <div class="footer">
+      <div>In this walkthrough we run the examples, inspect the tables, and verify metrics.</div>
+    </div>
+  </main>
+</body>
+</html>
