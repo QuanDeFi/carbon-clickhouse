@@ -100,10 +100,6 @@ fn register_block_crawler_metrics() {
     registry.register_histogram(&BLOCK_PROCESS_TIME_NANOS);
 }
 
-fn is_skippable_block_error(error: &str) -> bool {
-    skippable_block_error_code(error).is_some()
-}
-
 fn skippable_block_error_code(error: &str) -> Option<&'static str> {
     ["-32001", "-32007", "-32009"]
         .into_iter()
@@ -425,21 +421,24 @@ mod tests {
         assert!(is_retryable_block_error("IncompleteMessage"));
         assert!(is_retryable_block_error("429 Too Many Requests"));
 
-        assert!(is_skippable_block_error("-32001 BlockCleanedUp"));
-        assert!(is_skippable_block_error("-32007 SlotSkipped"));
-        assert!(is_skippable_block_error(
-            "-32009 LongTermStorageSlotSkipped"
-        ));
+        assert_eq!(
+            skippable_block_error_code("-32001 BlockCleanedUp"),
+            Some("-32001")
+        );
+        assert_eq!(
+            skippable_block_error_code("-32007 SlotSkipped"),
+            Some("-32007")
+        );
         assert_eq!(
             skippable_block_error_code("-32009 LongTermStorageSlotSkipped"),
             Some("-32009")
         );
 
-        assert!(!is_skippable_block_error("-32004 BlockNotAvailable"));
-        assert!(!is_skippable_block_error(
-            "-32014 BlockStatusNotAvailableYet"
-        ));
         assert_eq!(skippable_block_error_code("-32004 BlockNotAvailable"), None);
+        assert_eq!(
+            skippable_block_error_code("-32014 BlockStatusNotAvailableYet"),
+            None
+        );
     }
 
     #[tokio::test]

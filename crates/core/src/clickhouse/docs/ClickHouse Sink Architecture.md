@@ -101,6 +101,35 @@ The sink has four layers:
 
 The important boundary is that the core runtime knows how to write rows to ClickHouse, but it does not know Jupiter, Token Program, or any other program-specific schema.
 
+## Carbon Core Touch Points
+
+The ClickHouse sink is not a new Carbon pipeline abstraction. It does, however,
+require a few shared Carbon/runtime touch points so buffered writes are safe in
+real pipelines:
+
+- `carbon-core::clickhouse` contains the generic runtime for HTTP transport,
+  schema execution, buffering, retries, deduplication settings, metrics, and
+  account/instruction processor integration.
+- `Processor::finalize()` and pipeline finalization are used to drain buffered
+  rows before shutdown completes.
+- The RPC block crawler datasource is hardened for live ClickHouse examples
+  because datasource loss happens before the sink can retry anything.
+
+The RPC block crawler hardening is specifically about finalized block-stream
+stability:
+
+- retry temporary near-head `getBlock` failures such as `BlockNotAvailable`
+  and `BlockStatusNotAvailableYet`;
+- keep true permanent skipped/cleaned slots as skipped and log the extracted
+  RPC error code;
+- use awaited downstream sends so a full Carbon channel backpressures instead
+  of dropping transaction updates;
+- let queued fetched blocks drain before the crawler task exits.
+
+This is why the branch touches a datasource crate even though ClickHouse row
+mapping remains decoder-owned. The sink can only guarantee retry and shutdown
+drain for rows that reach the ClickHouse processor.
+
 ## Relationship To Postgres
 
 ClickHouse follows the same high-level Carbon integration model as Postgres:
@@ -180,6 +209,31 @@ This gives two intended modes:
 - sync inserts for deterministic ingestion and backfills
 - async-wait inserts for production live ingestion with many Carbon writers, where ClickHouse can coalesce writes server-side while Carbon still observes acknowledgement
 
+## Multi-Writer Model
+
+The production scaling model is many independent Carbon processes writing to
+the same ClickHouse deployment. Each process owns its own datasource,
+processor, local buffers, retry loop, and shutdown drain. The sink does not
+introduce a global writer registry or cross-process coordinator.
+
+ClickHouse is made "aware" of Carbon writes through standard request settings
+and row metadata:
+
+- every insert attempt has a Carbon-shaped `query_id` for query-log and
+  async-insert-log tracing;
+- exact-batch insert deduplication tokens are emitted by default so retrying
+  the same serialized batch can be idempotent when the table engine supports
+  insert deduplication;
+- async-wait insert settings let ClickHouse coalesce inserts from many writers
+  server-side without hiding insert failures from Carbon;
+- landing rows include `source_name`, `mode`, and `decoder_version`, so
+  downstream queries can separate pipelines, sources, backfills, snapshots, and
+  live ingestion.
+
+Those controls are not a substitute for a control plane. Durable queueing,
+source checkpoints, replay scheduling, per-process deployment labels, and
+range coverage tracking remain outside the sink.
+
 ## DDL Ownership
 
 Concrete landing-table DDL is decoder-owned and renderer-generated.
@@ -218,6 +272,12 @@ Production process-level visibility should combine:
 - ClickHouse server-side system tables and query logs
 - deployment-level process/container labels from the monitoring stack
 
+The current metrics registry is label-less. The sink therefore exposes
+processor-family aggregates rather than per-table or per-pipeline labeled
+metrics. In multi-process deployments, per-process and per-pipeline dashboards
+should come from the scrape target, service name, container labels, and row
+metadata rather than from dynamic metric labels inside Carbon.
+
 ## Responsibility Split
 
 The Carbon sink handles:
@@ -228,8 +288,9 @@ The Carbon sink handles:
 - shutdown drain through processor finalization
 - sync default inserts and async-wait insert settings
 - transient HTTP retry/backoff and failed-buffer preservation
-- optional exact-batch insert deduplication tokens
-- generated landing-table bootstrap
+- exact-batch insert deduplication tokens, enabled by default for retry
+  idempotency
+- generated managed schema bootstrap
 - safe generated-schema drift validation and enum-extension repair
 - sink-side metrics
 

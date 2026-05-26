@@ -9,8 +9,10 @@ validation, observability, and production boundaries.
 
 The curriculum uses the current canary examples:
 
-- `examples/jupiter-swap-clickhouse` for instruction and CPI/event landing rows.
-- `examples/token-program-clickhouse` for account landing rows.
+- `examples/jupiter-swap-clickhouse` for instruction, CPI/event, and live
+  TokenLedger account landing rows.
+- `examples/token-program-clickhouse` for fixed USDC account snapshots and live
+  Token Program instruction landing rows.
 
 ## Audience
 
@@ -40,13 +42,20 @@ After completing the curriculum, learners should be able to:
 - explain where ClickHouse fits in Carbon's datasource, decoder, processor, and
   writer flow
 - run the Jupiter ClickHouse example in bounded and live modes
-- run the Token Program ClickHouse fixed-USDC account snapshot example
+- run the Token Program ClickHouse fixed-USDC account snapshot plus live
+  instruction example
 - identify the generated landing tables created by each example
 - validate inserted rows with ClickHouse SQL
 - distinguish synchronous inserts from async-wait inserts
+- explain how query IDs, exact-batch deduplication tokens, source metadata, and
+  async-wait inserts support many Carbon writers writing to the same ClickHouse
+  deployment
 - inspect ClickHouse sink metrics through the local Prometheus stack
 - explain the sink's boundaries around replay, deduplication, canonicalization,
   finality, durable queues, and serving APIs
+- explain managed ClickHouse schema reconciliation and when it is safe
+- explain which shared Carbon runtime or datasource paths this branch touches
+  and why those changes are needed for buffered ClickHouse ingestion
 
 ## Module 1: Architecture Primer
 
@@ -61,6 +70,15 @@ Topics:
 - Append-only landing writes and deterministic row identifiers.
 - Why ClickHouse inserts are buffered and flushed in batches.
 - Why processor finalization is required for shutdown drain.
+- How exact-batch insert deduplication protects retry idempotency without
+  turning landing tables into unique-key tables.
+- How multiple Carbon processes write independently while ClickHouse observes
+  insert attempts through query IDs, insert deduplication tokens, and row-level
+  `source_name`, `mode`, and `decoder_version` metadata.
+- Why the branch hardens the RPC block crawler for live ClickHouse examples:
+  temporary near-head block errors are retried, permanent skipped slots are
+  logged, downstream sends backpressure instead of dropping updates, and queued
+  blocks drain on shutdown.
 
 Hands-on reading:
 
@@ -121,7 +139,7 @@ BLOCK_CRAWLER_START_SLOT=<start-slot-or-empty>
 BLOCK_CRAWLER_END_SLOT=<end-slot-or-empty>
 BLOCK_CRAWLER_HEAD_LAG_SLOTS=3
 PROMETHEUS_METRICS_ADDR=0.0.0.0:9464
-LOG_LEVEL=info
+LOG_LEVEL=debug
 ```
 
 Run:
@@ -149,6 +167,9 @@ Teaching notes:
 - TokenLedger account fetching is live-only because normal RPC account reads
   return current confirmed account state, not historical state for an old
   backfill slot.
+- Pure head-follow mode therefore bootstraps one additional Jupiter account
+  table, `jupiter_swap_token_ledger_account_landing`. Bounded backfills do not
+  create that account table through this example.
 - Empty instruction tables are expected when the selected slot window does not
   contain that instruction type.
 
@@ -164,7 +185,16 @@ SELECT 'swap_event' AS event_table, count()
 FROM default.jupiter_swap_swap_event_landing
 UNION ALL
 SELECT 'swaps_event' AS event_table, count()
-FROM default.jupiter_swap_swaps_event_landing;
+FROM default.jupiter_swap_swaps_event_landing
+UNION ALL
+SELECT 'candidate_swap_results' AS event_table, count()
+FROM default.jupiter_swap_candidate_swap_results_landing
+UNION ALL
+SELECT 'candidate_swap_quote_error' AS event_table, count()
+FROM default.jupiter_swap_candidate_swap_quote_error_landing
+UNION ALL
+SELECT 'best_swap_out_amount_violation' AS event_table, count()
+FROM default.jupiter_swap_best_swap_out_amount_violation_landing;
 
 SELECT
   count() AS rows,
@@ -172,17 +202,29 @@ SELECT
 FROM default.jupiter_swap_route_instruction_landing;
 ```
 
+Pure head-follow mode also enables the TokenLedger account path:
+
+```sql
+SELECT
+  count() AS token_ledger_snapshots,
+  uniq(pubkey) AS token_ledger_accounts
+FROM default.jupiter_swap_token_ledger_account_landing;
+```
+
 Expected outcome:
 
 - At least one Jupiter landing table exists.
-- The generated CPI/event landing tables exist, including `jupiter_swap_fee_event_landing`, `jupiter_swap_swap_event_landing`, and `jupiter_swap_swaps_event_landing`.
+- The generated CPI/event landing tables exist, including fee, swap, grouped
+  swap, candidate quote, quote error, and output-violation event families.
+- In pure head-follow mode, the TokenLedger account table exists and may receive
+  current account snapshots for first-seen TokenLedger pubkeys.
 - If the selected blocks include decoded Jupiter activity, row counts increase.
 - Sink buffers drain on shutdown.
 
-## Module 4: Token Program Account Snapshot Ingestion
+## Module 4: Token Program Account And Instruction Ingestion
 
-Goal: fetch a small real USDC account snapshot into all generated Token Program
-account-family ClickHouse landing tables.
+Goal: fetch real USDC account snapshots and then keep tailing finalized blocks
+so generated Token Program instruction landing tables receive live rows.
 
 Example directory:
 
@@ -196,10 +238,10 @@ Environment:
 DATABASE_URL=http://carbon:carbon@localhost:8123
 RPC_URL=<provider-rpc-url>
 PROMETHEUS_METRICS_ADDR=0.0.0.0:9465
-LOG_LEVEL=info
+LOG_LEVEL=debug
 ```
 
-Run the fixed USDC snapshot:
+Run the fixed USDC snapshot plus live instruction tail:
 
 ```sh
 cargo run -p token-program-clickhouse-carbon-example
@@ -212,20 +254,31 @@ Teaching notes:
   USDC freeze authority multisig, and one USDC token holding account.
 - This intentionally avoids unbounded Token Program scans and provider-specific
   GPA modes.
-- It populates the generated mint, multisig, and token account landing tables in
-  one small smoke run.
-- Rows are current account snapshots fetched at the RPC response slot, so the
-  example writes `mode = live` and `source_name = rpc_get_multiple_accounts`.
+- It populates generated mint, multisig, and token account landing tables from
+  the fixed snapshot before starting the live instruction phase.
+- Account rows are current account snapshots fetched at the RPC response slot,
+  so the example writes `mode = snapshot` and
+  `source_name = rpc_get_multiple_accounts`.
 - Snapshot rows have `transaction_signature = NULL` because they are current
   account reads, not transaction-scoped account updates.
-- The example exposes ClickHouse account metrics at `PROMETHEUS_METRICS_ADDR`
-  and stays alive briefly after completion so Prometheus can scrape the final
-  counters.
+- After the snapshot, the example starts the RPC block crawler at the next slot
+  and decodes live Token Program instructions from finalized blocks.
+- Instruction rows use `mode = live` and `source_name = rpc_block_crawler`.
+- The process keeps running until interrupted, so Prometheus can scrape both
+  account and instruction metrics at `PROMETHEUS_METRICS_ADDR`.
 
 Validation queries:
 
 ```sql
-SHOW TABLES FROM default LIKE 'token_program_%account_landing';
+SHOW TABLES FROM default LIKE 'token_program_%landing';
+
+SELECT
+  name,
+  total_rows
+FROM system.tables
+WHERE database = 'default'
+  AND name LIKE 'token_program_%landing'
+ORDER BY name;
 
 SELECT
   count() AS rows,
@@ -233,6 +286,13 @@ SELECT
   min(slot) AS min_slot,
   max(slot) AS max_slot
 FROM default.token_program_token_account_landing;
+
+SELECT
+  count() AS rows,
+  uniq(signature) AS signatures,
+  min(slot) AS min_slot,
+  max(slot) AS max_slot
+FROM default.token_program_transfer_checked_instruction_landing;
 ```
 
 Expected outcome:
@@ -243,6 +303,11 @@ Expected outcome:
   authority multisig snapshots.
 - `token_program_token_account_landing` contains the fixed USDC token holding
   account snapshot.
+- The generated Token Program instruction landing tables exist.
+- High-volume live tables such as `transfer_checked`, `initialize_account3`,
+  `initialize_immutable_owner`, `get_account_data_size`, `close_account`, and
+  `sync_native` may receive rows depending on current chain activity.
+- Low-frequency instruction tables can remain empty in short runs.
 
 ## Module 5: Insert Modes And Runtime Configuration
 
@@ -255,13 +320,25 @@ Topics:
 - Async-wait inserts are intended for live multi-writer deployments where
   ClickHouse should coalesce inserts server-side while Carbon still waits for
   acknowledgement.
-- Fire-and-forget async inserts are intentionally not exposed.
+- Async mode always waits for ClickHouse acknowledgement with
+  `wait_for_async_insert=1`.
 - Batch settings control local row and byte buffering.
 - Retry settings handle transient HTTP failures.
 - Transport settings control request timeout, connection timeout, pooling,
   compression, and user agent.
-- Optional exact-batch deduplication tokens can be enabled by callers that need
-  exact insert-batch identity.
+- Exact-batch deduplication tokens are enabled by default for retry
+  idempotency. They can be disabled by callers that explicitly accept duplicate
+  retry inserts in raw landing tables.
+- Per-attempt query IDs are generated for ClickHouse query-log and async-log
+  traceability.
+- `source_name`, `mode`, and `decoder_version` are row metadata; use distinct
+  source names when multiple production pipelines need to be separated in SQL.
+- Each Carbon process owns local buffers, and ClickHouse receives inserts with
+  per-attempt query IDs, exact-batch deduplication tokens, optional async-wait
+  settings, and row-level source metadata.
+- Generated local `MergeTree` landing tables include
+  `non_replicated_deduplication_window = 1000` by default so those tokens are
+  effective for plain local smoke-test tables.
 
 Jupiter async-wait run:
 
@@ -297,6 +374,8 @@ Checkpoint questions:
 
 - When should a backfill use sync inserts?
 - Why does async-wait preserve acknowledgement semantics?
+- What identifies a Carbon insert attempt in ClickHouse logs?
+- Which metadata should be used to separate multiple Carbon processes in SQL?
 - What should happen to buffered rows during shutdown?
 
 ## Module 6: Observability And Health Checks
@@ -313,11 +392,11 @@ Inspect the Carbon metrics endpoint:
 
 ```sh
 curl -sS http://localhost:9464/metrics | rg 'carbon_updates_failed_total|clickhouse_'
-curl -sS http://localhost:9465/metrics | rg 'clickhouse_accounts_'
+curl -sS http://localhost:9465/metrics | rg 'clickhouse_(accounts|instructions)_'
 ```
 
 The Jupiter example exposes Prometheus metrics on `9464` by default. The Token
-Program one-shot snapshot exposes its ClickHouse account metrics on `9465` by
+Program example exposes ClickHouse account and instruction metrics on `9465` by
 default, so both examples can be monitored locally without a port conflict.
 
 Prometheus queries:
@@ -336,7 +415,9 @@ Healthy signals:
 
 - `carbon_updates_failed_total` stays at zero for the smoke run.
 - `clickhouse_instructions_flush_failed_batches` stays at zero for Jupiter.
-- `clickhouse_accounts_flush_failed_batches` stays at zero for account runs.
+- `clickhouse_accounts_flush_failed_batches` stays at zero for account rows.
+- `clickhouse_instructions_flush_failed_batches` stays at zero for Token
+  Program instruction rows.
 - Buffered row gauges return to zero after finite shutdown.
 - Retry rates do not grow continuously.
 
@@ -364,8 +445,16 @@ Topics:
   - `{program}_{account}_account_landing`
 - The default DDL mode is local `MergeTree`.
 - Renderer options can produce replicated or distributed table setups.
-- Generated migrations are additive; destructive type-change migrations remain
-  outside the sink.
+- The renderer CLI accepts `--with-clickhouse true` for defaults and
+  `--clickhouse-options <json-or-file>` for production DDL options.
+- Generated managed schema metadata is the source of truth for table shape.
+- Schema reconciliation creates missing tables, adds missing columns, validates
+  table layout, safely extends enum columns, and fails fast on unsafe drift.
+- Destructive type-change migrations and table recreation remain outside the
+  ingestion startup path.
+- `scripts/validate-clickhouse-decoder-rollout.sh --clickhouse-ddl-smoke` can
+  bootstrap the committed canary schemas in a temporary ClickHouse database and
+  verify generated event table sort keys.
 
 Hands-on reading:
 
@@ -393,9 +482,10 @@ The ClickHouse sink handles:
 - per-buffer flushing
 - shutdown drain through processor finalization
 - synchronous inserts and async-wait insert settings
+- per-attempt query IDs for ClickHouse observability
 - transient HTTP retry and backoff
-- optional exact-batch insert deduplication tokens
-- generated landing-table bootstrap
+- default exact-batch insert deduplication tokens
+- generated managed schema bootstrap and safe drift reconciliation
 - sink-side metrics
 
 ClickHouse handles:
@@ -415,6 +505,7 @@ External control-plane or application code handles:
 - slot and range coverage tracking
 - replay orchestration
 - source checkpoints
+- multi-process orchestration and scrape-target labeling
 - DLQs and poison-record policy
 - Solana finality and reorg policy
 - schema rollout coordination
