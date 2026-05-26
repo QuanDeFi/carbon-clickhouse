@@ -6,7 +6,9 @@ publish = false
 
 [dependencies]
 carbon-core = { workspace = true, features = ["clickhouse"] }
+carbon-log-metrics = { workspace = true }
 carbon-prometheus-metrics = { workspace = true }
+carbon-rpc-block-crawler-datasource = { workspace = true }
 carbon-token-program-decoder = { workspace = true, features = ["clickhouse"] }
 
 dotenv = { workspace = true }
@@ -17,4 +19,5 @@ solana-account = { workspace = true }
 solana-client = { workspace = true }
 solana-commitment-config = { workspace = true }
 solana-pubkey = { workspace = true }
-tokio = { workspace = true, features = ["rt", "macros", "time"] }
+solana-transaction-status = { workspace = true }
+tokio = { workspace = true, features = ["rt", "macros"] }

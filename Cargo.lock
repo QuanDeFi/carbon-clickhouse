@@ -12707,7 +12707,9 @@ name = "token-program-clickhouse-carbon-example"
 version = "0.12.0"
 dependencies = [
  "carbon-core",
+ "carbon-log-metrics",
  "carbon-prometheus-metrics",
+ "carbon-rpc-block-crawler-datasource",
  "carbon-token-program-decoder",
  "dotenv",
  "env_logger",
@@ -12717,6 +12719,7 @@ dependencies = [
  "solana-client",
  "solana-commitment-config",
  "solana-pubkey 3.0.0",
+ "solana-transaction-status",
  "tokio",
 ]
 
