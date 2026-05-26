@@ -1,23 +1,22 @@
-# Branch Diff: `upstream-v1-sync` To `clickhouse-upstream-v1`
+# Branch Diff: `sevenlabs-hq/carbon:v1.0-rc` To `clickhouse-upstream-v1`
 
-This document is a technical summary of the actual Git diff from `upstream-v1-sync` to `clickhouse-upstream-v1`, filtered to implementation code. It is intentionally derived from Git commands and should be recomputed whenever either branch moves.
+This document is a technical summary of the actual Git diff from `sevenlabs-hq/carbon`'s `v1.0-rc` branch to `clickhouse-upstream-v1`, filtered to implementation code. It is intentionally derived from Git commands and should be recomputed whenever either branch moves.
 
 ## Diff Basis
 
 Commands used:
 
 ```bash
-TZ=Asia/Jakarta date '+%Y-%m-%d %H:%M:%S %Z (%z)'
+TZ=UTC date '+%Y-%m-%d %H:%M:%S %Z (%z)'
 git rev-parse --abbrev-ref HEAD
-git rev-parse upstream-v1-sync
+git rev-parse upstream/v1.0-rc
 git rev-parse HEAD
-git merge-base upstream-v1-sync HEAD
-git rev-list --left-right --count upstream-v1-sync...HEAD
-git rev-list --left-right --count upstream-v1-sync...upstream/v1.0-rc
-git diff --name-status upstream-v1-sync...HEAD -- '*.rs' '*.ts' '*.njk' '*.cjs'
-git diff --numstat upstream-v1-sync...HEAD -- '*.rs' '*.ts' '*.njk' '*.cjs'
-git diff --stat upstream-v1-sync...HEAD -- '*.rs' '*.ts' '*.njk' '*.cjs'
-git diff --shortstat upstream-v1-sync...HEAD -- '*.rs' '*.ts' '*.njk' '*.cjs'
+git merge-base upstream/v1.0-rc HEAD
+git rev-list --left-right --count upstream/v1.0-rc...HEAD
+git diff --name-status upstream/v1.0-rc...HEAD -- '*.rs' '*.ts' '*.njk' '*.cjs'
+git diff --numstat upstream/v1.0-rc...HEAD -- '*.rs' '*.ts' '*.njk' '*.cjs'
+git diff --stat upstream/v1.0-rc...HEAD -- '*.rs' '*.ts' '*.njk' '*.cjs'
+git diff --shortstat upstream/v1.0-rc...HEAD -- '*.rs' '*.ts' '*.njk' '*.cjs'
 ```
 
 Filtered scope:
@@ -25,20 +24,25 @@ Filtered scope:
 - Included: Rust (`.rs`), TypeScript (`.ts`), renderer templates (`.njk`), and CommonJS renderer tests (`.cjs`).
 - Excluded: docs and READMEs, CI, manifests, lockfiles, environment/config files, JSON dashboards, shell scripts, and other non-code artifacts.
 
+Legend:
+
+- `A`: added implementation file.
+- `M`: modified implementation file.
+
 Computed values:
 
-- Diff check timestamp: `2026-05-22 14:47:21 WIB (+0700)`
+- Diff check timestamp: `2026-05-26 06:41:58 UTC (+0000)`
 - Current branch: `clickhouse-upstream-v1`
-- Base branch tip: `upstream-v1-sync` at `b79f9a2a90b71dca479d64bb588d6b095137c98d`
-- Compare branch tip: `clickhouse-upstream-v1` at `2149d0254f9bc54490f843901cf5c23eb8c39e52`
-- Merge base: `b79f9a2a90b71dca479d64bb588d6b095137c98d`
-- Commit relation: `0` commits behind `upstream-v1-sync`, `44` commits ahead
-- Upstream sync relation: `upstream-v1-sync` is `0` commits behind and `0` commits ahead of `upstream/v1.0-rc`
-- Total changed implementation files: `113`
-- Added implementation files: `79`
-- Modified implementation files: `34`
-- Insertions: `17,389`
-- Deletions: `90`
+- Reference branch tip: `sevenlabs-hq/carbon:v1.0-rc` at `713a3f55272243c0a2a5357d0dc52d60fcd8054c`
+- Compare branch tip: `clickhouse-upstream-v1` at `d947509269c1f5fe63a845872a11a4f44f1d4463`
+- Merge base: `713a3f55272243c0a2a5357d0dc52d60fcd8054c`
+- Commit relation: `0` commits behind `sevenlabs-hq/carbon:v1.0-rc`, `60` commits ahead
+- Total changed implementation files: `116`
+- Added implementation files: `80`
+- Modified implementation files: `36`
+- Insertions: `13,786`
+- Deletions: `175`
+- Git shortstat: ` 116 files changed, 13786 insertions(+), 175 deletions(-)`
 
 ## Implementation Diff Footprint
 
@@ -47,15 +51,15 @@ This section excludes docs, README files, CI, manifests, lockfiles, config, JSON
 <strong>Added vs modified implementation churn</strong>
 
 <div style="display: flex; width: 100%; height: 24px; overflow: hidden;">
-  <div title="Lines in added implementation files: 16,594 lines, 94.9%" style="width: 94.94%; background: #6B7280; color: #F8FAFC; line-height: 24px;">&nbsp;Added 94.9%</div>
-  <div title="Changed-existing-code line churn: 885 lines, 5.1%" style="width: 5.06%; background: #374151;">&nbsp;</div>
+  <div title="Lines in added implementation files: 12,766 lines, 91.4%" style="width: 91.44%; background: #6B7280; color: #F8FAFC; line-height: 24px;">&nbsp;Added 91.4%</div>
+  <div title="Changed-existing-code line churn: 1,195 lines, 8.6%" style="width: 8.56%; background: #374151; color: #F8FAFC; line-height: 24px;">&nbsp;Modified 8.6%</div>
 </div>
 
 <table width="100%">
 <tr>
-<td><font color="#6B7280">■</font> Added: <strong>16,594</strong> lines / <strong>94.9%</strong></td>
-<td><font color="#374151">■</font> Modified: <strong>885</strong> lines / <strong>5.1%</strong></td>
-<td align="right">Total: <strong>17,479</strong> lines</td>
+<td><font color="#6B7280">■</font> Added: <strong>12,766</strong> lines / <strong>91.4%</strong></td>
+<td><font color="#374151">■</font> Modified: <strong>1,195</strong> lines / <strong>8.6%</strong></td>
+<td align="right">Total: <strong>13,961</strong> lines</td>
 </tr>
 </table>
 
@@ -63,12 +67,18 @@ This section excludes docs, README files, CI, manifests, lockfiles, config, JSON
 
 Bars show each section's share of total filtered implementation line churn. The darker patch inside a bar is changed-existing-code churn for that section.
 
-<table width="100%" cellspacing="0" cellpadding="6">
+<div style="width: 100%; overflow-x: auto;">
+<table style="width: 100%; table-layout: fixed;" cellspacing="0" cellpadding="6">
+<colgroup>
+<col style="width: 18%;" />
+<col style="width: 66%;" />
+<col style="width: 16%;" />
+</colgroup>
 <thead>
 <tr>
-<th align="left" width="18%">Section</th>
-<th align="left" width="66%">Footprint</th>
-<th align="right" width="16%" nowrap>Added/modified</th>
+<th align="left">Section</th>
+<th align="left">Footprint</th>
+<th align="right">A/M</th>
 </tr>
 </thead>
 <tbody>
@@ -76,59 +86,56 @@ Bars show each section's share of total filtered implementation line churn. The 
 <td>Decoders</td>
 <td>
 <div style="display: flex; width: 100%; height: 18px; overflow: hidden;">
-  <div title="New-code lines: 9,478" style="width: 54.23%; background: #435A6F;">&nbsp;</div>
-  <div title="Changed-existing-code line churn: 226" style="width: 1.29%; background: #2F4050;">&nbsp;</div>
-  <div style="width: 44.48%;">&nbsp;</div>
+  <div title="Lines in added files: 5,104" style="width: 36.56%; background: #435A6F;">&nbsp;</div>
+  <div title="Changed-existing-code line churn: 226" style="width: 1.62%; background: #2F4050;">&nbsp;</div>
+  <div style="width: 61.82%;">&nbsp;</div>
 </div>
-<strong>55.5%</strong> / 9,704 lines
+<strong>38.2%</strong> / 5,330 lines
 </td>
-<td align="right" nowrap>9,478 / 226</td>
+<td align="right" nowrap>5,104 / 226</td>
 </tr>
 <tr>
 <td>CH Sink</td>
 <td>
 <div style="display: flex; width: 100%; height: 18px; overflow: hidden;">
-  <div title="New-code lines: 4,173" style="width: 23.87%; background: #4F684E;">&nbsp;</div>
-
-  <div style="width: 76.13%;">&nbsp;</div>
+  <div title="Lines in added files: 4,643" style="width: 33.26%; background: #4F684E;">&nbsp;</div>
+  <div style="width: 66.74%;">&nbsp;</div>
 </div>
-<strong>23.9%</strong> / 4,173 lines
+<strong>33.3%</strong> / 4,643 lines
 </td>
-<td align="right" nowrap>4,173 / 0</td>
+<td align="right" nowrap>4,643 / 0</td>
 </tr>
 <tr>
-<td>Renderer</td>
+<td>Renderer &amp; CLI</td>
 <td>
 <div style="display: flex; width: 100%; height: 18px; overflow: hidden;">
-  <div title="New-code lines: 2,539" style="width: 14.53%; background: #66547D;">&nbsp;</div>
-  <div title="Changed-existing-code line churn: 476" style="width: 2.72%; background: #493C5A;">&nbsp;</div>
-  <div style="width: 82.75%;">&nbsp;</div>
+  <div title="Lines in added files: 2,562" style="width: 18.35%; background: #66547D;">&nbsp;</div>
+  <div title="Changed-existing-code line churn: 606" style="width: 4.34%; background: #493C5A;">&nbsp;</div>
+  <div style="width: 77.31%;">&nbsp;</div>
 </div>
-<strong>17.2%</strong> / 3,015 lines
+<strong>22.7%</strong> / 3,168 lines
 </td>
-<td align="right" nowrap>2,539 / 476</td>
+<td align="right" nowrap>2,562 / 606</td>
 </tr>
 <tr>
 <td>Examples</td>
 <td>
 <div style="display: flex; width: 100%; height: 18px; overflow: hidden;">
-  <div title="New-code lines: 404" style="width: 2.31%; background: #52645E;">&nbsp;</div>
-
-  <div style="width: 97.69%;">&nbsp;</div>
+  <div title="Lines in added files: 457" style="width: 3.27%; background: #52645E;">&nbsp;</div>
+  <div style="width: 96.73%;">&nbsp;</div>
 </div>
-<strong>2.3%</strong> / 404 lines
+<strong>3.3%</strong> / 457 lines
 </td>
-<td align="right" nowrap>404 / 0</td>
+<td align="right" nowrap>457 / 0</td>
 </tr>
 <tr>
 <td>Core Pipeline</td>
 <td>
 <div style="display: flex; width: 100%; height: 18px; overflow: hidden;">
-
-  <div title="Changed-existing-code line churn: 58" style="width: 0.33%; background: #4E3939;">&nbsp;</div>
-  <div style="width: 99.67%;">&nbsp;</div>
+  <div title="Changed-existing-code line churn: 58" style="width: 0.42%; background: #4E3939;">&nbsp;</div>
+  <div style="width: 99.58%;">&nbsp;</div>
 </div>
-<strong>0.3%</strong> / 58 lines
+<strong>0.4%</strong> / 58 lines
 </td>
 <td align="right" nowrap>0 / 58</td>
 </tr>
@@ -136,27 +143,91 @@ Bars show each section's share of total filtered implementation line churn. The 
 <td>Other</td>
 <td>
 <div style="display: flex; width: 100%; height: 18px; overflow: hidden;">
-
-  <div title="Changed-existing-code line churn: 125" style="width: 0.72%; background: #4D4132;">&nbsp;</div>
-  <div style="width: 99.28%;">&nbsp;</div>
+  <div title="Changed-existing-code line churn: 305" style="width: 2.18%; background: #554733;">&nbsp;</div>
+  <div style="width: 97.82%;">&nbsp;</div>
 </div>
-<strong>0.7%</strong> / 125 lines
+<strong>2.2%</strong> / 305 lines
 </td>
-<td align="right" nowrap>0 / 125</td>
+<td align="right" nowrap>0 / 305</td>
 </tr>
 </tbody>
 </table>
+</div>
 
-`Added/modified` = lines in added files / changed-existing-code line churn.
+<code>A/M</code> = lines in added files / modified-existing-code line churn.
+
+<code>Other</code> contains datasource reliability, Prometheus metrics exporter, and version metadata changes.
 
 ## Consolidated File-By-File Summary
 
-Line values are insertions/deletions for the filtered file diff.
+Line values are insertions/deletions for the filtered file diff. Modules are collapsed by default.
 
+<details>
+<summary style="white-space: nowrap;"><span style="display: inline-block; width: 45%;"><strong>Core ClickHouse runtime</strong></span><span style="display: inline-block; width: 19%; text-align: left;"><code>9 files</code></span><span style="display: inline-block; width: 36%; text-align: right;"><code>4643 / 0 lines</code></span></summary>
+
+New ClickHouse sink runtime, row contracts, schema reconciliation, HTTP transport, buffering, retries, and metrics.
+
+<div style="width: 100%; overflow-x: auto;">
+<table style="width: 100%; table-layout: fixed;">
+<colgroup>
+<col style="width: 9%;" />
+<col style="width: 30%;" />
+<col style="width: 61%;" />
+</colgroup>
+<thead>
+<tr>
+<th align="left">Lines</th>
+<th align="left">File</th>
+<th align="left">Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left" style="white-space: nowrap;"><code>1052/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>clickhouse/<wbr>admin.rs</code></td>
+<td>Implements ClickHouse admin execution, managed-table DDL helpers, schema/layout reconciliation, safe enum-extension repair, default MergeTree settings, and admin retry tests.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>376/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>clickhouse/<wbr>config.rs</code></td>
+<td>Defines ClickHouse endpoint/auth config, row context, batching/backpressure, transport, retry, sync/async insert settings, exact-batch dedup defaults, and database-URL parsing.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>248/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>clickhouse/<wbr>http.rs</code></td>
+<td>Implements ClickHouse HTTP client construction, auth, query/settings posting, gzip request bodies, response parsing, and retryable/permanent error classification.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>285/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>clickhouse/<wbr>metrics.rs</code></td>
+<td>Registers aggregate instruction/account ClickHouse metrics and helper recorders for rows, bytes, retries, backpressure, buffer state, flush batches, failures, and flush latency.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>26/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>clickhouse/<wbr>mod.rs</code></td>
+<td>Re-exports ClickHouse admin, config, processor, metrics, row, and writer APIs from the feature-gated runtime module.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>406/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>clickhouse/<wbr>processors.rs</code></td>
+<td>Adds shared ClickHouse processor plumbing plus account and instruction processors that convert generated wrappers into rows, buffer them, record metrics, and drain on finalize.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>35/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>clickhouse/<wbr>retry.rs</code></td>
+<td>Provides retry eligibility checks and capped exponential backoff with optional jitter for ClickHouse HTTP/admin operations.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>663/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>clickhouse/<wbr>rows/<wbr>mod.rs</code></td>
+<td>Defines row/table contracts, instruction/event/account landing metadata, common column specs, deterministic IDs, enum helpers, and generated-row table/dispatch macros.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>1552/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>clickhouse/<wbr>writer.rs</code></td>
+<td>Implements per-table/partition JSON buffering, row/byte thresholds, stale background flushing, global backpressure, retries, exact-batch dedup tokens, query IDs, snapshots, metrics, and shutdown drain.</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+</details>
 <details>
 <summary style="white-space: nowrap;"><span style="display: inline-block; width: 45%;"><strong>Core pipeline lifecycle</strong></span><span style="display: inline-block; width: 19%; text-align: left;"><code>8 files</code></span><span style="display: inline-block; width: 36%; text-align: right;"><code>58 / 0 lines</code></span></summary>
 
-Core processor inputs, processor lifecycle, and pipeline finalization changes.
+Core processor inputs, processor lifecycle, and pipeline finalization changes required by buffered sinks.
 
 <div style="width: 100%; overflow-x: auto;">
 <table style="width: 100%; table-layout: fixed;">
@@ -168,61 +239,53 @@ Core processor inputs, processor lifecycle, and pipeline finalization changes.
 <thead>
 <tr>
 <th align="left">Lines</th>
-<th>File</th>
-<th>Summary</th>
+<th align="left">File</th>
+<th align="left">Summary</th>
 </tr>
 </thead>
 <tbody>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>5/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>account_<wbr>deletion.rs</code></td>
-<td>Adds account-deletion processor finalization support for sink shutdown consistency.</td>
-</tr>
 <tr>
 <td align="left" style="white-space: nowrap;"><code>5/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>account.rs</code></td>
-<td>Adds account processor finalization support so buffered account sinks can drain during pipeline shutdown.</td>
-</tr>
-<tr>
+<td>Forwards account pipe finalization into the wrapped processor so buffered account sinks can drain on shutdown.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>5/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>account_<wbr>deletion.rs</code></td>
+<td>Forwards account-deletion pipe finalization into the wrapped processor for shutdown lifecycle consistency.</td>
+</tr><tr>
 <td align="left" style="white-space: nowrap;"><code>5/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>block_<wbr>details.rs</code></td>
-<td>Adds block-details processor finalization support for sink shutdown consistency.</td>
-</tr>
-<tr>
+<td>Forwards block-details pipe finalization into the wrapped processor for shutdown lifecycle consistency.</td>
+</tr><tr>
 <td align="left" style="white-space: nowrap;"><code>5/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>instruction.rs</code></td>
-<td>Adds instruction processor finalization support so buffered instruction sinks can flush on shutdown.</td>
-</tr>
-<tr>
+<td>Forwards instruction pipe finalization into the wrapped processor so buffered instruction/event sinks can drain on shutdown.</td>
+</tr><tr>
 <td align="left" style="white-space: nowrap;"><code>2/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>lib.rs</code></td>
-<td>Exports the ClickHouse runtime behind the `clickhouse` feature.</td>
-</tr>
-<tr>
+<td>Exports the optional ClickHouse runtime module behind the `clickhouse` feature.</td>
+</tr><tr>
 <td align="left" style="white-space: nowrap;"><code>27/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>pipeline.rs</code></td>
-<td>Finalizes all pipe families during shutdown so buffered processors can drain before exit.</td>
-</tr>
-<tr>
+<td>Finalizes all pipe families before exporter shutdown on cancellation, immediate ctrl-C shutdown, and closed-receiver shutdown paths.</td>
+</tr><tr>
 <td align="left" style="white-space: nowrap;"><code>4/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>processor.rs</code></td>
-<td>Extends the processor trait with a finalization hook used by buffered sinks.</td>
-</tr>
-<tr>
+<td>Adds the default no-op `Processor::finalize()` lifecycle hook used by buffered sinks.</td>
+</tr><tr>
 <td align="left" style="white-space: nowrap;"><code>5/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>transaction.rs</code></td>
-<td>Adds transaction processor finalization support for lifecycle consistency.</td>
+<td>Forwards transaction pipe finalization into the wrapped processor while preserving flat decoded-instruction routing.</td>
 </tr>
 </tbody>
 </table>
 </div>
 
 </details>
-
 <details>
-<summary style="white-space: nowrap;"><span style="display: inline-block; width: 45%;"><strong>Core ClickHouse runtime</strong></span><span style="display: inline-block; width: 19%; text-align: left;"><code>8 files</code></span><span style="display: inline-block; width: 36%; text-align: right;"><code>4,173 / 0 lines</code></span></summary>
+<summary style="white-space: nowrap;"><span style="display: inline-block; width: 45%;"><strong>Jupiter Swap decoder canary</strong></span><span style="display: inline-block; width: 19%; text-align: left;"><code>32 files</code></span><span style="display: inline-block; width: 36%; text-align: right;"><code>3005 / 1 lines</code></span></summary>
 
-New ClickHouse sink runtime, processors, row contracts, HTTP transport, schema management, metrics, and writer buffering.
+Generated Jupiter Swap ClickHouse account, instruction, CPI/event rows, and decoder wiring.
 
 <div style="width: 100%; overflow-x: auto;">
 <table style="width: 100%; table-layout: fixed;">
@@ -234,247 +297,149 @@ New ClickHouse sink runtime, processors, row contracts, HTTP transport, schema m
 <thead>
 <tr>
 <th align="left">Lines</th>
-<th>File</th>
-<th>Summary</th>
+<th align="left">File</th>
+<th align="left">Summary</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td align="left" style="white-space: nowrap;"><code>957/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>clickhouse/<wbr>admin.rs</code></td>
-<td>Adds ClickHouse admin/schema helpers for table creation, additive columns, enum-safe drift repair, and managed schema validation.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>379/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>clickhouse/<wbr>config.rs</code></td>
-<td>Defines ClickHouse configuration for insert mode, batching, transport, retries, deduplication, schema reconciliation, and deterministic row context.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>243/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>clickhouse/<wbr>http.rs</code></td>
-<td>Implements the ClickHouse HTTP client, query settings, gzip request bodies, error classification, query IDs, and insert requests.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>285/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>clickhouse/<wbr>metrics.rs</code></td>
-<td>Centralizes aggregate ClickHouse sink metrics for rows, bytes, retries, failures, buffers, and backpressure.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>25/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>clickhouse/<wbr>mod.rs</code></td>
-<td>Exports the ClickHouse runtime modules, processors, rows, configuration, and admin helpers.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>400/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>clickhouse/<wbr>processors.rs</code></td>
-<td>Adds account and instruction ClickHouse processors that convert decoder rows, buffer writes, flush, and finalize writers.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>420/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>clickhouse/<wbr>rows/<wbr>mod.rs</code></td>
-<td>Defines common ClickHouse row traits, row context, managed-table metadata, deterministic IDs, and table migration contracts.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>1464/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>clickhouse/<wbr>writer.rs</code></td>
-<td>Implements per-table/partition buffering, byte and row thresholds, background flush, retries, backpressure, dedup tokens, metrics, snapshots, and shutdown drain.</td>
-</tr>
-</tbody>
-</table>
-</div>
-
-</details>
-
-<details>
-<summary style="white-space: nowrap;"><span style="display: inline-block; width: 45%;"><strong>Jupiter Swap decoder</strong></span><span style="display: inline-block; width: 19%; text-align: left;"><code>32 files</code></span><span style="display: inline-block; width: 36%; text-align: right;"><code>4,904 / 1 lines</code></span></summary>
-
-Generated Jupiter Swap ClickHouse account, instruction, and CPI/event landing rows plus decoder dispatch integration.
-
-<div style="width: 100%; overflow-x: auto;">
-<table style="width: 100%; table-layout: fixed;">
-<colgroup>
-<col style="width: 9%;" />
-<col style="width: 30%;" />
-<col style="width: 61%;" />
-</colgroup>
-<thead>
-<tr>
-<th align="left">Lines</th>
-<th>File</th>
-<th>Summary</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>149/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>accounts/<wbr>clickhouse/<wbr>mod.rs</code></td>
-<td>Adds generated Jupiter account ClickHouse exports, processor alias, migrations, managed tables, and setup helper.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>120/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>accounts/<wbr>clickhouse/<wbr>token_<wbr>ledger_<wbr>row.rs</code></td>
-<td>Adds the generated Jupiter TokenLedger account ClickHouse landing row, conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
+<td align="left" style="white-space: nowrap;"><code>117/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>accounts/<wbr>clickhouse/<wbr>mod.rs</code></td>
+<td>Defines the Jupiter TokenLedger account ClickHouse processor alias, account table options, managed schema migration, config defaults, and setup helpers.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>58/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>accounts/<wbr>clickhouse/<wbr>token_<wbr>ledger_<wbr>row.rs</code></td>
+<td>Persists Jupiter TokenLedger account snapshots with token account and amount payload columns plus common account landing metadata.</td>
+</tr><tr>
 <td align="left" style="white-space: nowrap;"><code>3/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>accounts/<wbr>mod.rs</code></td>
-<td>Exposes the generated Jupiter account ClickHouse module behind the `clickhouse` feature.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>121/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>best_<wbr>swap_<wbr>out_<wbr>amount_<wbr>violation_<wbr>event_<wbr>row.rs</code></td>
-<td>Adds the generated Jupiter CPI/event ClickHouse landing row for Best Swap Out Amount Violation, including typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>123/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>candidate_<wbr>swap_<wbr>quote_<wbr>error_<wbr>event_<wbr>row.rs</code></td>
-<td>Adds the generated Jupiter CPI/event ClickHouse landing row for Candidate Swap Quote Error, including typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>125/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>candidate_<wbr>swap_<wbr>results_<wbr>event_<wbr>row.rs</code></td>
-<td>Adds the generated Jupiter CPI/event ClickHouse landing row for Candidate Swap Results, including typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>115/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>claim_<wbr>row.rs</code></td>
-<td>Adds the generated Jupiter instruction ClickHouse landing row for Claim, including typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>115/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>claim_<wbr>token_<wbr>row.rs</code></td>
-<td>Adds the generated Jupiter instruction ClickHouse landing row for Claim Token, including typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>119/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>close_<wbr>token_<wbr>row.rs</code></td>
-<td>Adds the generated Jupiter instruction ClickHouse landing row for Close Token, including typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>113/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>close_<wbr>wsol_<wbr>token_<wbr>account_<wbr>row.rs</code></td>
-<td>Adds the generated Jupiter instruction ClickHouse landing row for Close Wsol Token Account, including typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>116/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>create_<wbr>token_<wbr>account_<wbr>row.rs</code></td>
-<td>Adds the generated Jupiter instruction ClickHouse landing row for Create Token Account, including typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>113/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>create_<wbr>token_<wbr>ledger_<wbr>row.rs</code></td>
-<td>Adds the generated Jupiter instruction ClickHouse landing row for Create Token Ledger, including typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>138/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>exact_<wbr>out_<wbr>route_<wbr>row.rs</code></td>
-<td>Adds the generated Jupiter instruction ClickHouse landing row for Exact Out Route, including typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>142/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>exact_<wbr>out_<wbr>route_<wbr>v2_<wbr>row.rs</code></td>
-<td>Adds the generated Jupiter instruction ClickHouse landing row for Exact Out Route V2, including typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>123/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>fee_<wbr>event_<wbr>event_<wbr>row.rs</code></td>
-<td>Adds the generated Jupiter CPI/event ClickHouse landing row for Fee Event, including typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>593/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>mod.rs</code></td>
-<td>Adds generated Jupiter instruction/event ClickHouse exports, row dispatch, migrations, managed tables, and setup helper.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>138/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>route_<wbr>row.rs</code></td>
-<td>Adds the generated Jupiter instruction ClickHouse landing row for Route, including typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>141/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>route_<wbr>v2_<wbr>row.rs</code></td>
-<td>Adds the generated Jupiter instruction ClickHouse landing row for Route V2, including typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>136/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>route_<wbr>with_<wbr>token_<wbr>ledger_<wbr>row.rs</code></td>
-<td>Adds the generated Jupiter instruction ClickHouse landing row for Route With Token Ledger, including typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>113/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>set_<wbr>token_<wbr>ledger_<wbr>row.rs</code></td>
-<td>Adds the generated Jupiter instruction ClickHouse landing row for Set Token Ledger, including typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>143/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>shared_<wbr>accounts_<wbr>exact_<wbr>out_<wbr>route_<wbr>row.rs</code></td>
-<td>Adds the generated Jupiter instruction ClickHouse landing row for Shared Accounts Exact Out Route, including typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>146/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>shared_<wbr>accounts_<wbr>exact_<wbr>out_<wbr>route_<wbr>v2_<wbr>row.rs</code></td>
-<td>Adds the generated Jupiter instruction ClickHouse landing row for Shared Accounts Exact Out Route V2, including typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>142/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>shared_<wbr>accounts_<wbr>route_<wbr>row.rs</code></td>
-<td>Adds the generated Jupiter instruction ClickHouse landing row for Shared Accounts Route, including typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>145/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>shared_<wbr>accounts_<wbr>route_<wbr>v2_<wbr>row.rs</code></td>
-<td>Adds the generated Jupiter instruction ClickHouse landing row for Shared Accounts Route V2, including typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>140/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>shared_<wbr>accounts_<wbr>route_<wbr>with_<wbr>token_<wbr>ledger_<wbr>row.rs</code></td>
-<td>Adds the generated Jupiter instruction ClickHouse landing row for Shared Accounts Route With Token Ledger, including typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>129/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>swap_<wbr>event_<wbr>event_<wbr>row.rs</code></td>
-<td>Adds the generated Jupiter CPI/event ClickHouse landing row for Swap Event, including typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>125/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>swaps_<wbr>event_<wbr>event_<wbr>row.rs</code></td>
-<td>Adds the generated Jupiter CPI/event ClickHouse landing row for Swaps Event, including typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>1037/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>types.rs</code></td>
-<td>Adds shared structured ClickHouse helper types for Jupiter nested route-plan and swap payload fields.</td>
-</tr>
-<tr>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>accounts/<wbr>mod.rs</code></td>
+<td>Feature-gates the account ClickHouse module and decodes Jupiter-owned TokenLedger accounts into the account enum.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>58/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>best_<wbr>swap_<wbr>out_<wbr>amount_<wbr>violation_<wbr>event_<wbr>row.rs</code></td>
+<td>Persists best-swap threshold violation events with expected and actual output amount payload columns.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>60/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>candidate_<wbr>swap_<wbr>quote_<wbr>error_<wbr>event_<wbr>row.rs</code></td>
+<td>Persists candidate quote failure events with candidate index, input amount, and error code payload columns.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>60/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>candidate_<wbr>swap_<wbr>results_<wbr>event_<wbr>row.rs</code></td>
+<td>Persists candidate swap result events as structured arrays of generated ClickHouse candidate-result helper types.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>53/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>claim_<wbr>row.rs</code></td>
+<td>Persists Jupiter `claim` instruction rows with the claim id payload column and common instruction landing metadata.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>53/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>claim_<wbr>token_<wbr>row.rs</code></td>
+<td>Persists Jupiter `claim_token` instruction rows with the claim id payload column and common instruction landing metadata.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>57/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>close_<wbr>token_<wbr>row.rs</code></td>
+<td>Persists Jupiter `close_token` instruction rows with id and burn-all payload columns.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>51/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>close_<wbr>wsol_<wbr>token_<wbr>account_<wbr>row.rs</code></td>
+<td>Persists Jupiter WSOL cleanup instruction rows with common instruction landing metadata and no extra payload columns.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>54/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>create_<wbr>token_<wbr>account_<wbr>row.rs</code></td>
+<td>Persists Jupiter token-account creation instruction rows with the derived bump payload column.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>51/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>create_<wbr>token_<wbr>ledger_<wbr>row.rs</code></td>
+<td>Persists Jupiter TokenLedger creation instruction rows with common instruction landing metadata and no extra payload columns.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>71/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>exact_<wbr>out_<wbr>route_<wbr>row.rs</code></td>
+<td>Persists exact-out route instructions with structured route-plan steps plus output amount, quoted input, slippage, and platform-fee payload columns.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>75/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>exact_<wbr>out_<wbr>route_<wbr>v2_<wbr>row.rs</code></td>
+<td>Persists v2 exact-out route instructions with structured v2 route-plan steps, amount fields, platform fee, and positive-slippage payload columns.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>60/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>fee_<wbr>event_<wbr>event_<wbr>row.rs</code></td>
+<td>Persists Jupiter fee events with fee account, mint, and amount payload columns.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>233/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>mod.rs</code></td>
+<td>Defines explicit instruction/event row exports, table options, row enum dispatch, CPI-event routing, managed schema migration, config defaults, and setup helpers.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>71/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>route_<wbr>row.rs</code></td>
+<td>Persists standard route instructions with structured route-plan steps plus input amount, quoted output, slippage, and platform-fee payload columns.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>74/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>route_<wbr>v2_<wbr>row.rs</code></td>
+<td>Persists v2 route instructions with structured v2 route-plan steps, amount fields, platform fee, and positive-slippage payload columns.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>69/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>route_<wbr>with_<wbr>token_<wbr>ledger_<wbr>row.rs</code></td>
+<td>Persists token-ledger route instructions with structured route-plan steps, quoted output, slippage, and platform-fee payload columns.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>51/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>set_<wbr>token_<wbr>ledger_<wbr>row.rs</code></td>
+<td>Persists `set_token_ledger` instruction rows with common instruction landing metadata and no extra payload columns.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>76/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>shared_<wbr>accounts_<wbr>exact_<wbr>out_<wbr>route_<wbr>row.rs</code></td>
+<td>Persists shared-account exact-out route instructions with route id, structured route-plan steps, amount, slippage, and platform-fee payload columns.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>81/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>shared_<wbr>accounts_<wbr>exact_<wbr>out_<wbr>route_<wbr>v2_<wbr>row.rs</code></td>
+<td>Persists shared-account v2 exact-out route instructions with route id, structured v2 route-plan steps, amount fields, platform fee, and positive slippage.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>75/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>shared_<wbr>accounts_<wbr>route_<wbr>row.rs</code></td>
+<td>Persists shared-account route instructions with route id, structured route-plan steps, input/output amounts, slippage, and platform-fee payload columns.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>78/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>shared_<wbr>accounts_<wbr>route_<wbr>v2_<wbr>row.rs</code></td>
+<td>Persists shared-account v2 route instructions with route id, structured v2 route-plan steps, amount fields, platform fee, and positive slippage.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>75/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>shared_<wbr>accounts_<wbr>route_<wbr>with_<wbr>token_<wbr>ledger_<wbr>row.rs</code></td>
+<td>Persists shared-account token-ledger route instructions with route id, structured route-plan steps, quoted output, slippage, and platform fee.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>66/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>swap_<wbr>event_<wbr>event_<wbr>row.rs</code></td>
+<td>Persists single-swap execution events with AMM, input/output mints, and input/output amount payload columns.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>60/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>swaps_<wbr>event_<wbr>event_<wbr>row.rs</code></td>
+<td>Persists grouped swap execution events as structured arrays of generated v2 swap-event helper types.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>1074/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>types.rs</code></td>
+<td>Defines generated ClickHouse helper types, enum/tuple serializers, and shared DDL constants for structured payload columns.</td>
+</tr><tr>
 <td align="left" style="white-space: nowrap;"><code>19/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>cpi_<wbr>event.rs</code></td>
-<td>Routes decoded Jupiter CPI-event variants into generated event-specific ClickHouse row families.</td>
-</tr>
-<tr>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>cpi_<wbr>event.rs</code></td>
+<td>Adds generated CPI/event decoder variants used by ClickHouse event landing output.</td>
+</tr><tr>
 <td align="left" style="white-space: nowrap;"><code>14/1</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>mod.rs</code></td>
-<td>Exposes the generated Jupiter instruction ClickHouse module behind the `clickhouse` feature.</td>
-</tr>
-<tr>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>mod.rs</code></td>
+<td>Wires generated ClickHouse modules into the decoder family behind the feature gate.</td>
+</tr><tr>
 <td align="left" style="white-space: nowrap;"><code>1/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>types/<wbr>candidate_<wbr>swap.rs</code></td>
-<td>Updates the generated Jupiter candidate-swap type to match upstream v1 schema/import style.</td>
-</tr>
-<tr>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>types/<wbr>candidate_<wbr>swap.rs</code></td>
+<td>Decoder-owned schema or type support used by generated ClickHouse rows.</td>
+</tr><tr>
 <td align="left" style="white-space: nowrap;"><code>7/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-<wbr>swap-<wbr>decoder/<wbr>src/<wbr>types/<wbr>swap.rs</code></td>
-<td>Extends the generated Jupiter swap enum with newer upstream swap variants used by structured ClickHouse rows.</td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>types/<wbr>swap.rs</code></td>
+<td>Decoder-owned schema or type support used by generated ClickHouse rows.</td>
 </tr>
 </tbody>
 </table>
 </div>
 
 </details>
-
 <details>
-<summary style="white-space: nowrap;"><span style="display: inline-block; width: 45%;"><strong>Token Program decoder</strong></span><span style="display: inline-block; width: 19%; text-align: left;"><code>39 files</code></span><span style="display: inline-block; width: 36%; text-align: right;"><code>4,736 / 63 lines</code></span></summary>
+<summary style="white-space: nowrap;"><span style="display: inline-block; width: 45%;"><strong>Token Program decoder canary</strong></span><span style="display: inline-block; width: 19%; text-align: left;"><code>39 files</code></span><span style="display: inline-block; width: 36%; text-align: right;"><code>2261 / 63 lines</code></span></summary>
 
-Generated Token Program ClickHouse account and instruction landing rows plus official SPL Token account unpacking integration.
+Generated Token Program ClickHouse account/instruction rows plus SPL Token account decoding corrections.
 
 <div style="width: 100%; overflow-x: auto;">
 <table style="width: 100%; table-layout: fixed;">
@@ -486,216 +451,177 @@ Generated Token Program ClickHouse account and instruction landing rows plus off
 <thead>
 <tr>
 <th align="left">Lines</th>
-<th>File</th>
-<th>Summary</th>
+<th align="left">File</th>
+<th align="left">Summary</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td align="left" style="white-space: nowrap;"><code>135/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>accounts/<wbr>clickhouse/<wbr>mint_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Mint account ClickHouse landing row, conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>192/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>accounts/<wbr>clickhouse/<wbr>mod.rs</code></td>
-<td>Adds generated Token Program account ClickHouse exports, processor alias, migrations, managed tables, and setup helper.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>130/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>accounts/<wbr>clickhouse/<wbr>multisig_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Multisig account ClickHouse landing row, conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>144/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>accounts/<wbr>clickhouse/<wbr>token_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Token account ClickHouse landing row, conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
+<td align="left" style="white-space: nowrap;"><code>73/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>accounts/<wbr>clickhouse/<wbr>mint_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse account landing row for this decoder-owned account family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>125/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>accounts/<wbr>clickhouse/<wbr>mod.rs</code></td>
+<td>Defines generated ClickHouse account row enum dispatch, setup helpers, account table options, and migration bundle.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>68/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>accounts/<wbr>clickhouse/<wbr>multisig_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse account landing row for this decoder-owned account family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>82/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>accounts/<wbr>clickhouse/<wbr>token_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse account landing row for this decoder-owned account family.</td>
+</tr><tr>
 <td align="left" style="white-space: nowrap;"><code>8/10</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>accounts/<wbr>mint.rs</code></td>
-<td>Uses official SPL Token Pack decoding for Mint accounts so generated account rows match the on-chain layout.</td>
-</tr>
-<tr>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>accounts/<wbr>mint.rs</code></td>
+<td>Updates Token Program account decoding to use official SPL Token unpacking semantics and expose generated ClickHouse account coverage.</td>
+</tr><tr>
 <td align="left" style="white-space: nowrap;"><code>79/33</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>accounts/<wbr>mod.rs</code></td>
-<td>Exposes generated Token Program account ClickHouse support behind the `clickhouse` feature.</td>
-</tr>
-<tr>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>accounts/<wbr>mod.rs</code></td>
+<td>Wires generated ClickHouse modules into the decoder family behind the feature gate.</td>
+</tr><tr>
 <td align="left" style="white-space: nowrap;"><code>7/10</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>accounts/<wbr>multisig.rs</code></td>
-<td>Uses official SPL Token Pack decoding for Multisig accounts so generated account rows match the on-chain layout.</td>
-</tr>
-<tr>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>accounts/<wbr>multisig.rs</code></td>
+<td>Updates Token Program account decoding to use official SPL Token unpacking semantics and expose generated ClickHouse account coverage.</td>
+</tr><tr>
 <td align="left" style="white-space: nowrap;"><code>21/10</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>accounts/<wbr>token.rs</code></td>
-<td>Uses official SPL Token Pack decoding for Token accounts so generated account rows match the on-chain layout.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>116/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>amount_<wbr>to_<wbr>ui_<wbr>amount_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Amount To Ui Amount instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>120/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>approve_<wbr>checked_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Approve Checked instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>115/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>approve_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Approve instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>124/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>batch_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Batch instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>119/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>burn_<wbr>checked_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Burn Checked instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>115/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>burn_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Burn instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>112/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>close_<wbr>account_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Close Account instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>112/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>freeze_<wbr>account_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Freeze Account instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>113/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>get_<wbr>account_<wbr>data_<wbr>size_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Get Account Data Size instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>113/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>initialize_<wbr>account_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Initialize Account instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>116/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>initialize_<wbr>account2_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Initialize Account2 instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>116/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>initialize_<wbr>account3_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Initialize Account3 instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>113/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>initialize_<wbr>immutable_<wbr>owner_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Initialize Immutable Owner instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>126/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>initialize_<wbr>mint_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Initialize Mint instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>126/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>initialize_<wbr>mint2_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Initialize Mint2 instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>116/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>initialize_<wbr>multisig_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Initialize Multisig instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>116/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>initialize_<wbr>multisig2_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Initialize Multisig2 instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>120/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>mint_<wbr>to_<wbr>checked_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Mint To Checked instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>115/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>mint_<wbr>to_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Mint To instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>729/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>mod.rs</code></td>
-<td>Adds generated Token Program instruction ClickHouse exports, row dispatch, migrations, managed tables, and setup helper.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>112/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>revoke_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Revoke instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>122/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>set_<wbr>authority_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Set Authority instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>112/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>sync_<wbr>native_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Sync Native instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>112/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>thaw_<wbr>account_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Thaw Account instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>120/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>transfer_<wbr>checked_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Transfer Checked instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>115/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>transfer_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Transfer instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>accounts/<wbr>token.rs</code></td>
+<td>Updates Token Program account decoding to use official SPL Token unpacking semantics and expose generated ClickHouse account coverage.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>54/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>amount_<wbr>to_<wbr>ui_<wbr>amount_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>58/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>approve_<wbr>checked_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>53/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>approve_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>62/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>batch_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>57/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>burn_<wbr>checked_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>53/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>burn_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>50/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>close_<wbr>account_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>50/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>freeze_<wbr>account_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>51/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>get_<wbr>account_<wbr>data_<wbr>size_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>54/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>initialize_<wbr>account2_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>54/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>initialize_<wbr>account3_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>51/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>initialize_<wbr>account_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>51/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>initialize_<wbr>immutable_<wbr>owner_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>64/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>initialize_<wbr>mint2_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>64/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>initialize_<wbr>mint_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>54/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>initialize_<wbr>multisig2_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>54/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>initialize_<wbr>multisig_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>58/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>mint_<wbr>to_<wbr>checked_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>53/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>mint_<wbr>to_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>243/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>mod.rs</code></td>
+<td>Defines generated ClickHouse instruction/event row enum dispatch, setup helpers, table options, and migration bundle.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>50/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>revoke_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>60/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>set_<wbr>authority_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>50/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>sync_<wbr>native_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>50/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>thaw_<wbr>account_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>58/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>transfer_<wbr>checked_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>53/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>transfer_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
 <td align="left" style="white-space: nowrap;"><code>27/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>types.rs</code></td>
-<td>Adds shared Token Program ClickHouse helper types for structured instruction payload fields.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>116/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>ui_<wbr>amount_<wbr>to_<wbr>amount_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Ui Amount To Amount instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>116/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>unwrap_<wbr>lamports_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Unwrap Lamports instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>113/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>withdraw_<wbr>excess_<wbr>lamports_<wbr>row.rs</code></td>
-<td>Adds the generated Token Program Withdraw Excess Lamports instruction ClickHouse landing row, typed payload conversion, DDL, column metadata, and managed migration.</td>
-</tr>
-<tr>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>types.rs</code></td>
+<td>Defines generated ClickHouse helper types, enum/tuple serializers, and shared DDL constants for structured payload columns.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>54/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>ui_<wbr>amount_<wbr>to_<wbr>amount_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>54/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>unwrap_<wbr>lamports_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>51/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>withdraw_<wbr>excess_<wbr>lamports_<wbr>row.rs</code></td>
+<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+</tr><tr>
 <td align="left" style="white-space: nowrap;"><code>3/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-<wbr>program-<wbr>decoder/<wbr>src/<wbr>instructions/<wbr>mod.rs</code></td>
-<td>Exposes generated Token Program instruction ClickHouse support behind the `clickhouse` feature.</td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>mod.rs</code></td>
+<td>Wires generated ClickHouse modules into the decoder family behind the feature gate.</td>
 </tr>
 </tbody>
 </table>
 </div>
 
 </details>
-
 <details>
-<summary style="white-space: nowrap;"><span style="display: inline-block; width: 45%;"><strong>Examples</strong></span><span style="display: inline-block; width: 19%; text-align: left;"><code>2 files</code></span><span style="display: inline-block; width: 36%; text-align: right;"><code>404 / 0 lines</code></span></summary>
+<summary style="white-space: nowrap;"><span style="display: inline-block; width: 45%;"><strong>Renderer</strong></span><span style="display: inline-block; width: 19%; text-align: left;"><code>18 files</code></span><span style="display: inline-block; width: 36%; text-align: right;"><code>3047 / 20 lines</code></span></summary>
 
-Real-world ClickHouse examples for Jupiter Swap and Token Program ingestion.
+Codama renderer support for ClickHouse typed rows, structured mapping, DDL modes, schema metadata, and tests.
 
 <div style="width: 100%; overflow-x: auto;">
 <table style="width: 100%; table-layout: fixed;">
@@ -707,62 +633,93 @@ Real-world ClickHouse examples for Jupiter Swap and Token Program ingestion.
 <thead>
 <tr>
 <th align="left">Lines</th>
-<th>File</th>
-<th>Summary</th>
+<th align="left">File</th>
+<th align="left">Summary</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td align="left" style="white-space: nowrap;"><code>260/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">examples/<wbr>jupiter-<wbr>swap-<wbr>clickhouse/<wbr>src/<wbr>main.rs</code></td>
-<td>Adds the Jupiter Swap ClickHouse smoke example with live/block-range ingestion, generated instruction/event/account processors, metrics, and ClickHouse setup.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>144/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">examples/<wbr>token-<wbr>program-<wbr>clickhouse/<wbr>src/<wbr>main.rs</code></td>
-<td>Adds the Token Program ClickHouse smoke example that polls USDC-related account snapshots and writes mint, token, and multisig landing rows.</td>
+<td align="left" style="white-space: nowrap;"><code>43/3</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>src/<wbr>cargoTomlGenerator.ts</code></td>
+<td>Adds ClickHouse dependencies/features to generated decoder Cargo manifests.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>232/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>src/<wbr>clickhouseDdl.ts</code></td>
+<td>Builds renderer-controlled MergeTree, ReplicatedMergeTree, and Distributed DDL options, defaults, codecs, and deduplication settings.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>1174/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>src/<wbr>clickhouseRowMapper.ts</code></td>
+<td>Plans structured ClickHouse row fields/types/conversions from decoder schema, including tuples, arrays, enums, payload unions, and unsupported-type failures.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>226/5</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>src/<wbr>getRenderMapVisitor.ts</code></td>
+<td>Routes renderer options into generated ClickHouse account, instruction, event, and type pages.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>4/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>src/<wbr>index.ts</code></td>
+<td>Supports ClickHouse renderer configuration, exports, or helper behavior.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>13/1</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>src/<wbr>utils/<wbr>helpers.ts</code></td>
+<td>Supports ClickHouse renderer configuration, exports, or helper behavior.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>136/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>accountsClickHouseMod.njk</code></td>
+<td>Generates ClickHouse modules, row files, table options, schema metadata, and feature-gated exports from renderer templates.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>94/3</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>accountsMod.njk</code></td>
+<td>Generates ClickHouse modules, row files, table options, schema metadata, and feature-gated exports from renderer templates.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>52/1</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>accountsPage.njk</code></td>
+<td>Generates ClickHouse modules, row files, table options, schema metadata, and feature-gated exports from renderer templates.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>114/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>clickhouseRowPage.njk</code></td>
+<td>Generates ClickHouse modules, row files, table options, schema metadata, and feature-gated exports from renderer templates.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>11/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>clickhouseTypesPage.njk</code></td>
+<td>Generates ClickHouse modules, row files, table options, schema metadata, and feature-gated exports from renderer templates.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>67/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>eventInstructionClickHouseRowPage.njk</code></td>
+<td>Generates ClickHouse modules, row files, table options, schema metadata, and feature-gated exports from renderer templates.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>17/1</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>eventInstructionPage.njk</code></td>
+<td>Generates ClickHouse modules, row files, table options, schema metadata, and feature-gated exports from renderer templates.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>194/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>instructionsClickHouseMod.njk</code></td>
+<td>Generates ClickHouse modules, row files, table options, schema metadata, and feature-gated exports from renderer templates.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>20/4</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>instructionsMod.njk</code></td>
+<td>Generates ClickHouse modules, row files, table options, schema metadata, and feature-gated exports from renderer templates.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>1/1</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>lib.njk</code></td>
+<td>Generates ClickHouse modules, row files, table options, schema metadata, and feature-gated exports from renderer templates.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>15/1</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>macros.njk</code></td>
+<td>Generates ClickHouse modules, row files, table options, schema metadata, and feature-gated exports from renderer templates.</td>
+</tr><tr>
+<td align="left" style="white-space: nowrap;"><code>634/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>test/<wbr>clickhouse-renderer.test.cjs</code></td>
+<td>Tests ClickHouse renderer output, structured schema mapping, DDL options, schema metadata, and no-JSON-fallback canaries.</td>
 </tr>
 </tbody>
 </table>
 </div>
 
 </details>
-
-<details>
-<summary style="white-space: nowrap;"><span style="display: inline-block; width: 45%;"><strong>Metrics exporter</strong></span><span style="display: inline-block; width: 19%; text-align: left;"><code>1 file</code></span><span style="display: inline-block; width: 36%; text-align: right;"><code>22 / 1 lines</code></span></summary>
-
-Prometheus exporter adjustments for ClickHouse metric names.
-
-<div style="width: 100%; overflow-x: auto;">
-<table style="width: 100%; table-layout: fixed;">
-<colgroup>
-<col style="width: 9%;" />
-<col style="width: 30%;" />
-<col style="width: 61%;" />
-</colgroup>
-<thead>
-<tr>
-<th align="left">Lines</th>
-<th>File</th>
-<th>Summary</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>22/1</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">metrics/<wbr>prometheus-<wbr>metrics/<wbr>src/<wbr>lib.rs</code></td>
-<td>Allows ClickHouse metric names to be exported in Prometheus-compatible form without losing Carbon metric semantics.</td>
-</tr>
-</tbody>
-</table>
-</div>
-
-</details>
-
 <details>
 <summary style="white-space: nowrap;"><span style="display: inline-block; width: 45%;"><strong>CLI</strong></span><span style="display: inline-block; width: 19%; text-align: left;"><code>5 files</code></span><span style="display: inline-block; width: 36%; text-align: right;"><code>95 / 6 lines</code></span></summary>
 
-CLI option parsing and scaffolding support for ClickHouse generation settings.
+CLI plumbing for ClickHouse generation and renderer option parity.
 
 <div style="width: 100%; overflow-x: auto;">
 <table style="width: 100%; table-layout: fixed;">
@@ -774,46 +731,41 @@ CLI option parsing and scaffolding support for ClickHouse generation settings.
 <thead>
 <tr>
 <th align="left">Lines</th>
-<th>File</th>
-<th>Summary</th>
+<th align="left">File</th>
+<th align="left">Summary</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td align="left" style="white-space: nowrap;"><code>70/4</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>cli/<wbr>src/<wbr>cli.ts</code></td>
-<td>Adds ClickHouse CLI flags and forwards parsed generator options into decoder generation.</td>
-</tr>
-<tr>
+<td>Adds CLI support for ClickHouse generation flags and `--clickhouse-options` parity.</td>
+</tr><tr>
 <td align="left" style="white-space: nowrap;"><code>10/1</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>cli/<wbr>src/<wbr>lib/<wbr>cargo<wbr>Toml<wbr>Generator.ts</code></td>
-<td>Adds ClickHouse dependency wiring for generated decoder Cargo manifests.</td>
-</tr>
-<tr>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>cli/<wbr>src/<wbr>lib/<wbr>cargoTomlGenerator.ts</code></td>
+<td>Adds CLI support for ClickHouse generation flags and `--clickhouse-options` parity.</td>
+</tr><tr>
 <td align="left" style="white-space: nowrap;"><code>10/1</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>cli/<wbr>src/<wbr>lib/<wbr>decoder.ts</code></td>
-<td>Parses and validates ClickHouse generator options from CLI JSON or option files.</td>
-</tr>
-<tr>
+<td>Adds CLI support for ClickHouse generation flags and `--clickhouse-options` parity.</td>
+</tr><tr>
 <td align="left" style="white-space: nowrap;"><code>2/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>cli/<wbr>src/<wbr>lib/<wbr>prompts.ts</code></td>
-<td>Adds interactive prompt handling for ClickHouse generation settings.</td>
-</tr>
-<tr>
+<td>Adds CLI support for ClickHouse generation flags and `--clickhouse-options` parity.</td>
+</tr><tr>
 <td align="left" style="white-space: nowrap;"><code>3/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>cli/<wbr>src/<wbr>lib/<wbr>scaffold.ts</code></td>
-<td>Passes ClickHouse options through scaffolded decoder generation.</td>
+<td>Adds CLI support for ClickHouse generation flags and `--clickhouse-options` parity.</td>
 </tr>
 </tbody>
 </table>
 </div>
 
 </details>
-
 <details>
-<summary style="white-space: nowrap;"><span style="display: inline-block; width: 45%;"><strong>Renderer</strong></span><span style="display: inline-block; width: 19%; text-align: left;"><code>17 files</code></span><span style="display: inline-block; width: 36%; text-align: right;"><code>2,996 / 19 lines</code></span></summary>
+<summary style="white-space: nowrap;"><span style="display: inline-block; width: 45%;"><strong>Examples</strong></span><span style="display: inline-block; width: 19%; text-align: left;"><code>2 files</code></span><span style="display: inline-block; width: 36%; text-align: right;"><code>457 / 0 lines</code></span></summary>
 
-Renderer schema mapping, DDL planning, templates, and tests for ClickHouse generation.
+Thin real-world ClickHouse canaries for Jupiter Swap and Token Program data ingestion.
 
 <div style="width: 100%; overflow-x: auto;">
 <table style="width: 100%; table-layout: fixed;">
@@ -825,106 +777,29 @@ Renderer schema mapping, DDL planning, templates, and tests for ClickHouse gener
 <thead>
 <tr>
 <th align="left">Lines</th>
-<th>File</th>
-<th>Summary</th>
+<th align="left">File</th>
+<th align="left">Summary</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td align="left" style="white-space: nowrap;"><code>43/3</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>src/<wbr>cargo<wbr>Toml<wbr>Generator.ts</code></td>
-<td>Adds renderer-side ClickHouse dependency generation for decoder crates.</td>
-</tr>
-<tr>
+<td align="left" style="white-space: nowrap;"><code>261/0</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">examples/<wbr>jupiter-swap-clickhouse/<wbr>src/<wbr>main.rs</code></td>
+<td>Runs the Jupiter Swap ClickHouse canary with finalized block crawling, instruction/event rows, live TokenLedger account snapshots, metrics, and async insert opt-in.</td>
+</tr><tr>
 <td align="left" style="white-space: nowrap;"><code>196/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>src/<wbr>clickhouse<wbr>Ddl.ts</code></td>
-<td>Adds ClickHouse DDL planning for MergeTree, replicated/distributed modes, clustering, TTLs, codecs, and additive migrations.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>1094/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>src/<wbr>clickhouse<wbr>Row<wbr>Mapper.ts</code></td>
-<td>Adds structured Codama-to-ClickHouse schema mapping, Rust conversion planning, enum/tuple/array handling, and JSON fallback controls.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>213/5</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>src/<wbr>get<wbr>Render<wbr>Map<wbr>Visitor.ts</code></td>
-<td>Wires ClickHouse account, instruction, event, type, migration, and setup templates into renderer output.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>4/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>src/<wbr>index.ts</code></td>
-<td>Exports the ClickHouse DDL and row-mapper APIs.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>13/1</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>src/<wbr>utils/<wbr>helpers.ts</code></td>
-<td>Adds helper logic for Token Program family detection and generated module naming.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>164/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>accounts<wbr>Click<wbr>House<wbr>Mod.njk</code></td>
-<td>Generates account ClickHouse modules with explicit row exports, processor aliases, migrations, managed tables, and setup helpers.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>94/3</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>accounts<wbr>Mod.njk</code></td>
-<td>Adds the feature-gated account ClickHouse module and official SPL Token Pack decoding integration.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>52/1</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>accounts<wbr>Page.njk</code></td>
-<td>Generates classic SPL Token account conversions from official `spl-token-interface` Pack types.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>183/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>clickhouse<wbr>Row<wbr>Page.njk</code></td>
-<td>Generates account/instruction ClickHouse row structs, conversions, DDL, migrations, column metadata, and managed-table helpers.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>11/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>clickhouse<wbr>Types<wbr>Page.njk</code></td>
-<td>Generates shared ClickHouse helper types for structured nested payload fields.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>141/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>event<wbr>Instruction<wbr>Click<wbr>House<wbr>Row<wbr>Page.njk</code></td>
-<td>Generates per-event ClickHouse row structs, conversions, DDL, migrations, column metadata, and managed-table helpers.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>17/1</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>event<wbr>Instruction<wbr>Page.njk</code></td>
-<td>Adds CPI-event account metadata helper logic used before event instruction decoding.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>223/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>instructions<wbr>Click<wbr>House<wbr>Mod.njk</code></td>
-<td>Generates instruction ClickHouse modules with explicit instruction/event exports, row dispatch, migrations, managed tables, and setup helpers.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>20/4</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>instructions<wbr>Mod.njk</code></td>
-<td>Adds the feature-gated instruction ClickHouse module and decodes CPI events before normal instruction matching.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>1/1</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>lib.njk</code></td>
-<td>Normalizes generated template output around module exports.</td>
-</tr>
-<tr>
-<td align="left" style="white-space: nowrap;"><code>527/0</code></td>
-<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>test/<wbr>clickhouse-<wbr>renderer.test.cjs</code></td>
-<td>Adds renderer tests for ClickHouse schema mapping, generated modules, DDL options, fallback safety, and canary output expectations.</td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">examples/<wbr>token-program-clickhouse/<wbr>src/<wbr>main.rs</code></td>
+<td>Runs the fixed-USDC Token Program ClickHouse canary: fetches finalized `getMultipleAccounts` snapshots for mint, multisig, and token accounts, then tails finalized blocks for Token Program instruction rows.</td>
 </tr>
 </tbody>
 </table>
 </div>
 
 </details>
-
 <details>
-<summary style="white-space: nowrap;"><span style="display: inline-block; width: 45%;"><strong>Version metadata</strong></span><span style="display: inline-block; width: 19%; text-align: left;"><code>1 file</code></span><span style="display: inline-block; width: 36%; text-align: right;"><code>1 / 0 lines</code></span></summary>
+<summary style="white-space: nowrap;"><span style="display: inline-block; width: 45%;"><strong>Datasource reliability</strong></span><span style="display: inline-block; width: 19%; text-align: left;"><code>1 files</code></span><span style="display: inline-block; width: 36%; text-align: right;"><code>197 / 84 lines</code></span></summary>
 
-Workspace version metadata update required by generated package exports.
+RPC block crawler reliability, cancellation, retry, and skip/error classification changes.
 
 <div style="width: 100%; overflow-x: auto;">
 <table style="width: 100%; table-layout: fixed;">
@@ -936,15 +811,75 @@ Workspace version metadata update required by generated package exports.
 <thead>
 <tr>
 <th align="left">Lines</th>
-<th>File</th>
-<th>Summary</th>
+<th align="left">File</th>
+<th align="left">Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left" style="white-space: nowrap;"><code>197/84</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">datasources/<wbr>rpc-block-crawler-datasource/<wbr>src/<wbr>lib.rs</code></td>
+<td>Hardens RPC block crawler behavior around channel drain, cancellation, retries, and Solana block error classification.</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+</details>
+<details>
+<summary style="white-space: nowrap;"><span style="display: inline-block; width: 45%;"><strong>Metrics</strong></span><span style="display: inline-block; width: 19%; text-align: left;"><code>1 files</code></span><span style="display: inline-block; width: 36%; text-align: right;"><code>22 / 1 lines</code></span></summary>
+
+Prometheus metrics export behavior used by local ClickHouse sink monitoring.
+
+<div style="width: 100%; overflow-x: auto;">
+<table style="width: 100%; table-layout: fixed;">
+<colgroup>
+<col style="width: 9%;" />
+<col style="width: 30%;" />
+<col style="width: 61%;" />
+</colgroup>
+<thead>
+<tr>
+<th align="left">Lines</th>
+<th align="left">File</th>
+<th align="left">Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left" style="white-space: nowrap;"><code>22/1</code></td>
+<td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">metrics/<wbr>prometheus-metrics/<wbr>src/<wbr>lib.rs</code></td>
+<td>Sanitizes Carbon metric names for Prometheus-compatible output.</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+</details>
+<details>
+<summary style="white-space: nowrap;"><span style="display: inline-block; width: 45%;"><strong>Versions package</strong></span><span style="display: inline-block; width: 19%; text-align: left;"><code>1 files</code></span><span style="display: inline-block; width: 36%; text-align: right;"><code>1 / 0 lines</code></span></summary>
+
+Version export update needed by generated package plumbing.
+
+<div style="width: 100%; overflow-x: auto;">
+<table style="width: 100%; table-layout: fixed;">
+<colgroup>
+<col style="width: 9%;" />
+<col style="width: 30%;" />
+<col style="width: 61%;" />
+</colgroup>
+<thead>
+<tr>
+<th align="left">Lines</th>
+<th align="left">File</th>
+<th align="left">Summary</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td align="left" style="white-space: nowrap;"><code>1/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>versions/<wbr>src/<wbr>index.ts</code></td>
-<td>Publishes the package version metadata required by generated ClickHouse-capable packages.</td>
+<td>Supporting implementation change included in the filtered diff.</td>
 </tr>
 </tbody>
 </table>
@@ -960,95 +895,35 @@ Status legend:
 - `[M]` / `M` = modified existing implementation file
 
 <style>
-.touched-path-tree-tabs input[type="radio"] {
-  height: 1px;
-  opacity: 0;
-  position: absolute;
-  width: 1px;
-}
-.touched-path-tree-tabs .tree-mode-controls {
-  margin: 0.85em 0 0;
-}
-.touched-path-tree-tabs .tree-mode-controls + .tree-mode-controls {
-  margin-top: 0.2em;
-  margin-bottom: 1.1em;
-}
-.touched-path-tree-tabs .tree-mode-controls label {
-  color: #0969da;
-  cursor: pointer;
-  margin-left: 0;
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.18em;
-}
-.touched-path-tree-tabs .tree-mode-controls span {
-  color: #64748b;
-  margin-left: 0.45em;
-  margin-right: 0.45em;
-}
-.touched-path-tree-tabs .tree-view {
-  display: none;
-}
-.touched-path-tree-tabs .tree-code-window {
-  border: 1px solid rgba(148, 163, 184, 0.24);
-  border-radius: 12px;
-  font-family: var(--vscode-editor-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
-  font-size: 0.92em;
-  line-height: 1.18;
-  margin: 0;
-  overflow-x: auto;
-  padding: 1em;
-}
-.touched-path-tree-tabs .tree-code-window details,
-.touched-path-tree-tabs .tree-code-window summary,
-.touched-path-tree-tabs .tree-code-window .tree-file,
-.touched-path-tree-tabs .tree-code-window .tree-children {
-  margin: 0 !important;
-  padding: 0 !important;
-}
-.touched-path-tree-tabs .tree-code-window summary,
-.touched-path-tree-tabs .tree-code-window .tree-file {
-  display: block;
-  line-height: 1.18;
-  white-space: pre;
-}
-.touched-path-tree-tabs .tree-code-window summary {
-  cursor: pointer;
-  list-style: none;
-  list-style-type: none;
-}
-.touched-path-tree-tabs .tree-code-window summary::marker {
-  content: "";
-  font-size: 0;
-}
-.touched-path-tree-tabs .tree-code-window summary::-webkit-details-marker {
-  display: none;
-}
-.touched-path-tree-tabs .tree-code-window .tree-status {
-  color: #94a3b8;
-}
-#tree-mode-first-level:checked ~ .tree-mode-controls label[for="tree-mode-first-level"],
-#tree-mode-second-level:checked ~ .tree-mode-controls label[for="tree-mode-second-level"],
-#tree-mode-expanded:checked ~ .tree-mode-controls label[for="tree-mode-expanded"],
-#tree-mode-collapsed:checked ~ .tree-mode-controls label[for="tree-mode-collapsed"],
-#tree-mode-carbon-core:checked ~ .tree-mode-controls label[for="tree-mode-carbon-core"],
-#tree-mode-ch-sink:checked ~ .tree-mode-controls label[for="tree-mode-ch-sink"],
-#tree-mode-decoders:checked ~ .tree-mode-controls label[for="tree-mode-decoders"],
-#tree-mode-cli-renderer:checked ~ .tree-mode-controls label[for="tree-mode-cli-renderer"] {
-  color: #8250df;
-  font-weight: 400;
-  text-decoration-thickness: 1px;
-}
-#tree-mode-first-level:checked ~ .tree-view-first-level,
-#tree-mode-second-level:checked ~ .tree-view-second-level,
-#tree-mode-expanded:checked ~ .tree-view-expanded,
-#tree-mode-collapsed:checked ~ .tree-view-collapsed,
-#tree-mode-carbon-core:checked ~ .tree-view-carbon-core,
-#tree-mode-ch-sink:checked ~ .tree-view-ch-sink,
-#tree-mode-decoders:checked ~ .tree-view-decoders,
-#tree-mode-cli-renderer:checked ~ .tree-view-cli-renderer {
-  display: block;
-}
+.touched-path-tree-tabs input[type="radio"] { height: 1px; opacity: 0; position: absolute; width: 1px; }
+.touched-path-tree-tabs .tree-mode-controls { margin: 0.85em 0 0; }
+.touched-path-tree-tabs .tree-mode-controls + .tree-mode-controls { margin-top: 0.2em; margin-bottom: 1.1em; }
+.touched-path-tree-tabs .tree-mode-controls label { color: #0969da; cursor: pointer; margin-left: 0; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.18em; }
+.touched-path-tree-tabs .tree-mode-controls span { color: #64748b; margin-left: 0.45em; margin-right: 0.45em; }
+.touched-path-tree-tabs .tree-view { display: none; }
+.touched-path-tree-tabs .tree-code-window { border: 1px solid rgba(148, 163, 184, 0.24); border-radius: 12px; font-family: var(--vscode-editor-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace); font-size: 0.92em; line-height: 1.18; margin: 0; overflow-x: auto; padding: 1em; }
+.touched-path-tree-tabs .tree-code-window details, .touched-path-tree-tabs .tree-code-window summary, .touched-path-tree-tabs .tree-code-window .tree-file, .touched-path-tree-tabs .tree-code-window .tree-children { margin: 0 !important; padding: 0 !important; }
+.touched-path-tree-tabs .tree-code-window summary, .touched-path-tree-tabs .tree-code-window .tree-file { display: block; line-height: 1.18; white-space: pre; }
+.touched-path-tree-tabs .tree-code-window summary { cursor: pointer; list-style: none; list-style-type: none; }
+.touched-path-tree-tabs .tree-code-window summary::marker { content: ""; font-size: 0; }
+.touched-path-tree-tabs .tree-code-window summary::-webkit-details-marker { display: none; }
+.touched-path-tree-tabs .tree-code-window .tree-status { color: #94a3b8; }
+#tree-mode-first-level:checked ~ .tree-mode-controls label[for="tree-mode-first-level"] { color: #8250df; font-weight: 400; text-decoration-thickness: 1px; }
+#tree-mode-second-level:checked ~ .tree-mode-controls label[for="tree-mode-second-level"] { color: #8250df; font-weight: 400; text-decoration-thickness: 1px; }
+#tree-mode-expanded:checked ~ .tree-mode-controls label[for="tree-mode-expanded"] { color: #8250df; font-weight: 400; text-decoration-thickness: 1px; }
+#tree-mode-collapsed:checked ~ .tree-mode-controls label[for="tree-mode-collapsed"] { color: #8250df; font-weight: 400; text-decoration-thickness: 1px; }
+#tree-mode-carbon-core:checked ~ .tree-mode-controls label[for="tree-mode-carbon-core"] { color: #8250df; font-weight: 400; text-decoration-thickness: 1px; }
+#tree-mode-ch-sink:checked ~ .tree-mode-controls label[for="tree-mode-ch-sink"] { color: #8250df; font-weight: 400; text-decoration-thickness: 1px; }
+#tree-mode-decoders:checked ~ .tree-mode-controls label[for="tree-mode-decoders"] { color: #8250df; font-weight: 400; text-decoration-thickness: 1px; }
+#tree-mode-cli-renderer:checked ~ .tree-mode-controls label[for="tree-mode-cli-renderer"] { color: #8250df; font-weight: 400; text-decoration-thickness: 1px; }
+#tree-mode-first-level:checked ~ .tree-view-first-level { display: block; }
+#tree-mode-second-level:checked ~ .tree-view-second-level { display: block; }
+#tree-mode-expanded:checked ~ .tree-view-expanded { display: block; }
+#tree-mode-collapsed:checked ~ .tree-view-collapsed { display: block; }
+#tree-mode-carbon-core:checked ~ .tree-view-carbon-core { display: block; }
+#tree-mode-ch-sink:checked ~ .tree-view-ch-sink { display: block; }
+#tree-mode-decoders:checked ~ .tree-view-decoders { display: block; }
+#tree-mode-cli-renderer:checked ~ .tree-view-cli-renderer { display: block; }
 </style>
 
 <div class="touched-path-tree-tabs">
@@ -1070,49 +945,1977 @@ Status legend:
 
 <div class="tree-view tree-view-first-level">
 <div class="tree-code-window">
-<details class="tree-node" open><summary><span class="tree-prefix"></span><span class="tree-label">carbon/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">crates/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">core/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">rows/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> mod.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> admin.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> config.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> http.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> metrics.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> processors.rs</div><div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[A]</span> writer.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account_deletion.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> block_details.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> instruction.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> lib.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> pipeline.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> processor.rs</div><div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> transaction.rs</div></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">decoders/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-decoder/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">accounts/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> token_ledger_row.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div></div></details><details class="tree-node"><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">instructions/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> best_swap_out_amount_violation_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_quote_error_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_results_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_token_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_token_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_wsol_token_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> fee_event_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_with_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> set_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_with_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swap_event_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swaps_event_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> types.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│   │       │   ├── </span><span class="tree-status">[M]</span> cpi_event.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div></div></details><details class="tree-node"><summary><span class="tree-prefix">│   │       └── </span><span class="tree-label">types/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │           ├── </span><span class="tree-status">[M]</span> candidate_swap.rs</div><div class="tree-file"><span class="tree-prefix">│   │           └── </span><span class="tree-status">[M]</span> swap.rs</div></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-decoder/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">accounts/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mint_row.rs</div><div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> multisig_row.rs</div><div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> token_row.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mint.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> multisig.rs</div><div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[M]</span> token.rs</div></div></details><details class="tree-node"><summary><span class="tree-prefix">│           └── </span><span class="tree-label">instructions/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│               ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> amount_to_ui_amount_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> batch_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> close_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> freeze_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> get_account_data_size_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account2_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account3_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_immutable_owner_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint2_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig2_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> revoke_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> set_authority_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> sync_native_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> thaw_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> types.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> ui_amount_to_amount_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> unwrap_lamports_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   └── </span><span class="tree-status">[A]</span> withdraw_excess_lamports_row.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│               └── </span><span class="tree-status">[M]</span> mod.rs</div></div></details></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">examples/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-clickhouse/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │       └── </span><span class="tree-status">[A]</span> main.rs</div></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-clickhouse/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[A]</span> main.rs</div></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">metrics/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">prometheus-metrics/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> lib.rs</div></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">└── </span><span class="tree-label">packages/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    ├── </span><span class="tree-label">cli/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    │       ├── </span><span class="tree-label">lib/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div><div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> decoder.ts</div><div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> prompts.ts</div><div class="tree-file"><span class="tree-prefix">    │       │   └── </span><span class="tree-status">[M]</span> scaffold.ts</div></div></details><div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[M]</span> cli.ts</div></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">    ├── </span><span class="tree-label">renderer/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    │   │   ├── </span><span class="tree-label">utils/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │   │   │   └── </span><span class="tree-status">[M]</span> helpers.ts</div></div></details><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseDdl.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowMapper.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> getRenderMapVisitor.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> index.ts</div></div></details><details class="tree-node"><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">templates/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> accountsClickHouseMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseTypesPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> eventInstructionClickHouseRowPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> eventInstructionPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> instructionsClickHouseMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> instructionsMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> lib.njk</div></div></details><details class="tree-node"><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">test/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[A]</span> clickhouse-renderer.test.cjs</div></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">    └── </span><span class="tree-label">versions/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">        └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">            └── </span><span class="tree-status">[M]</span> index.ts</div></div></details></div></details></div></details></div></details>
+<details class="tree-node" open><summary><span class="tree-prefix"></span><span class="tree-label">carbon/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">crates/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">core/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">rows/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> mod.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> admin.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> config.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> http.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> metrics.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> processors.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> retry.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[A]</span> writer.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account_deletion.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> block_details.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> instruction.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> lib.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> pipeline.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> processor.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> transaction.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">datasources/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">rpc-block-crawler-datasource/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> lib.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">decoders/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-decoder/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">accounts/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> token_ledger_row.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">instructions/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> best_swap_out_amount_violation_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_quote_error_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_results_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_token_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_token_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_wsol_token_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> fee_event_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_with_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> set_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_with_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swap_event_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swaps_event_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> types.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│   │       │   ├── </span><span class="tree-status">[M]</span> cpi_event.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   │       └── </span><span class="tree-label">types/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │           ├── </span><span class="tree-status">[M]</span> candidate_swap.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │           └── </span><span class="tree-status">[M]</span> swap.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-decoder/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">accounts/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mint_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> multisig_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> token_row.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mint.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> multisig.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[M]</span> token.rs</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│           └── </span><span class="tree-label">instructions/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│               ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> amount_to_ui_amount_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> batch_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> close_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> freeze_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> get_account_data_size_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account3_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_immutable_owner_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> revoke_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> set_authority_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> sync_native_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> thaw_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> types.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> ui_amount_to_amount_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> unwrap_lamports_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   └── </span><span class="tree-status">[A]</span> withdraw_excess_lamports_row.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│               └── </span><span class="tree-status">[M]</span> mod.rs</div>
+</div></details>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">examples/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-clickhouse/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │       └── </span><span class="tree-status">[A]</span> main.rs</div>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-clickhouse/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[A]</span> main.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">metrics/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">prometheus-metrics/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> lib.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">└── </span><span class="tree-label">packages/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    ├── </span><span class="tree-label">cli/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    │       ├── </span><span class="tree-label">lib/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> decoder.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> prompts.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │       │   └── </span><span class="tree-status">[M]</span> scaffold.ts</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[M]</span> cli.ts</div>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    ├── </span><span class="tree-label">renderer/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    │   │   ├── </span><span class="tree-label">utils/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │   │   │   └── </span><span class="tree-status">[M]</span> helpers.ts</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseDdl.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowMapper.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> getRenderMapVisitor.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> index.ts</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">templates/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> accountsClickHouseMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseTypesPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> eventInstructionClickHouseRowPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> eventInstructionPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> instructionsClickHouseMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> instructionsMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> lib.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> macros.njk</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">test/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[A]</span> clickhouse-renderer.test.cjs</div>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    └── </span><span class="tree-label">versions/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">        └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">            └── </span><span class="tree-status">[M]</span> index.ts</div>
+</div></details>
+</div></details>
+</div></details>
+</div></details>
 </div>
 </div>
 
 <div class="tree-view tree-view-second-level">
 <div class="tree-code-window">
-<details class="tree-node" open><summary><span class="tree-prefix"></span><span class="tree-label">carbon/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">├── </span><span class="tree-label">crates/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">core/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">rows/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> mod.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> admin.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> config.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> http.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> metrics.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> processors.rs</div><div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[A]</span> writer.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account_deletion.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> block_details.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> instruction.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> lib.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> pipeline.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> processor.rs</div><div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> transaction.rs</div></div></details></div></details></div></details><details class="tree-node" open><summary><span class="tree-prefix">├── </span><span class="tree-label">decoders/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-decoder/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">accounts/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> token_ledger_row.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div></div></details><details class="tree-node"><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">instructions/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> best_swap_out_amount_violation_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_quote_error_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_results_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_token_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_token_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_wsol_token_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> fee_event_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_with_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> set_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_with_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swap_event_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swaps_event_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> types.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│   │       │   ├── </span><span class="tree-status">[M]</span> cpi_event.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div></div></details><details class="tree-node"><summary><span class="tree-prefix">│   │       └── </span><span class="tree-label">types/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │           ├── </span><span class="tree-status">[M]</span> candidate_swap.rs</div><div class="tree-file"><span class="tree-prefix">│   │           └── </span><span class="tree-status">[M]</span> swap.rs</div></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-decoder/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">accounts/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mint_row.rs</div><div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> multisig_row.rs</div><div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> token_row.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mint.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> multisig.rs</div><div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[M]</span> token.rs</div></div></details><details class="tree-node"><summary><span class="tree-prefix">│           └── </span><span class="tree-label">instructions/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│               ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> amount_to_ui_amount_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> batch_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> close_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> freeze_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> get_account_data_size_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account2_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account3_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_immutable_owner_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint2_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig2_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> revoke_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> set_authority_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> sync_native_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> thaw_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> types.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> ui_amount_to_amount_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> unwrap_lamports_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   └── </span><span class="tree-status">[A]</span> withdraw_excess_lamports_row.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│               └── </span><span class="tree-status">[M]</span> mod.rs</div></div></details></div></details></div></details></div></details><details class="tree-node" open><summary><span class="tree-prefix">├── </span><span class="tree-label">examples/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-clickhouse/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │       └── </span><span class="tree-status">[A]</span> main.rs</div></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-clickhouse/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[A]</span> main.rs</div></div></details></div></details></div></details><details class="tree-node" open><summary><span class="tree-prefix">├── </span><span class="tree-label">metrics/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">prometheus-metrics/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> lib.rs</div></div></details></div></details></div></details><details class="tree-node" open><summary><span class="tree-prefix">└── </span><span class="tree-label">packages/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    ├── </span><span class="tree-label">cli/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    │       ├── </span><span class="tree-label">lib/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div><div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> decoder.ts</div><div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> prompts.ts</div><div class="tree-file"><span class="tree-prefix">    │       │   └── </span><span class="tree-status">[M]</span> scaffold.ts</div></div></details><div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[M]</span> cli.ts</div></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">    ├── </span><span class="tree-label">renderer/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    │   │   ├── </span><span class="tree-label">utils/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │   │   │   └── </span><span class="tree-status">[M]</span> helpers.ts</div></div></details><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseDdl.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowMapper.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> getRenderMapVisitor.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> index.ts</div></div></details><details class="tree-node"><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">templates/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> accountsClickHouseMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseTypesPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> eventInstructionClickHouseRowPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> eventInstructionPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> instructionsClickHouseMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> instructionsMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> lib.njk</div></div></details><details class="tree-node"><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">test/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[A]</span> clickhouse-renderer.test.cjs</div></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">    └── </span><span class="tree-label">versions/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">        └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">            └── </span><span class="tree-status">[M]</span> index.ts</div></div></details></div></details></div></details></div></details>
+<details class="tree-node" open><summary><span class="tree-prefix"></span><span class="tree-label">carbon/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">├── </span><span class="tree-label">crates/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">core/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">rows/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> mod.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> admin.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> config.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> http.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> metrics.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> processors.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> retry.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[A]</span> writer.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account_deletion.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> block_details.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> instruction.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> lib.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> pipeline.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> processor.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> transaction.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">├── </span><span class="tree-label">datasources/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">rpc-block-crawler-datasource/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> lib.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">├── </span><span class="tree-label">decoders/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-decoder/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">accounts/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> token_ledger_row.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">instructions/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> best_swap_out_amount_violation_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_quote_error_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_results_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_token_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_token_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_wsol_token_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> fee_event_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_with_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> set_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_with_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swap_event_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swaps_event_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> types.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│   │       │   ├── </span><span class="tree-status">[M]</span> cpi_event.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   │       └── </span><span class="tree-label">types/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │           ├── </span><span class="tree-status">[M]</span> candidate_swap.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │           └── </span><span class="tree-status">[M]</span> swap.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-decoder/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">accounts/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mint_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> multisig_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> token_row.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mint.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> multisig.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[M]</span> token.rs</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│           └── </span><span class="tree-label">instructions/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│               ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> amount_to_ui_amount_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> batch_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> close_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> freeze_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> get_account_data_size_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account3_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_immutable_owner_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> revoke_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> set_authority_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> sync_native_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> thaw_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> types.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> ui_amount_to_amount_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> unwrap_lamports_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   └── </span><span class="tree-status">[A]</span> withdraw_excess_lamports_row.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│               └── </span><span class="tree-status">[M]</span> mod.rs</div>
+</div></details>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">├── </span><span class="tree-label">examples/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-clickhouse/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │       └── </span><span class="tree-status">[A]</span> main.rs</div>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-clickhouse/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[A]</span> main.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">├── </span><span class="tree-label">metrics/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">prometheus-metrics/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> lib.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">└── </span><span class="tree-label">packages/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    ├── </span><span class="tree-label">cli/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    │       ├── </span><span class="tree-label">lib/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> decoder.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> prompts.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │       │   └── </span><span class="tree-status">[M]</span> scaffold.ts</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[M]</span> cli.ts</div>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    ├── </span><span class="tree-label">renderer/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    │   │   ├── </span><span class="tree-label">utils/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │   │   │   └── </span><span class="tree-status">[M]</span> helpers.ts</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseDdl.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowMapper.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> getRenderMapVisitor.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> index.ts</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">templates/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> accountsClickHouseMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseTypesPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> eventInstructionClickHouseRowPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> eventInstructionPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> instructionsClickHouseMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> instructionsMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> lib.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> macros.njk</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">test/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[A]</span> clickhouse-renderer.test.cjs</div>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    └── </span><span class="tree-label">versions/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">        └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">            └── </span><span class="tree-status">[M]</span> index.ts</div>
+</div></details>
+</div></details>
+</div></details>
+</div></details>
 </div>
 </div>
 
 <div class="tree-view tree-view-expanded">
 <div class="tree-code-window">
-<details class="tree-node" open><summary><span class="tree-prefix"></span><span class="tree-label">carbon/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">├── </span><span class="tree-label">crates/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│   └── </span><span class="tree-label">core/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">rows/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> mod.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> admin.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> config.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> http.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> metrics.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> processors.rs</div><div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[A]</span> writer.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account_deletion.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> block_details.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> instruction.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> lib.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> pipeline.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> processor.rs</div><div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> transaction.rs</div></div></details></div></details></div></details><details class="tree-node" open><summary><span class="tree-prefix">├── </span><span class="tree-label">decoders/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-decoder/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">accounts/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> token_ledger_row.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div></div></details><details class="tree-node" open><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">instructions/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> best_swap_out_amount_violation_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_quote_error_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_results_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_token_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_token_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_wsol_token_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> fee_event_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_with_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> set_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_with_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swap_event_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swaps_event_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> types.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│   │       │   ├── </span><span class="tree-status">[M]</span> cpi_event.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div></div></details><details class="tree-node" open><summary><span class="tree-prefix">│   │       └── </span><span class="tree-label">types/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │           ├── </span><span class="tree-status">[M]</span> candidate_swap.rs</div><div class="tree-file"><span class="tree-prefix">│   │           └── </span><span class="tree-status">[M]</span> swap.rs</div></div></details></div></details></div></details><details class="tree-node" open><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-decoder/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">accounts/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mint_row.rs</div><div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> multisig_row.rs</div><div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> token_row.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mint.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> multisig.rs</div><div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[M]</span> token.rs</div></div></details><details class="tree-node" open><summary><span class="tree-prefix">│           └── </span><span class="tree-label">instructions/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│               ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> amount_to_ui_amount_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> batch_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> close_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> freeze_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> get_account_data_size_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account2_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account3_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_immutable_owner_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint2_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig2_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> revoke_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> set_authority_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> sync_native_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> thaw_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> types.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> ui_amount_to_amount_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> unwrap_lamports_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   └── </span><span class="tree-status">[A]</span> withdraw_excess_lamports_row.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│               └── </span><span class="tree-status">[M]</span> mod.rs</div></div></details></div></details></div></details></div></details><details class="tree-node" open><summary><span class="tree-prefix">├── </span><span class="tree-label">examples/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-clickhouse/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │       └── </span><span class="tree-status">[A]</span> main.rs</div></div></details></div></details><details class="tree-node" open><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-clickhouse/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[A]</span> main.rs</div></div></details></div></details></div></details><details class="tree-node" open><summary><span class="tree-prefix">├── </span><span class="tree-label">metrics/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│   └── </span><span class="tree-label">prometheus-metrics/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> lib.rs</div></div></details></div></details></div></details><details class="tree-node" open><summary><span class="tree-prefix">└── </span><span class="tree-label">packages/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">    ├── </span><span class="tree-label">cli/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">    │       ├── </span><span class="tree-label">lib/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div><div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> decoder.ts</div><div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> prompts.ts</div><div class="tree-file"><span class="tree-prefix">    │       │   └── </span><span class="tree-status">[M]</span> scaffold.ts</div></div></details><div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[M]</span> cli.ts</div></div></details></div></details><details class="tree-node" open><summary><span class="tree-prefix">    ├── </span><span class="tree-label">renderer/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">    │   │   ├── </span><span class="tree-label">utils/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │   │   │   └── </span><span class="tree-status">[M]</span> helpers.ts</div></div></details><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseDdl.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowMapper.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> getRenderMapVisitor.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> index.ts</div></div></details><details class="tree-node" open><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">templates/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> accountsClickHouseMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseTypesPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> eventInstructionClickHouseRowPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> eventInstructionPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> instructionsClickHouseMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> instructionsMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> lib.njk</div></div></details><details class="tree-node" open><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">test/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[A]</span> clickhouse-renderer.test.cjs</div></div></details></div></details><details class="tree-node" open><summary><span class="tree-prefix">    └── </span><span class="tree-label">versions/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">        └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">            └── </span><span class="tree-status">[M]</span> index.ts</div></div></details></div></details></div></details></div></details>
+<details class="tree-node" open><summary><span class="tree-prefix"></span><span class="tree-label">carbon/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">├── </span><span class="tree-label">crates/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│   └── </span><span class="tree-label">core/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">rows/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> mod.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> admin.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> config.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> http.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> metrics.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> processors.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> retry.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[A]</span> writer.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account_deletion.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> block_details.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> instruction.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> lib.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> pipeline.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> processor.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> transaction.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">├── </span><span class="tree-label">datasources/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│   └── </span><span class="tree-label">rpc-block-crawler-datasource/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> lib.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">├── </span><span class="tree-label">decoders/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-decoder/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">accounts/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> token_ledger_row.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">instructions/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> best_swap_out_amount_violation_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_quote_error_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_results_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_token_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_token_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_wsol_token_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> fee_event_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_with_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> set_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_with_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swap_event_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swaps_event_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> types.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│   │       │   ├── </span><span class="tree-status">[M]</span> cpi_event.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">│   │       └── </span><span class="tree-label">types/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │           ├── </span><span class="tree-status">[M]</span> candidate_swap.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │           └── </span><span class="tree-status">[M]</span> swap.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-decoder/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">accounts/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mint_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> multisig_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> token_row.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mint.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> multisig.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[M]</span> token.rs</div>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">│           └── </span><span class="tree-label">instructions/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│               ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> amount_to_ui_amount_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> batch_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> close_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> freeze_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> get_account_data_size_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account3_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_immutable_owner_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> revoke_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> set_authority_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> sync_native_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> thaw_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> types.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> ui_amount_to_amount_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> unwrap_lamports_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   └── </span><span class="tree-status">[A]</span> withdraw_excess_lamports_row.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│               └── </span><span class="tree-status">[M]</span> mod.rs</div>
+</div></details>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">├── </span><span class="tree-label">examples/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-clickhouse/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │       └── </span><span class="tree-status">[A]</span> main.rs</div>
+</div></details>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-clickhouse/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[A]</span> main.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">├── </span><span class="tree-label">metrics/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│   └── </span><span class="tree-label">prometheus-metrics/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> lib.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">└── </span><span class="tree-label">packages/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">    ├── </span><span class="tree-label">cli/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">    │       ├── </span><span class="tree-label">lib/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> decoder.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> prompts.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │       │   └── </span><span class="tree-status">[M]</span> scaffold.ts</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[M]</span> cli.ts</div>
+</div></details>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">    ├── </span><span class="tree-label">renderer/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">    │   │   ├── </span><span class="tree-label">utils/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │   │   │   └── </span><span class="tree-status">[M]</span> helpers.ts</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseDdl.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowMapper.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> getRenderMapVisitor.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> index.ts</div>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">templates/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> accountsClickHouseMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseTypesPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> eventInstructionClickHouseRowPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> eventInstructionPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> instructionsClickHouseMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> instructionsMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> lib.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> macros.njk</div>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">test/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[A]</span> clickhouse-renderer.test.cjs</div>
+</div></details>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">    └── </span><span class="tree-label">versions/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">        └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">            └── </span><span class="tree-status">[M]</span> index.ts</div>
+</div></details>
+</div></details>
+</div></details>
+</div></details>
 </div>
 </div>
 
 <div class="tree-view tree-view-collapsed">
 <div class="tree-code-window">
-<details class="tree-node" open><summary><span class="tree-prefix"></span><span class="tree-label">carbon/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">crates/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">core/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">rows/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> mod.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> admin.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> config.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> http.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> metrics.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> processors.rs</div><div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[A]</span> writer.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account_deletion.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> block_details.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> instruction.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> lib.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> pipeline.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> processor.rs</div><div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> transaction.rs</div></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">decoders/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-decoder/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">accounts/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> token_ledger_row.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div></div></details><details class="tree-node"><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">instructions/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> best_swap_out_amount_violation_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_quote_error_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_results_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_token_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_token_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_wsol_token_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> fee_event_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_with_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> set_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_with_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swap_event_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swaps_event_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> types.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│   │       │   ├── </span><span class="tree-status">[M]</span> cpi_event.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div></div></details><details class="tree-node"><summary><span class="tree-prefix">│   │       └── </span><span class="tree-label">types/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │           ├── </span><span class="tree-status">[M]</span> candidate_swap.rs</div><div class="tree-file"><span class="tree-prefix">│   │           └── </span><span class="tree-status">[M]</span> swap.rs</div></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-decoder/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">accounts/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mint_row.rs</div><div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> multisig_row.rs</div><div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> token_row.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mint.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> multisig.rs</div><div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[M]</span> token.rs</div></div></details><details class="tree-node"><summary><span class="tree-prefix">│           └── </span><span class="tree-label">instructions/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│               ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> amount_to_ui_amount_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> batch_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> close_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> freeze_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> get_account_data_size_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account2_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account3_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_immutable_owner_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint2_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig2_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> revoke_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> set_authority_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> sync_native_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> thaw_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> types.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> ui_amount_to_amount_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> unwrap_lamports_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   └── </span><span class="tree-status">[A]</span> withdraw_excess_lamports_row.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│               └── </span><span class="tree-status">[M]</span> mod.rs</div></div></details></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">examples/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-clickhouse/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │       └── </span><span class="tree-status">[A]</span> main.rs</div></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-clickhouse/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[A]</span> main.rs</div></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">metrics/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">prometheus-metrics/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> lib.rs</div></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">└── </span><span class="tree-label">packages/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    ├── </span><span class="tree-label">cli/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    │       ├── </span><span class="tree-label">lib/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div><div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> decoder.ts</div><div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> prompts.ts</div><div class="tree-file"><span class="tree-prefix">    │       │   └── </span><span class="tree-status">[M]</span> scaffold.ts</div></div></details><div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[M]</span> cli.ts</div></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">    ├── </span><span class="tree-label">renderer/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    │   │   ├── </span><span class="tree-label">utils/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │   │   │   └── </span><span class="tree-status">[M]</span> helpers.ts</div></div></details><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseDdl.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowMapper.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> getRenderMapVisitor.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> index.ts</div></div></details><details class="tree-node"><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">templates/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> accountsClickHouseMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseTypesPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> eventInstructionClickHouseRowPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> eventInstructionPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> instructionsClickHouseMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> instructionsMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> lib.njk</div></div></details><details class="tree-node"><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">test/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[A]</span> clickhouse-renderer.test.cjs</div></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">    └── </span><span class="tree-label">versions/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">        └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">            └── </span><span class="tree-status">[M]</span> index.ts</div></div></details></div></details></div></details></div></details>
+<details class="tree-node" open><summary><span class="tree-prefix"></span><span class="tree-label">carbon/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">crates/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">core/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">rows/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> mod.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> admin.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> config.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> http.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> metrics.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> processors.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> retry.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[A]</span> writer.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account_deletion.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> block_details.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> instruction.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> lib.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> pipeline.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> processor.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> transaction.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">datasources/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">rpc-block-crawler-datasource/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> lib.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">decoders/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-decoder/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">accounts/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> token_ledger_row.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">instructions/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> best_swap_out_amount_violation_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_quote_error_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_results_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_token_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_token_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_wsol_token_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> fee_event_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_with_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> set_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_with_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swap_event_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swaps_event_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> types.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│   │       │   ├── </span><span class="tree-status">[M]</span> cpi_event.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   │       └── </span><span class="tree-label">types/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │           ├── </span><span class="tree-status">[M]</span> candidate_swap.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │           └── </span><span class="tree-status">[M]</span> swap.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-decoder/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">accounts/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mint_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> multisig_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> token_row.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mint.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> multisig.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[M]</span> token.rs</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│           └── </span><span class="tree-label">instructions/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│               ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> amount_to_ui_amount_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> batch_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> close_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> freeze_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> get_account_data_size_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account3_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_immutable_owner_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> revoke_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> set_authority_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> sync_native_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> thaw_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> types.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> ui_amount_to_amount_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> unwrap_lamports_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   └── </span><span class="tree-status">[A]</span> withdraw_excess_lamports_row.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│               └── </span><span class="tree-status">[M]</span> mod.rs</div>
+</div></details>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">examples/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-clickhouse/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │       └── </span><span class="tree-status">[A]</span> main.rs</div>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-clickhouse/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[A]</span> main.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">metrics/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">prometheus-metrics/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> lib.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">└── </span><span class="tree-label">packages/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    ├── </span><span class="tree-label">cli/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    │       ├── </span><span class="tree-label">lib/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> decoder.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> prompts.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │       │   └── </span><span class="tree-status">[M]</span> scaffold.ts</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[M]</span> cli.ts</div>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    ├── </span><span class="tree-label">renderer/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    │   │   ├── </span><span class="tree-label">utils/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │   │   │   └── </span><span class="tree-status">[M]</span> helpers.ts</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseDdl.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowMapper.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> getRenderMapVisitor.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> index.ts</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">templates/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> accountsClickHouseMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseTypesPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> eventInstructionClickHouseRowPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> eventInstructionPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> instructionsClickHouseMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> instructionsMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> lib.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> macros.njk</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">test/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[A]</span> clickhouse-renderer.test.cjs</div>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    └── </span><span class="tree-label">versions/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">        └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">            └── </span><span class="tree-status">[M]</span> index.ts</div>
+</div></details>
+</div></details>
+</div></details>
+</div></details>
 </div>
 </div>
 
 <div class="tree-view tree-view-carbon-core">
 <div class="tree-code-window">
-<details class="tree-node" open><summary><span class="tree-prefix"></span><span class="tree-label">carbon/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">├── </span><span class="tree-label">crates/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│   └── </span><span class="tree-label">core/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">rows/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> mod.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> admin.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> config.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> http.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> metrics.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> processors.rs</div><div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[A]</span> writer.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account_deletion.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> block_details.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> instruction.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> lib.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> pipeline.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> processor.rs</div><div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> transaction.rs</div></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">decoders/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-decoder/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">accounts/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> token_ledger_row.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div></div></details><details class="tree-node"><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">instructions/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> best_swap_out_amount_violation_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_quote_error_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_results_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_token_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_token_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_wsol_token_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> fee_event_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_with_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> set_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_with_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swap_event_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swaps_event_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> types.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│   │       │   ├── </span><span class="tree-status">[M]</span> cpi_event.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div></div></details><details class="tree-node"><summary><span class="tree-prefix">│   │       └── </span><span class="tree-label">types/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │           ├── </span><span class="tree-status">[M]</span> candidate_swap.rs</div><div class="tree-file"><span class="tree-prefix">│   │           └── </span><span class="tree-status">[M]</span> swap.rs</div></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-decoder/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">accounts/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mint_row.rs</div><div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> multisig_row.rs</div><div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> token_row.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mint.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> multisig.rs</div><div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[M]</span> token.rs</div></div></details><details class="tree-node"><summary><span class="tree-prefix">│           └── </span><span class="tree-label">instructions/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│               ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> amount_to_ui_amount_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> batch_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> close_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> freeze_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> get_account_data_size_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account2_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account3_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_immutable_owner_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint2_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig2_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> revoke_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> set_authority_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> sync_native_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> thaw_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> types.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> ui_amount_to_amount_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> unwrap_lamports_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   └── </span><span class="tree-status">[A]</span> withdraw_excess_lamports_row.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│               └── </span><span class="tree-status">[M]</span> mod.rs</div></div></details></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">examples/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-clickhouse/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │       └── </span><span class="tree-status">[A]</span> main.rs</div></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-clickhouse/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[A]</span> main.rs</div></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">metrics/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">prometheus-metrics/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> lib.rs</div></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">└── </span><span class="tree-label">packages/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    ├── </span><span class="tree-label">cli/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    │       ├── </span><span class="tree-label">lib/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div><div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> decoder.ts</div><div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> prompts.ts</div><div class="tree-file"><span class="tree-prefix">    │       │   └── </span><span class="tree-status">[M]</span> scaffold.ts</div></div></details><div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[M]</span> cli.ts</div></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">    ├── </span><span class="tree-label">renderer/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    │   │   ├── </span><span class="tree-label">utils/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │   │   │   └── </span><span class="tree-status">[M]</span> helpers.ts</div></div></details><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseDdl.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowMapper.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> getRenderMapVisitor.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> index.ts</div></div></details><details class="tree-node"><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">templates/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> accountsClickHouseMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseTypesPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> eventInstructionClickHouseRowPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> eventInstructionPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> instructionsClickHouseMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> instructionsMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> lib.njk</div></div></details><details class="tree-node"><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">test/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[A]</span> clickhouse-renderer.test.cjs</div></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">    └── </span><span class="tree-label">versions/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">        └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">            └── </span><span class="tree-status">[M]</span> index.ts</div></div></details></div></details></div></details></div></details>
+<details class="tree-node" open><summary><span class="tree-prefix"></span><span class="tree-label">carbon/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">├── </span><span class="tree-label">crates/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│   └── </span><span class="tree-label">core/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">rows/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> mod.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> admin.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> config.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> http.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> metrics.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> processors.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> retry.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[A]</span> writer.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account_deletion.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> block_details.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> instruction.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> lib.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> pipeline.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> processor.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> transaction.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">datasources/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">rpc-block-crawler-datasource/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> lib.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">decoders/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-decoder/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">accounts/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> token_ledger_row.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">instructions/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> best_swap_out_amount_violation_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_quote_error_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_results_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_token_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_token_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_wsol_token_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> fee_event_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_with_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> set_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_with_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swap_event_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swaps_event_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> types.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│   │       │   ├── </span><span class="tree-status">[M]</span> cpi_event.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   │       └── </span><span class="tree-label">types/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │           ├── </span><span class="tree-status">[M]</span> candidate_swap.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │           └── </span><span class="tree-status">[M]</span> swap.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-decoder/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">accounts/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mint_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> multisig_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> token_row.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mint.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> multisig.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[M]</span> token.rs</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│           └── </span><span class="tree-label">instructions/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│               ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> amount_to_ui_amount_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> batch_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> close_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> freeze_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> get_account_data_size_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account3_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_immutable_owner_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> revoke_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> set_authority_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> sync_native_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> thaw_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> types.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> ui_amount_to_amount_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> unwrap_lamports_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   └── </span><span class="tree-status">[A]</span> withdraw_excess_lamports_row.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│               └── </span><span class="tree-status">[M]</span> mod.rs</div>
+</div></details>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">examples/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-clickhouse/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │       └── </span><span class="tree-status">[A]</span> main.rs</div>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-clickhouse/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[A]</span> main.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">metrics/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">prometheus-metrics/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> lib.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">└── </span><span class="tree-label">packages/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    ├── </span><span class="tree-label">cli/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    │       ├── </span><span class="tree-label">lib/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> decoder.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> prompts.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │       │   └── </span><span class="tree-status">[M]</span> scaffold.ts</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[M]</span> cli.ts</div>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    ├── </span><span class="tree-label">renderer/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    │   │   ├── </span><span class="tree-label">utils/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │   │   │   └── </span><span class="tree-status">[M]</span> helpers.ts</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseDdl.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowMapper.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> getRenderMapVisitor.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> index.ts</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">templates/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> accountsClickHouseMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseTypesPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> eventInstructionClickHouseRowPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> eventInstructionPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> instructionsClickHouseMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> instructionsMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> lib.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> macros.njk</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">test/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[A]</span> clickhouse-renderer.test.cjs</div>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    └── </span><span class="tree-label">versions/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">        └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">            └── </span><span class="tree-status">[M]</span> index.ts</div>
+</div></details>
+</div></details>
+</div></details>
+</div></details>
 </div>
 </div>
 
 <div class="tree-view tree-view-ch-sink">
 <div class="tree-code-window">
-<details class="tree-node" open><summary><span class="tree-prefix"></span><span class="tree-label">carbon/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">├── </span><span class="tree-label">crates/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│   └── </span><span class="tree-label">core/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">rows/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> mod.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> admin.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> config.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> http.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> metrics.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> processors.rs</div><div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[A]</span> writer.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account_deletion.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> block_details.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> instruction.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> lib.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> pipeline.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> processor.rs</div><div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> transaction.rs</div></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">decoders/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-decoder/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">accounts/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> token_ledger_row.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div></div></details><details class="tree-node"><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">instructions/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> best_swap_out_amount_violation_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_quote_error_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_results_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_token_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_token_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_wsol_token_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> fee_event_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_with_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> set_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_with_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swap_event_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swaps_event_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> types.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│   │       │   ├── </span><span class="tree-status">[M]</span> cpi_event.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div></div></details><details class="tree-node"><summary><span class="tree-prefix">│   │       └── </span><span class="tree-label">types/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │           ├── </span><span class="tree-status">[M]</span> candidate_swap.rs</div><div class="tree-file"><span class="tree-prefix">│   │           └── </span><span class="tree-status">[M]</span> swap.rs</div></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-decoder/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">accounts/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mint_row.rs</div><div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> multisig_row.rs</div><div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> token_row.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mint.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> multisig.rs</div><div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[M]</span> token.rs</div></div></details><details class="tree-node"><summary><span class="tree-prefix">│           └── </span><span class="tree-label">instructions/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│               ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> amount_to_ui_amount_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> batch_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> close_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> freeze_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> get_account_data_size_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account2_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account3_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_immutable_owner_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint2_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig2_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> revoke_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> set_authority_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> sync_native_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> thaw_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> types.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> ui_amount_to_amount_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> unwrap_lamports_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   └── </span><span class="tree-status">[A]</span> withdraw_excess_lamports_row.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│               └── </span><span class="tree-status">[M]</span> mod.rs</div></div></details></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">examples/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-clickhouse/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │       └── </span><span class="tree-status">[A]</span> main.rs</div></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-clickhouse/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[A]</span> main.rs</div></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">metrics/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">prometheus-metrics/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> lib.rs</div></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">└── </span><span class="tree-label">packages/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    ├── </span><span class="tree-label">cli/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    │       ├── </span><span class="tree-label">lib/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div><div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> decoder.ts</div><div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> prompts.ts</div><div class="tree-file"><span class="tree-prefix">    │       │   └── </span><span class="tree-status">[M]</span> scaffold.ts</div></div></details><div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[M]</span> cli.ts</div></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">    ├── </span><span class="tree-label">renderer/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    │   │   ├── </span><span class="tree-label">utils/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │   │   │   └── </span><span class="tree-status">[M]</span> helpers.ts</div></div></details><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseDdl.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowMapper.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> getRenderMapVisitor.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> index.ts</div></div></details><details class="tree-node"><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">templates/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> accountsClickHouseMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseTypesPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> eventInstructionClickHouseRowPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> eventInstructionPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> instructionsClickHouseMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> instructionsMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> lib.njk</div></div></details><details class="tree-node"><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">test/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[A]</span> clickhouse-renderer.test.cjs</div></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">    └── </span><span class="tree-label">versions/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">        └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">            └── </span><span class="tree-status">[M]</span> index.ts</div></div></details></div></details></div></details></div></details>
+<details class="tree-node" open><summary><span class="tree-prefix"></span><span class="tree-label">carbon/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">├── </span><span class="tree-label">crates/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│   └── </span><span class="tree-label">core/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">rows/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> mod.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> admin.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> config.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> http.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> metrics.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> processors.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> retry.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[A]</span> writer.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account_deletion.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> block_details.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> instruction.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> lib.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> pipeline.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> processor.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> transaction.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">datasources/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">rpc-block-crawler-datasource/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> lib.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">decoders/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-decoder/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">accounts/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> token_ledger_row.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">instructions/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> best_swap_out_amount_violation_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_quote_error_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_results_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_token_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_token_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_wsol_token_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> fee_event_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_with_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> set_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_with_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swap_event_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swaps_event_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> types.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│   │       │   ├── </span><span class="tree-status">[M]</span> cpi_event.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   │       └── </span><span class="tree-label">types/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │           ├── </span><span class="tree-status">[M]</span> candidate_swap.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │           └── </span><span class="tree-status">[M]</span> swap.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-decoder/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">accounts/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mint_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> multisig_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> token_row.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mint.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> multisig.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[M]</span> token.rs</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│           └── </span><span class="tree-label">instructions/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│               ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> amount_to_ui_amount_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> batch_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> close_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> freeze_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> get_account_data_size_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account3_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_immutable_owner_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> revoke_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> set_authority_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> sync_native_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> thaw_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> types.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> ui_amount_to_amount_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> unwrap_lamports_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   └── </span><span class="tree-status">[A]</span> withdraw_excess_lamports_row.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│               └── </span><span class="tree-status">[M]</span> mod.rs</div>
+</div></details>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">examples/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-clickhouse/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │       └── </span><span class="tree-status">[A]</span> main.rs</div>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-clickhouse/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[A]</span> main.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">metrics/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">prometheus-metrics/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> lib.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">└── </span><span class="tree-label">packages/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    ├── </span><span class="tree-label">cli/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    │       ├── </span><span class="tree-label">lib/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> decoder.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> prompts.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │       │   └── </span><span class="tree-status">[M]</span> scaffold.ts</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[M]</span> cli.ts</div>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    ├── </span><span class="tree-label">renderer/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    │   │   ├── </span><span class="tree-label">utils/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │   │   │   └── </span><span class="tree-status">[M]</span> helpers.ts</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseDdl.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowMapper.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> getRenderMapVisitor.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> index.ts</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">templates/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> accountsClickHouseMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseTypesPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> eventInstructionClickHouseRowPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> eventInstructionPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> instructionsClickHouseMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> instructionsMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> lib.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> macros.njk</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">test/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[A]</span> clickhouse-renderer.test.cjs</div>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    └── </span><span class="tree-label">versions/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">        └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">            └── </span><span class="tree-status">[M]</span> index.ts</div>
+</div></details>
+</div></details>
+</div></details>
+</div></details>
 </div>
 </div>
 
 <div class="tree-view tree-view-decoders">
 <div class="tree-code-window">
-<details class="tree-node" open><summary><span class="tree-prefix"></span><span class="tree-label">carbon/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">crates/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">core/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">rows/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> mod.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> admin.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> config.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> http.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> metrics.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> processors.rs</div><div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[A]</span> writer.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account_deletion.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> block_details.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> instruction.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> lib.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> pipeline.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> processor.rs</div><div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> transaction.rs</div></div></details></div></details></div></details><details class="tree-node" open><summary><span class="tree-prefix">├── </span><span class="tree-label">decoders/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-decoder/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">accounts/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> token_ledger_row.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div></div></details><details class="tree-node" open><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">instructions/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> best_swap_out_amount_violation_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_quote_error_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_results_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_token_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_token_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_wsol_token_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> fee_event_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_with_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> set_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_with_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swap_event_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swaps_event_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> types.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│   │       │   ├── </span><span class="tree-status">[M]</span> cpi_event.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div></div></details><details class="tree-node" open><summary><span class="tree-prefix">│   │       └── </span><span class="tree-label">types/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │           ├── </span><span class="tree-status">[M]</span> candidate_swap.rs</div><div class="tree-file"><span class="tree-prefix">│   │           └── </span><span class="tree-status">[M]</span> swap.rs</div></div></details></div></details></div></details><details class="tree-node" open><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-decoder/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">accounts/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mint_row.rs</div><div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> multisig_row.rs</div><div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> token_row.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mint.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> multisig.rs</div><div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[M]</span> token.rs</div></div></details><details class="tree-node" open><summary><span class="tree-prefix">│           └── </span><span class="tree-label">instructions/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">│               ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> amount_to_ui_amount_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> batch_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> close_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> freeze_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> get_account_data_size_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account2_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account3_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_immutable_owner_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint2_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig2_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> revoke_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> set_authority_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> sync_native_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> thaw_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> types.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> ui_amount_to_amount_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> unwrap_lamports_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   └── </span><span class="tree-status">[A]</span> withdraw_excess_lamports_row.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│               └── </span><span class="tree-status">[M]</span> mod.rs</div></div></details></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">examples/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-clickhouse/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │       └── </span><span class="tree-status">[A]</span> main.rs</div></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-clickhouse/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[A]</span> main.rs</div></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">metrics/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">prometheus-metrics/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> lib.rs</div></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">└── </span><span class="tree-label">packages/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    ├── </span><span class="tree-label">cli/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    │       ├── </span><span class="tree-label">lib/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div><div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> decoder.ts</div><div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> prompts.ts</div><div class="tree-file"><span class="tree-prefix">    │       │   └── </span><span class="tree-status">[M]</span> scaffold.ts</div></div></details><div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[M]</span> cli.ts</div></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">    ├── </span><span class="tree-label">renderer/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">    │   │   ├── </span><span class="tree-label">utils/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │   │   │   └── </span><span class="tree-status">[M]</span> helpers.ts</div></div></details><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseDdl.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowMapper.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> getRenderMapVisitor.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> index.ts</div></div></details><details class="tree-node"><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">templates/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> accountsClickHouseMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseTypesPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> eventInstructionClickHouseRowPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> eventInstructionPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> instructionsClickHouseMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> instructionsMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> lib.njk</div></div></details><details class="tree-node"><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">test/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[A]</span> clickhouse-renderer.test.cjs</div></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">    └── </span><span class="tree-label">versions/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">        └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">            └── </span><span class="tree-status">[M]</span> index.ts</div></div></details></div></details></div></details></div></details>
+<details class="tree-node" open><summary><span class="tree-prefix"></span><span class="tree-label">carbon/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">crates/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">core/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">rows/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> mod.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> admin.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> config.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> http.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> metrics.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> processors.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> retry.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[A]</span> writer.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account_deletion.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> block_details.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> instruction.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> lib.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> pipeline.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> processor.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> transaction.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">datasources/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">rpc-block-crawler-datasource/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> lib.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">├── </span><span class="tree-label">decoders/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-decoder/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">accounts/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> token_ledger_row.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">instructions/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> best_swap_out_amount_violation_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_quote_error_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_results_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_token_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_token_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_wsol_token_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> fee_event_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_with_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> set_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_with_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swap_event_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swaps_event_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> types.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│   │       │   ├── </span><span class="tree-status">[M]</span> cpi_event.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">│   │       └── </span><span class="tree-label">types/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │           ├── </span><span class="tree-status">[M]</span> candidate_swap.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │           └── </span><span class="tree-status">[M]</span> swap.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-decoder/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">accounts/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mint_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> multisig_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> token_row.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mint.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> multisig.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[M]</span> token.rs</div>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">│           └── </span><span class="tree-label">instructions/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">│               ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> amount_to_ui_amount_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> batch_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> close_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> freeze_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> get_account_data_size_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account3_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_immutable_owner_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> revoke_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> set_authority_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> sync_native_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> thaw_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> types.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> ui_amount_to_amount_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> unwrap_lamports_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   └── </span><span class="tree-status">[A]</span> withdraw_excess_lamports_row.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│               └── </span><span class="tree-status">[M]</span> mod.rs</div>
+</div></details>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">examples/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-clickhouse/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │       └── </span><span class="tree-status">[A]</span> main.rs</div>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-clickhouse/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[A]</span> main.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">metrics/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">prometheus-metrics/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> lib.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">└── </span><span class="tree-label">packages/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    ├── </span><span class="tree-label">cli/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    │       ├── </span><span class="tree-label">lib/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> decoder.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> prompts.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │       │   └── </span><span class="tree-status">[M]</span> scaffold.ts</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[M]</span> cli.ts</div>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    ├── </span><span class="tree-label">renderer/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">    │   │   ├── </span><span class="tree-label">utils/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │   │   │   └── </span><span class="tree-status">[M]</span> helpers.ts</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseDdl.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowMapper.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> getRenderMapVisitor.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> index.ts</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">templates/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> accountsClickHouseMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseTypesPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> eventInstructionClickHouseRowPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> eventInstructionPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> instructionsClickHouseMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> instructionsMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> lib.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> macros.njk</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">test/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[A]</span> clickhouse-renderer.test.cjs</div>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    └── </span><span class="tree-label">versions/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">        └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">            └── </span><span class="tree-status">[M]</span> index.ts</div>
+</div></details>
+</div></details>
+</div></details>
+</div></details>
 </div>
 </div>
 
 <div class="tree-view tree-view-cli-renderer">
 <div class="tree-code-window">
-<details class="tree-node" open><summary><span class="tree-prefix"></span><span class="tree-label">carbon/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">crates/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">core/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">rows/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> mod.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> admin.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> config.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> http.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> metrics.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> processors.rs</div><div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[A]</span> writer.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account_deletion.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> block_details.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> instruction.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> lib.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> pipeline.rs</div><div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> processor.rs</div><div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> transaction.rs</div></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">decoders/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-decoder/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">accounts/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> token_ledger_row.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div></div></details><details class="tree-node"><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">instructions/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> best_swap_out_amount_violation_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_quote_error_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_results_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_token_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_token_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_wsol_token_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> fee_event_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_with_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> set_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_v2_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_with_token_ledger_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swap_event_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swaps_event_event_row.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> types.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│   │       │   ├── </span><span class="tree-status">[M]</span> cpi_event.rs</div><div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div></div></details><details class="tree-node"><summary><span class="tree-prefix">│   │       └── </span><span class="tree-label">types/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │           ├── </span><span class="tree-status">[M]</span> candidate_swap.rs</div><div class="tree-file"><span class="tree-prefix">│   │           └── </span><span class="tree-status">[M]</span> swap.rs</div></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-decoder/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">accounts/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mint_row.rs</div><div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> multisig_row.rs</div><div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> token_row.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mint.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> multisig.rs</div><div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[M]</span> token.rs</div></div></details><details class="tree-node"><summary><span class="tree-prefix">│           └── </span><span class="tree-label">instructions/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│               ├── </span><span class="tree-label">clickhouse/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> amount_to_ui_amount_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> batch_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> close_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> freeze_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> get_account_data_size_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account2_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account3_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_immutable_owner_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint2_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig2_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mod.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> revoke_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> set_authority_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> sync_native_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> thaw_account_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_checked_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> types.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> ui_amount_to_amount_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> unwrap_lamports_row.rs</div><div class="tree-file"><span class="tree-prefix">│               │   └── </span><span class="tree-status">[A]</span> withdraw_excess_lamports_row.rs</div></div></details><div class="tree-file"><span class="tree-prefix">│               └── </span><span class="tree-status">[M]</span> mod.rs</div></div></details></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">examples/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-clickhouse/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│   │       └── </span><span class="tree-status">[A]</span> main.rs</div></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-clickhouse/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[A]</span> main.rs</div></div></details></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">metrics/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">prometheus-metrics/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> lib.rs</div></div></details></div></details></div></details><details class="tree-node" open><summary><span class="tree-prefix">└── </span><span class="tree-label">packages/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">    ├── </span><span class="tree-label">cli/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">    │       ├── </span><span class="tree-label">lib/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div><div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> decoder.ts</div><div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> prompts.ts</div><div class="tree-file"><span class="tree-prefix">    │       │   └── </span><span class="tree-status">[M]</span> scaffold.ts</div></div></details><div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[M]</span> cli.ts</div></div></details></div></details><details class="tree-node" open><summary><span class="tree-prefix">    ├── </span><span class="tree-label">renderer/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">src/</span></summary><div class="tree-children"><details class="tree-node" open><summary><span class="tree-prefix">    │   │   ├── </span><span class="tree-label">utils/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │   │   │   └── </span><span class="tree-status">[M]</span> helpers.ts</div></div></details><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseDdl.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowMapper.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> getRenderMapVisitor.ts</div><div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> index.ts</div></div></details><details class="tree-node" open><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">templates/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> accountsClickHouseMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseTypesPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> eventInstructionClickHouseRowPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> eventInstructionPage.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> instructionsClickHouseMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> instructionsMod.njk</div><div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> lib.njk</div></div></details><details class="tree-node" open><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">test/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[A]</span> clickhouse-renderer.test.cjs</div></div></details></div></details><details class="tree-node"><summary><span class="tree-prefix">    └── </span><span class="tree-label">versions/</span></summary><div class="tree-children"><details class="tree-node"><summary><span class="tree-prefix">        └── </span><span class="tree-label">src/</span></summary><div class="tree-children"><div class="tree-file"><span class="tree-prefix">            └── </span><span class="tree-status">[M]</span> index.ts</div></div></details></div></details></div></details></div></details>
+<details class="tree-node" open><summary><span class="tree-prefix"></span><span class="tree-label">carbon/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">crates/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">core/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">rows/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> mod.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> admin.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> config.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> http.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> metrics.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> processors.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[A]</span> retry.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[A]</span> writer.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> account_deletion.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> block_details.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> instruction.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> lib.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> pipeline.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           ├── </span><span class="tree-status">[M]</span> processor.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> transaction.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">datasources/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">rpc-block-crawler-datasource/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> lib.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">decoders/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-decoder/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">accounts/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> token_ledger_row.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   │       ├── </span><span class="tree-label">instructions/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │       │   ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> best_swap_out_amount_violation_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_quote_error_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> candidate_swap_results_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> claim_token_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_token_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> close_wsol_token_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> create_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> exact_out_route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> fee_event_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> route_with_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> set_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_exact_out_route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_v2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> shared_accounts_route_with_token_ledger_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swap_event_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   ├── </span><span class="tree-status">[A]</span> swaps_event_event_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   │   └── </span><span class="tree-status">[A]</span> types.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│   │       │   ├── </span><span class="tree-status">[M]</span> cpi_event.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │       │   └── </span><span class="tree-status">[M]</span> mod.rs</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   │       └── </span><span class="tree-label">types/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │           ├── </span><span class="tree-status">[M]</span> candidate_swap.rs</div>
+<div class="tree-file"><span class="tree-prefix">│   │           └── </span><span class="tree-status">[M]</span> swap.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-decoder/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│           ├── </span><span class="tree-label">accounts/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│           │   ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mint_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   │   ├── </span><span class="tree-status">[A]</span> multisig_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   │   └── </span><span class="tree-status">[A]</span> token_row.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mint.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   ├── </span><span class="tree-status">[M]</span> multisig.rs</div>
+<div class="tree-file"><span class="tree-prefix">│           │   └── </span><span class="tree-status">[M]</span> token.rs</div>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│           └── </span><span class="tree-label">instructions/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│               ├── </span><span class="tree-label">clickhouse/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> amount_to_ui_amount_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> approve_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> batch_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> burn_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> close_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> freeze_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> get_account_data_size_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account3_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_immutable_owner_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_mint_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig2_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> initialize_multisig_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mint_to_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> mod.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> revoke_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> set_authority_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> sync_native_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> thaw_account_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_checked_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> transfer_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> types.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> ui_amount_to_amount_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   ├── </span><span class="tree-status">[A]</span> unwrap_lamports_row.rs</div>
+<div class="tree-file"><span class="tree-prefix">│               │   └── </span><span class="tree-status">[A]</span> withdraw_excess_lamports_row.rs</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">│               └── </span><span class="tree-status">[M]</span> mod.rs</div>
+</div></details>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">examples/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   ├── </span><span class="tree-label">jupiter-swap-clickhouse/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   │   └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│   │       └── </span><span class="tree-status">[A]</span> main.rs</div>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">token-program-clickhouse/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[A]</span> main.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">├── </span><span class="tree-label">metrics/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│   └── </span><span class="tree-label">prometheus-metrics/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">│       └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">│           └── </span><span class="tree-status">[M]</span> lib.rs</div>
+</div></details>
+</div></details>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">└── </span><span class="tree-label">packages/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">    ├── </span><span class="tree-label">cli/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">    │       ├── </span><span class="tree-label">lib/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> decoder.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │       │   ├── </span><span class="tree-status">[M]</span> prompts.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │       │   └── </span><span class="tree-status">[M]</span> scaffold.ts</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[M]</span> cli.ts</div>
+</div></details>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">    ├── </span><span class="tree-label">renderer/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<details class="tree-node" open><summary><span class="tree-prefix">    │   │   ├── </span><span class="tree-label">utils/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │   │   │   └── </span><span class="tree-status">[M]</span> helpers.ts</div>
+</div></details>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> cargoTomlGenerator.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseDdl.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowMapper.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> getRenderMapVisitor.ts</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> index.ts</div>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">    │   ├── </span><span class="tree-label">templates/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> accountsClickHouseMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> accountsPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseRowPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> clickhouseTypesPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> eventInstructionClickHouseRowPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> eventInstructionPage.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[A]</span> instructionsClickHouseMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> instructionsMod.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   ├── </span><span class="tree-status">[M]</span> lib.njk</div>
+<div class="tree-file"><span class="tree-prefix">    │   │   └── </span><span class="tree-status">[M]</span> macros.njk</div>
+</div></details>
+<details class="tree-node" open><summary><span class="tree-prefix">    │   └── </span><span class="tree-label">test/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">    │       └── </span><span class="tree-status">[A]</span> clickhouse-renderer.test.cjs</div>
+</div></details>
+</div></details>
+<details class="tree-node"><summary><span class="tree-prefix">    └── </span><span class="tree-label">versions/</span></summary>
+<div class="tree-children">
+<details class="tree-node"><summary><span class="tree-prefix">        └── </span><span class="tree-label">src/</span></summary>
+<div class="tree-children">
+<div class="tree-file"><span class="tree-prefix">            └── </span><span class="tree-status">[M]</span> index.ts</div>
+</div></details>
+</div></details>
+</div></details>
+</div></details>
 </div>
 </div>
 
