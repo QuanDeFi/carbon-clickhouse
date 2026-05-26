@@ -14,13 +14,15 @@ The ClickHouse path includes:
 2. Processor finalization so buffered processors drain on shutdown.
 3. Typed instruction and CPI-event ClickHouse coverage for `jupiter-swap-decoder`.
 4. Typed account ClickHouse coverage for `jupiter-swap-decoder` TokenLedger and `token-program-decoder`.
-5. Renderer support for generated typed account, instruction, and CPI-event landing rows.
-6. A per-buffer ClickHouse writer for independent Carbon processes writing into the same table families.
-7. Explicit synchronous and async-wait insert settings, with synchronous inserts as the default.
-8. Runtime controls for byte-aware batching, global backpressure, transport timeouts, gzip, retries, and optional exact-batch insert deduplication tokens.
-9. Renderer-controlled landing-table DDL modes for `MergeTree`, `ReplicatedMergeTree`, and `Distributed` deployments.
-10. CLI parity for ClickHouse renderer options through `--clickhouse-options`.
-11. Managed schema drift checks that safely repair enum-extension drift and reject unsafe live-table drift before ingestion.
+5. Typed instruction ClickHouse coverage for `token-program-decoder`.
+6. Renderer support for generated typed account, instruction, and CPI-event landing rows.
+7. A per-buffer ClickHouse writer for independent Carbon processes writing into the same table families.
+8. Explicit synchronous and async-wait insert settings, with synchronous inserts as the default.
+9. Runtime controls for byte-aware batching, global backpressure, transport timeouts, gzip, retries, and default exact-batch insert deduplication tokens.
+10. Renderer-controlled landing-table DDL modes for `MergeTree`, `ReplicatedMergeTree`, and `Distributed` deployments.
+11. CLI parity for ClickHouse renderer options through `--clickhouse-options`.
+12. Managed schema drift checks that safely repair enum-extension drift and reject unsafe live-table drift before ingestion.
+13. RPC block crawler reliability hardening for real-world ClickHouse live examples that depend on finalized block streams.
 
 ## How It Fits Into Carbon
 
@@ -40,6 +42,43 @@ That keeps the ClickHouse path aligned with Carbon's existing model:
 - Pipelines route data.
 - Processors own side effects.
 - Decoder crates own schema and storage-specific row mapping.
+
+## Carbon Core And Datasource Touches
+
+Most of the ClickHouse implementation lives in generated decoder modules and the
+`carbon-core::clickhouse` runtime. The branch also touches a small number of
+shared Carbon paths because a buffered ClickHouse sink depends on delivery and
+shutdown behavior that happens before rows reach the sink.
+
+Those shared touches are intentional:
+
+- Processor finalization was added so buffered processors can drain rows on
+  shutdown. Without this lifecycle hook, a ClickHouse processor could process
+  decoded updates but exit before its in-memory buffers are flushed.
+- Pipeline shutdown calls processor finalization before exporter shutdown so
+  ClickHouse rows accepted by processors are drained before the process exits.
+- The RPC block crawler was hardened because both real-world ClickHouse
+  examples use finalized block streams. Sink-local retries cannot recover a
+  transaction update that the datasource dropped before the processor saw it.
+
+The RPC block crawler changes are reliability changes, not ClickHouse schema
+logic:
+
+- near-head temporary `getBlock` failures such as `-32004
+  BlockNotAvailable` and `-32014 BlockStatusNotAvailableYet` are retried
+  instead of treated as permanent skipped slots;
+- permanent Solana skip conditions such as `-32001`, `-32007`, and `-32009`
+  are still skipped and logged with the extracted RPC error code;
+- downstream transaction delivery uses awaited `send(...)` instead of
+  `try_send(...)`, so a full Carbon channel applies backpressure rather than
+  silently dropping updates;
+- the block fetcher and task processor shut down in an order that lets queued
+  blocks drain before the task exits.
+
+These changes keep the example data source compatible with the ClickHouse
+sink's durability assumptions: once a transaction update is accepted by the
+processor, the ClickHouse writer can buffer, retry, and drain it; before that
+point, datasource behavior controls whether the update exists at all.
 
 ## Solana Schema And Validation Boundary
 
@@ -160,6 +199,71 @@ Callers that need production settings should use `bootstrap_clickhouse_from_data
 
 `DATABASE_URL` provides the HTTP endpoint and optional auth credentials. Generated helpers pass their own database default, currently `DEFAULT_DATABASE = "default"`, instead of deriving the database from the URL path.
 
+## End-User Setup Flow
+
+For a generated decoder with ClickHouse enabled, the normal setup is:
+
+1. Generate or scaffold the decoder with `--with-clickhouse true`, or pass
+   production DDL options through `--clickhouse-options <jsonOrFile>`.
+2. Enable the generated decoder crate's `clickhouse` feature in the consuming
+   application.
+3. Build a `ClickHouseConfig` from `DATABASE_URL` with the generated
+   `clickhouse_config_from_database_url(...)` or
+   `bootstrap_clickhouse_from_database_url(...)` helper.
+4. Run the generated migration/setup helper before ingestion. This creates
+   missing generated tables, adds missing generated columns, repairs safe enum
+   extensions, and fails on unsafe drift.
+5. Apply any production runtime settings with `ClickHouseConfig` builder
+   methods.
+6. Attach the generated ClickHouse processor to the normal Carbon account or
+   instruction pipe.
+7. Let Carbon pipeline shutdown call processor `finalize()`, or call
+   `finalize()` directly in custom wiring, so buffered rows drain.
+
+Minimal example environment:
+
+```env
+DATABASE_URL=http://user:password@clickhouse-host:8123
+RPC_URL=<provider-rpc-url>
+PROMETHEUS_METRICS_ADDR=0.0.0.0:9464
+LOG_LEVEL=debug
+```
+
+The committed examples also support:
+
+- `CLICKHOUSE_ASYNC_INSERT=true` to opt into async-wait inserts.
+- Jupiter only: `BLOCK_CRAWLER_START_SLOT`, `BLOCK_CRAWLER_END_SLOT`, and
+  `BLOCK_CRAWLER_HEAD_LAG_SLOTS` for bounded, catch-up, or head-follow modes.
+
+Do not put multiple independent Carbon processes on the same
+`PROMETHEUS_METRICS_ADDR` port on one host. Run each process with its own
+metrics port or let the process supervisor/container platform expose distinct
+targets.
+
+## Runtime Configuration Reference
+
+`ClickHouseConfig` is the runtime contract between generated decoder helpers
+and the generic writer.
+
+| Field or builder | Default | Purpose |
+| --- | --- | --- |
+| `endpoint` | From `DATABASE_URL` scheme, host, and port | ClickHouse HTTP endpoint. |
+| `database` | Generated helper default, currently `default` | Target database passed as the ClickHouse `database` query parameter. |
+| `username` / `password` | From `DATABASE_URL` userinfo | Optional HTTP basic auth. |
+| `table` | Generated default table name | Compatibility field for single-table helpers; multi-table generated rows choose concrete tables through `ClickHouseRow::table_name()`. |
+| `source_name` | Generated helper default, often decoder/example specific | Row metadata identifying the datasource or pipeline source, for example `rpc_block_crawler` or `rpc_get_multiple_accounts`. |
+| `mode` | Generated helper default, then example-specific override | Row metadata such as `backfill`, `live`, or `snapshot`. |
+| `decoder_version` | Generated helper default, currently logical `v1` | Row metadata for logical decoder/version routing; not currently a crate version or schema hash. |
+| `with_insert_settings(...)` | `ClickHouseInsertSettings::Sync` | Select synchronous inserts or async-wait inserts. |
+| `with_batch_settings(...)` | Required generated `max_rows` and `flush_interval`; byte/global caps unset | Controls per-buffer row threshold, per-buffer byte threshold, global buffered row/byte caps, and stale flush interval. |
+| `with_transport_settings(...)` | No explicit timeouts, no compression, default reqwest pool | Controls request/connect/pool timeouts, max idle connections per host, gzip body compression, and user agent. |
+| `with_retry_settings(...)` | `max_retries = 3`, `initial_backoff = 100ms`, `max_backoff = 5s`, `jitter = true` | Controls transient HTTP retry behavior. |
+| `with_deduplication_settings(...)` | `ClickHouseDeduplicationSettings::ExactBatchHash` | Emits a stable `insert_deduplication_token` per exact table/query/body batch unless disabled. |
+
+The examples expose only a thin environment surface. More advanced runtime
+settings are Rust API configuration, not environment variables, so production
+applications should configure them in their own pipeline wiring.
+
 ## Write Path And Insert Model
 
 The sink uses client-side batching and HTTP `JSONEachRow` inserts.
@@ -238,18 +342,54 @@ All insert requests include `date_time_input_format=best_effort`; async settings
 Each insert attempt also includes a generated `query_id`:
 
 ```text
-carbon-clickhouse-{table}-{sha256(table + body + attempt)}
+carbon-clickhouse-{table}-{sequence}-{attempt}
 ```
 
 The query ID is for ClickHouse query-log traceability only. It is not used for deduplication.
 
-When `ClickHouseDeduplicationSettings::ExactBatchHash` is enabled, each exact batch includes:
+`ClickHouseDeduplicationSettings::ExactBatchHash` is the default. When enabled,
+each exact batch includes:
 
 ```text
 insert_deduplication_token = sha256(table + "\n" + insert_query + "\n" + exact_body)
 ```
 
 Retry behavior is controlled by `ClickHouseRetrySettings`. The sink retries network errors, request timeouts, HTTP `408`, `429`, `5xx`, and ClickHouse "too many parts" / "too many inactive parts" responses. Schema errors, auth errors, malformed requests, and most other `4xx` responses are treated as permanent.
+
+## Multi-Writer Behavior
+
+Production deployments can run many Carbon processes in parallel, each with its
+own datasource, decoder, processor, and local ClickHouse writer. There is no
+global writer coordinator in `carbon-core::clickhouse`.
+
+The integration gives ClickHouse enough request and row metadata to operate
+safely in that model:
+
+- `source_name`, `mode`, and `decoder_version` are written into every landing
+  row so downstream queries can separate pipelines, sources, backfills,
+  snapshots, and live ingestion modes.
+- Each insert attempt sends a `query_id` in the form
+  `carbon-clickhouse-{table}-{sequence}-{attempt}` so operators can trace
+  Carbon inserts in `system.query_log` and async-insert logs. This is trace
+  metadata, not a stable writer identity.
+- `ClickHouseDeduplicationSettings::ExactBatchHash` sends
+  `insert_deduplication_token` based on the exact table, insert query, and
+  body. This gives retry idempotency for the exact same batch. It does not
+  deduplicate different batch boundaries or replayed landing rows.
+- Async-wait mode sends `async_insert=1` and `wait_for_async_insert=1`, allowing
+  ClickHouse to coalesce inserts server-side while the Carbon process still
+  observes insert success or failure.
+- Renderer-generated local `MergeTree` DDL includes
+  `non_replicated_deduplication_window = 1000` by default when local
+  non-replicated deduplication is relevant.
+- Replicated and distributed table topology is controlled by renderer DDL
+  options, not by the runtime writer.
+
+For scaled live ingestion, use async-wait inserts, consistent DDL across all
+writers, unique `source_name` values when operators need per-pipeline
+separation, and external process/container labels for per-process Prometheus
+views. For bounded backfills and deterministic replay jobs, synchronous inserts
+remain the simpler default.
 
 ## Production Config Examples
 
@@ -264,7 +404,6 @@ use std::time::Duration;
 
 use carbon_core::clickhouse::{
     ClickHouseBatchSettings,
-    ClickHouseDeduplicationSettings,
     ClickHouseHttpCompression,
     ClickHouseRetrySettings,
     ClickHouseTransportSettings,
@@ -291,11 +430,13 @@ let config = bootstrap_clickhouse_from_database_url(&database_url).await?
         initial_backoff: Duration::from_millis(250),
         max_backoff: Duration::from_secs(10),
         jitter: true,
-    })
-    .with_deduplication_settings(ClickHouseDeduplicationSettings::ExactBatchHash);
+    });
 ```
 
-`ExactBatchHash` emits an `insert_deduplication_token` derived from the exact table, insert query, and body. It is optional because ClickHouse gives explicit tokens priority over the data hash; callers must not reuse a token for different data.
+`ExactBatchHash` is enabled by default and emits an `insert_deduplication_token`
+derived from the exact table, insert query, and body. Callers can disable it
+through `with_deduplication_settings(ClickHouseDeduplicationSettings::Disabled)`
+only when duplicate retry inserts in raw landing tables are acceptable.
 
 ### Async-Wait Live Ingestion
 
@@ -399,6 +540,7 @@ Current canary table families include:
 - Jupiter instruction tables such as `jupiter_swap_route_instruction_landing`.
 - Jupiter CPI/event tables such as `jupiter_swap_fee_event_landing`, `jupiter_swap_swap_event_landing`, and `jupiter_swap_swaps_event_landing`.
 - Token Program account tables: `token_program_mint_account_landing`, `token_program_multisig_account_landing`, and `token_program_token_account_landing`.
+- Token Program instruction tables such as `token_program_transfer_checked_instruction_landing`, `token_program_initialize_account3_instruction_landing`, and `token_program_sync_native_instruction_landing`.
 
 Common instruction columns:
 
@@ -567,16 +709,24 @@ Use a bounded slot range when testing the example against production RPC.
 
 ## Token Program Example
 
-`examples/token-program-clickhouse` is the real-world smoke test for the account-family path.
+`examples/token-program-clickhouse` is the real-world smoke test for the Token
+Program account and instruction path.
 
 It validates:
 
 - standard Solana JSON-RPC `getMultipleAccounts` against a fixed USDC account set
 - generated Token Program ClickHouse account table bootstrap
+- generated Token Program ClickHouse instruction table bootstrap
 - Token Program account decoding from real mainnet account data
 - generated mint, multisig, and token account landing rows
+- live finalized block crawling for Token Program instruction rows
+- generated Token Program instruction landing rows, including high-volume
+  `TransferChecked`, ATA setup, WSOL lifecycle, and lower-frequency authority
+  or mint/burn operations when they occur in the stream
 - `ClickHouseAccountProcessor`
+- `ClickHouseInstructionProcessor`
 - account-family metrics
+- instruction-family metrics
 - per-buffer writer flushing and shutdown drain
 - optional `CLICKHOUSE_ASYNC_INSERT=true`
 - Prometheus scrape exposure on `PROMETHEUS_METRICS_ADDR`, default `0.0.0.0:9465`
@@ -585,10 +735,14 @@ The example is intentionally opinionated. It fetches four hardwired USDC
 accounts: the USDC mint, the USDC mint-authority multisig, the USDC
 freeze-authority multisig, and one USDC token holding account. It does not scan
 Token Program accounts, does not use GPA pagination, does not require Helius
-specific APIs, and has no `--source` mode. Rows are current account snapshots
-from the RPC response slot, so the example writes `mode = live` and
-`source_name = rpc_get_multiple_accounts`. It stays alive briefly after the
-snapshot so Prometheus can scrape final ClickHouse account metrics.
+specific APIs, and has no `--source` mode. Account rows are current account
+snapshots from the RPC response slot, so the account processor writes
+`mode = snapshot` and `source_name = rpc_get_multiple_accounts`.
+
+After the account snapshot, the example starts the RPC block crawler at the
+next finalized slot and keeps running until interrupted. Instruction rows are
+block-wide Token Program coverage from finalized blocks, so the instruction
+processor writes `mode = live` and `source_name = rpc_block_crawler`.
 
 ## Identity, Replay, And Table Semantics
 
@@ -724,7 +878,16 @@ For that model:
 - The writer flushes independently per `(table, partition)` buffer.
 - Synchronous inserts are the default for backfills and deterministic ingestion.
 - Async-wait inserts are available for live production ingestion with many writers.
+- `query_id` gives ClickHouse query-log traceability per insert attempt.
+- Exact-batch deduplication tokens are emitted by default for retry
+  idempotency of the same serialized batch.
+- Row metadata (`source_name`, `mode`, `decoder_version`) is the application
+  layer way to distinguish pipelines and ingestion modes in landing tables.
 - ClickHouse table design is typed landing tables: one per instruction family, one per account family, and one per generated CPI/event family.
+
+The sink does not register writer processes in ClickHouse and does not provide
+a cross-process coordinator. Coordination across many Carbon processes belongs
+to the process supervisor, deployment platform, or external control plane.
 
 ## Responsibility Split
 
@@ -736,8 +899,9 @@ The sink handles:
 - shutdown drain through processor finalization
 - sync insert defaults and async-wait insert settings
 - transient HTTP retry/backoff and failed-buffer preservation
-- optional exact-batch insert deduplication tokens
-- basic generated schema bootstrap for landing tables
+- default exact-batch insert deduplication tokens
+- generated managed schema bootstrap and safe drift reconciliation for landing
+  tables
 - sink-side metrics
 
 ClickHouse handles:
@@ -881,7 +1045,7 @@ ORDER BY minute DESC;
 Committed decoder output stays canary-limited:
 
 - Jupiter swap validates instruction and CPI-event ClickHouse rows.
-- Token Program validates account ClickHouse rows.
+- Token Program validates account and instruction ClickHouse rows.
 - Other decoders stay without committed ClickHouse modules until upstream v1 stabilizes.
 
 Broad decoder validation is done without committing generated output. Use `scripts/validate-clickhouse-decoder-rollout.sh` for current canary validation, `--compile-all` for a broader baseline compile scan, `--regenerate-idl-dir` for local IDL files, and `--regenerate-from-readme --rpc-url "$RPC_URL"` for README-listed program IDs. When upstream v1 stabilizes, run broader `withClickHouse` regeneration in a temporary branch or worktree, compile with `--allow-broad-clickhouse`, and commit only the intended rollout set.

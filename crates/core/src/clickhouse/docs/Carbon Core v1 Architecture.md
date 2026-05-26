@@ -1,6 +1,6 @@
 # Carbon Core v1 Architecture
 
-This document summarizes Carbon core v1 as it exists on `upstream-v1-sync`, without the ClickHouse sink branch additions.
+This document summarizes Carbon core v1 as it exists on `upstream-v1-sync`.
 
 Diff basis for this scan:
 
@@ -28,8 +28,6 @@ The workspace package version is `0.12.0`, Rust version is `1.82`, and the upstr
 - `default = ["macros"]`
 - `postgres` is optional and pulls in `sqlx`, `sqlx_migrator`, numeric wrappers, and Postgres primitives.
 - `graphql` is optional and pulls in Juniper/Axum support.
-
-There is no upstream `clickhouse` feature.
 
 The upstream CI shape is:
 
@@ -77,7 +75,7 @@ Carbon's core shape follows Solana's program model rather than a generic databas
 
 Program-owned account layouts, instruction layouts, CPI/event layouts, and shared type definitions are the natural schema boundaries. This is why generated decoder crates own account, instruction, event, and type modules, while Carbon core owns the generic pipeline and processor surfaces.
 
-IDL and Codama-driven generation are the intended source of truth for known program schemas. The useful Solana rule is to avoid hand-maintaining Borsh layouts when an IDL/codegen path exists. For ClickHouse-style generated sinks, that means structured row mappings should be derived from decoder/Codama schema, with handwritten canary mappings treated as temporary compatibility scaffolding.
+IDL and Codama-driven generation are the intended source of truth for known program schemas. The useful Solana rule is to avoid hand-maintaining Borsh layouts when an IDL/codegen path exists.
 
 Live RPC, Geyser, account, transaction, and log data should be treated as untrusted input. Account owner checks, data length checks, discriminators, instruction discriminators, and account arrangement validation are not incidental details; they are the safety boundary between arbitrary on-chain bytes and typed decoder output. A decoder that cannot validate a shape should skip or fail that shape rather than silently accepting it as typed data.
 
@@ -286,7 +284,7 @@ Important behaviors not directly covered by scanned tests:
 - queue-depth gauge semantics under full-channel pressure
 - block-details pipe count omission from the startup log
 
-These gaps matter for sink work because buffered processors depend on deterministic shutdown/drain behavior, while metrics and queue depth are process-global and not sink-local.
+These gaps matter for any buffered processor because deterministic shutdown/drain behavior is not provided by upstream v1, while metrics and queue depth are process-global rather than processor-local.
 
 ## Account Path
 
@@ -387,12 +385,12 @@ Event payload field shapes from the targeted scan:
 Notable event schema stress cases:
 
 - Drift v2 has many `u128`/`i128` event fields, optional scalar/pubkey fields, nested defined-type payloads, and events such as `OrderActionRecord` and `LiquidationRecord` with many fields.
-- Jupiter Swap has only six event variants, but `SwapsEvent` and `CandidateSwapResults` use vectors of defined types, which is why it is a useful ClickHouse event canary.
+- Jupiter Swap has only six event variants, but `SwapsEvent` and `CandidateSwapResults` use vectors of defined types, which makes it a useful representative event-shape stress case.
 - Marginfi v2 uses many nested header/config defined types and an `Option<Vec<Pubkey>>` event field.
 - Marinade Finance uses many `Option<DefinedType>` configuration-change fields.
 - Circle Message Transmitter and Drift include fixed byte arrays in event payloads.
 
-Upstream generated Postgres persistence for CPI/events is intentionally generic: every event variant goes into one `cpi_events` table with `name TEXT`, `data JSONB`, and `__accounts JSONB`. Broad typed ClickHouse event rollout is therefore not a one-to-one copy of upstream Postgres. It requires structured mapping coverage for all known event payload shapes or an explicit fail-fast path.
+Upstream generated Postgres persistence for CPI/events is intentionally generic: every event variant goes into one `cpi_events` table with `name TEXT`, `data JSONB`, and `__accounts JSONB`.
 
 ## Transaction Path
 
@@ -576,7 +574,7 @@ High-complexity decoder stress cases from the targeted scan:
 | meteora-dlmm-decoder | 12 | 75 | 25 | 65 | 89 | 158 | CPI events plus liquidity parameter structs and repeated complex instruction payloads |
 | raydium-clmm-decoder | 9 | 26 | 11 | 16 | 37 | 57 | nested tick/observation arrays, fixed arrays, and CPI events |
 
-These decoders explain why a strict typed sink needs broad non-committing validation before regenerating everything. Upstream Postgres uses JSONB as a pressure valve for known complex shapes; a structured ClickHouse mapper must either support those shapes explicitly or fail fast instead of silently producing an unusable schema.
+These decoders explain why any strict typed backend needs broad non-committing validation before regenerating everything. Upstream Postgres uses JSONB as a pressure valve for known complex shapes.
 
 Renderer schema-edge scan across committed decoders found these high-risk shapes outside generated Postgres and GraphQL output:
 
@@ -584,10 +582,10 @@ Renderer schema-edge scan across committed decoders found these high-risk shapes
 | --- | ---: | ---: | ---: | --- |
 | `u128` / `i128` fields | 762 | 343 | 29 | Requires precision-preserving mapping; Drift v2 dominates this class. |
 | `Option<...>` fields | 1,286 | 513 | 44 | Includes optional composites that Postgres often routes through JSONB. |
-| `Option<Vec<...>>` fields | 30 | 25 | 6 | Important because ClickHouse does not allow `Nullable(Array(...))`. |
+| `Option<Vec<...>>` fields | 30 | 25 | 6 | Optional vectors are a notable generated-schema edge case. |
 | `Option<Composite>` fields | 328 | 168 | 26 | Requires explicit presence handling or fail-fast mapping. |
 | `Vec<...>` fields | 2,015 | 1,938 | 62 | Common across instructions, accounts, events, and types. |
-| `Vec<Composite>` fields | 134 | 124 | 34 | Jupiter Swap route plans are the canary version of this shape. |
+| `Vec<Composite>` fields | 134 | 124 | 34 | Jupiter Swap route plans are a compact representative of this shape. |
 | `Vec<Vec<...>>` fields | 3 | 3 | 3 | Rare but structurally important for strict typed sinks. |
 | fixed array fields | 792 | 394 | 39 | Many use `serde_big_array::BigArray`; fixed byte arrays are common. |
 | `HashMap` / `HashSet` fields | 4 | 2 | 2 | Postgres maps/sets fall back to JSONB upstream. |
@@ -612,15 +610,6 @@ Anchor IDL generation applies several normalization steps before rendering:
 Codama IDL generation follows a narrower path and applies `extractStructArrayItems()` so anonymous struct array elements become named defined types. This avoids Rust shapes like `Vec<{ anonymous struct }>`.
 
 Token-2022 generation is special-cased. Generated account decoding uses SPL Token 2022 `StateWithExtensions` for mint/token accounts, handles multisig separately, and emits extra conversion code for extension types.
-
-There is no ClickHouse support in upstream v1:
-
-- no `clickhouse` feature in `carbon-core`
-- no `carbon_core::clickhouse`
-- no `withClickHouse`
-- no ClickHouse renderer templates
-- no ClickHouse DDL planner
-- no ClickHouse example crates
 
 The generator stack also includes macro support:
 
@@ -668,9 +657,8 @@ Computed comparison against `upstream/v1.0-rc`:
 | `upstream/nd/arranged-accounts-refactor` | 249 | 16 | `efe023190` on 2025-12-05 | Older decoder/account-arranging branch; far behind v1. |
 | `upstream/nd/reference-refactor` | 201 | 16 | `58eb3c874` on 2026-01-12 | Older reference/refactor branch; far behind v1. |
 
-`upstream/refactor/core-consistency` was merged into `clickhouse-upstream-v1`
-during the 2026-05-18 WIB maintenance pass. The branch touched the areas most
-likely to conflict with local ClickHouse additions:
+`upstream/refactor/core-consistency` touches several high-signal upstream core,
+renderer, datasource, decoder, example, and metrics paths:
 
 - Core pipe structs get private fields plus `new(...)` constructors.
 - `Filter` object bounds drop redundant `Send + Sync` annotations in several builder and pipe signatures.
@@ -680,57 +668,11 @@ likely to conflict with local ClickHouse additions:
 - `postgres::operations::LookUp` was renamed to `Lookup`, requiring generated Postgres template and generated decoder updates.
 - The branch reformats a large number of generated Postgres/GraphQL files due to the trait rename and formatting changes.
 
-The `refactor/core-consistency` diff over scanned core/renderer/datasource/decoder/example/metrics paths is 2,261 files, 3,261 insertions, and 2,735 deletions. Most changes are comments, formatting, constructor encapsulation, and the Postgres trait rename rather than a new pipeline abstraction. For the ClickHouse branch, the practical merge-risk areas are `pipeline.rs`, pipe structs, metrics registry, Postgres operation names in templates, and any generated ClickHouse code that mirrors upstream pipe-constructor patterns.
+The `refactor/core-consistency` diff over scanned core/renderer/datasource/decoder/example/metrics paths is 2,261 files, 3,261 insertions, and 2,735 deletions. Most changes are comments, formatting, constructor encapsulation, and the Postgres trait rename rather than a new pipeline abstraction.
 
-### Merge Scan And Resolution Against ClickHouse Branch
+## Architectural Implications For Extensions
 
-A dry merge was run in a disposable worktree at `2026-05-16 09:11:05 WIB (+0700)`:
-
-- Merge target: `clickhouse-upstream-v1` at `6b84bec8f`
-- Merge source: `upstream/refactor/core-consistency` at `940ca846f`
-- Merge base: `972028f15`
-- Result: merge conflicts, with no direct conflict in ClickHouse-specific files
-
-Unmerged files from the dry merge:
-
-| File | Conflict cause |
-| --- | --- |
-| `README.md` | documentation drift between the ClickHouse branch and upstream core-consistency docs |
-| `crates/core/src/account.rs` | ClickHouse branch adds pipe `finalize()`; upstream changes filter object bounds and pipe encapsulation |
-| `crates/core/src/account_deletion.rs` | same `finalize()` versus filter-bound/encapsulation conflict |
-| `crates/core/src/block_details.rs` | same `finalize()` versus filter-bound/encapsulation conflict |
-| `crates/core/src/instruction.rs` | same `finalize()` versus filter-bound/encapsulation conflict |
-| `crates/core/src/transaction.rs` | same `finalize()` versus filter-bound/encapsulation conflict |
-| `crates/core/src/pipeline.rs` | ClickHouse branch adds `finalize_pipes()`; upstream moves helper methods and refactors pipe construction |
-
-Non-conflicting but relevant auto-merged paths include:
-
-- `crates/core/src/processor.rs`: ClickHouse branch's default `Processor::finalize()` coexists with upstream's documentation changes.
-- `crates/core/src/metrics.rs`: upstream poison-lock handling and docs auto-merge, but metric registry remains global and label-less.
-- `metrics/prometheus-metrics/src/lib.rs`: upstream import/style changes auto-merge; ClickHouse metric-name handling still needs review during an actual merge.
-- `packages/renderer/templates/eventInstructionRowPage.njk`, `graphqlQueryPage.njk`, and `postgresRowPage.njk`: upstream `LookUp` to `Lookup` rename affects Postgres templates, not ClickHouse templates directly.
-- `examples/yellowstone-grpc/src/main.rs`: upstream example edits auto-merge and do not affect committed ClickHouse examples directly.
-
-Practical resolution direction for a future merge:
-
-- Keep the ClickHouse branch's `Processor::finalize()` lifecycle and `Pipeline::finalize_pipes()` shutdown drain.
-- Adopt upstream's simplified `Box<dyn Filter + 'static>` object bounds consistently in pipe traits and implementations.
-- Keep upstream's private pipe fields and `new(...)` constructors; the dry merge already auto-applies these in `PipelineBuilder`.
-- Re-run core ClickHouse tests after resolving the six core conflicts because the conflicts are exactly in the processor lifecycle path used by buffered ClickHouse writers.
-- Re-run renderer checks because upstream's Postgres template rename touches generated-output templates even though ClickHouse templates do not conflict directly.
-
-Actual merge resolution on `2026-05-18 01:18:01 WIB (+0700)` used that plan:
-
-- Merge target before merge: `clickhouse-upstream-v1` at `a834ed91f`.
-- Merge source: `upstream/refactor/core-consistency` at `940ca846f`.
-- Kept `Processor::finalize()` and `Pipeline::finalize_pipes()` for buffered ClickHouse shutdown drain.
-- Adopted upstream's simplified `Box<dyn Filter + 'static>` object bounds and pipe constructor encapsulation.
-- Resolved the Jupiter GraphQL conflict to upstream's `postgres::operations::Lookup` spelling.
-- Kept README ClickHouse CLI option docs while incorporating upstream's refreshed README structure.
-
-## Architectural Implications For Sink Work
-
-New sinks should align with upstream v1 when they:
+New processor-backed extensions should align with upstream v1 when they:
 
 - stay processor-driven
 - keep decoder-owned schema in decoder crates
@@ -738,7 +680,7 @@ New sinks should align with upstream v1 when they:
 - expose metrics through the global registry
 - avoid changing core channel and fanout semantics unless explicitly required
 
-Buffered sinks need extra lifecycle support because upstream v1 processors have no finalization. A buffered sink that returns from `process()` before data is durably written needs a shutdown drain path outside upstream v1's original lifecycle.
+Buffered processors need extra lifecycle support because upstream v1 processors have no finalization. A processor that returns from `process()` before its side effect is durably completed needs a shutdown drain path outside upstream v1's original lifecycle.
 
 The risky core areas to modify casually are:
 
