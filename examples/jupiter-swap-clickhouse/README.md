@@ -2,7 +2,8 @@
 
 This example runs real RPC blocks through the generated Jupiter Swap
 ClickHouse instruction and CPI-event landing tables. It supports bounded
-backfill ranges and a near-head live mode.
+backfill ranges, explicit start-slot catch-up/tailing, and pure head-follow
+mode.
 
 ## Required Environment
 
@@ -15,7 +16,7 @@ BLOCK_CRAWLER_START_SLOT=<start-slot>
 BLOCK_CRAWLER_END_SLOT=<end-slot-or-empty>
 BLOCK_CRAWLER_HEAD_LAG_SLOTS=3
 PROMETHEUS_METRICS_ADDR=0.0.0.0:9464
-LOG_LEVEL=info
+LOG_LEVEL=debug
 ```
 
 Use the production/provider RPC URL from the local `.env`. The public
@@ -34,8 +35,13 @@ Mode is inferred from the slot env:
 - Set `BLOCK_CRAWLER_START_SLOT` and leave `BLOCK_CRAWLER_END_SLOT` empty to
   catch up from that slot and then keep following head.
 - Leave both `BLOCK_CRAWLER_START_SLOT` and `BLOCK_CRAWLER_END_SLOT` empty for
-  pure head-follow mode. The example starts near the current confirmed slot
+  pure head-follow mode. The example starts near the current finalized slot
   using `BLOCK_CRAWLER_HEAD_LAG_SLOTS`.
+
+The block crawler uses finalized blocks, binary transaction encoding, version
+0 transaction support, and one in-flight `getBlock` request. This keeps the
+example conservative and provider-friendly; it is not tuned as a high-throughput
+catch-up worker.
 
 TokenLedger account fetching is intentionally live-only in this example. The
 RPC account read returns the current confirmed account state at fetch time, not
@@ -45,7 +51,8 @@ is outside this thin example. Because of that, the generated TokenLedger
 account processor is attached only in pure head-follow mode, when both
 `BLOCK_CRAWLER_START_SLOT` and `BLOCK_CRAWLER_END_SLOT` are empty. It is not
 attached for bounded backfills or catch-up/tailing runs from an explicit start
-slot.
+slot. In that mode, first-seen TokenLedger pubkeys are fetched immediately with
+`getAccountInfo` and written through the generated Jupiter account processor.
 
 The example exposes Carbon metrics for Prometheus at
 `PROMETHEUS_METRICS_ADDR` and keeps log metrics enabled. Use
