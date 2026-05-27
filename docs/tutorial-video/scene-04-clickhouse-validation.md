@@ -1,11 +1,10 @@
-# Scene 04: ClickHouse SQL Validation
+# Scene 04: Token Program Live Ingestion
 
-After ingestion, we query ClickHouse directly. The goal is to prove that the
-landing tables were created and populated with typed Jupiter rows.
+Next we start the Token Program ClickHouse example in a second terminal window.
+This keeps the Jupiter and Token Program examples visually separate while both
+write to the same local ClickHouse and monitoring stack.
 
-The table list shows the generated landing tables for Jupiter instructions and
-CPI events. The count query checks how many route rows and unique transaction
-signatures landed. Then the sample route rows show the decoded swap amount
-fields and the number of route legs, while the event query shows per-swap AMM
-execution amounts. These samples are more useful than counts alone because they
-show what analysts can actually inspect from the landing layer.
+The Token Program example starts with fixed USDC account snapshots and then
+keeps tailing finalized blocks for live Token Program instructions. With both
+examples running, the next scenes can show Carbon-side metrics and ClickHouse-
+side query activity while ingestion is still in progress.

@@ -16,22 +16,17 @@ query_ch() {
 }
 
 active_demo_processes() {
+  # grep (not rg) so the reset works on hosts without ripgrep installed.
   pgrep -af 'jupiter-swap-clickhouse-carbon-example|token-program-clickhouse-carbon-example|cargo run -p jupiter-swap-clickhouse-carbon-example|cargo run -p token-program-clickhouse-carbon-example' \
-    | rg -v 'pgrep|reset-clickhouse|detect-running|bash -c' || true
+    | grep -Ev 'pgrep|reset-clickhouse|detect-running|bash -c' || true
 }
 
-tables="$(curl -fsS "$DATABASE_URL/" --data-binary "SHOW TABLES FROM default" \
-  | awk '/^jupiter_swap_.*landing$/ || /^token_program_.*account_landing$/ {print}' \
-  | sort)"
+# System logs surfaced to viewers in ClickStack. They accumulate across runs
+# (e.g. system.query_log grows unbounded), so each demo run otherwise shows
+# stale prior-run telemetry. Truncated for a fresh viewer-visible state.
+SYSTEM_LOGS=(system.query_log system.asynchronous_insert_log system.metric_log)
 
-if [[ -z "$tables" ]]; then
-  log_info "No tutorial ClickHouse tables matched"
-  exit 0
-fi
-
-log_info "Matching tutorial tables:"
-printf '%s\n' "$tables"
-
+# Refuse to reset while example processes are still writing.
 running="$(active_demo_processes)"
 if [[ -n "$running" ]]; then
   log_error "Demo/example processes are active; stop them before reset"
@@ -39,13 +34,36 @@ if [[ -n "$running" ]]; then
   exit 1
 fi
 
+tables="$(curl -fsS "$DATABASE_URL/" --data-binary "SHOW TABLES FROM default" \
+  | awk '/^jupiter_swap_.*landing$/ || /^token_program_.*account_landing$/ {print}' \
+  | sort)"
+
 if [[ "${DEMO_ALLOW_CLICKHOUSE_RESET:-}" != "true" ]]; then
-  log_warn "Dry run only. Set DEMO_ALLOW_CLICKHOUSE_RESET=true to drop these tables."
+  log_warn "Dry run only. Set DEMO_ALLOW_CLICKHOUSE_RESET=true to drop tutorial tables and flush system logs."
+  if [[ -n "$tables" ]]; then
+    log_info "Would drop tutorial tables:"
+    printf '%s\n' "$tables"
+  fi
   exit 0
 fi
 
-while IFS= read -r table; do
-  [[ -z "$table" ]] && continue
-  log_info "Dropping $table"
-  query_ch "DROP TABLE IF EXISTS default.$table"
-done <<< "$tables"
+if [[ -n "$tables" ]]; then
+  log_info "Dropping tutorial tables:"
+  printf '%s\n' "$tables"
+  while IFS= read -r table; do
+    [[ -z "$table" ]] && continue
+    log_info "Dropping $table"
+    query_ch "DROP TABLE IF EXISTS default.$table"
+  done <<< "$tables"
+else
+  log_info "No tutorial ClickHouse tables matched (nothing to drop)"
+fi
+
+log_info "Flushing ClickHouse system logs for a fresh viewer-visible state"
+for system_log in "${SYSTEM_LOGS[@]}"; do
+  if query_ch "TRUNCATE TABLE IF EXISTS $system_log"; then
+    log_info "Truncated $system_log"
+  else
+    log_warn "Could not truncate $system_log (continuing)"
+  fi
+done

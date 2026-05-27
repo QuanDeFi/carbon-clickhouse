@@ -73,9 +73,21 @@ def wait_for_chrome_window() -> str:
     raise RuntimeError("visible Chromium window was not found on the demo display")
 
 
+def screen_size() -> tuple[int, int]:
+    return tuple(int(part) for part in os.environ.get("DEMO_SCREEN_SIZE", "1920x1080").split("x", 1))  # type: ignore[return-value]
+
+
+def single_frame() -> tuple[int, int, int, int]:
+    width, height = screen_size()
+    margin = int(os.environ.get("DEMO_WINDOW_MARGIN", "60"))
+    frame_w = int(os.environ.get("DEMO_WINDOW_WIDTH", str(width - margin * 2)))
+    frame_h = int(os.environ.get("DEMO_WINDOW_HEIGHT", str(height - margin * 2)))
+    return max(0, (width - frame_w) // 2), max(0, (height - frame_h) // 2), min(frame_w, width), min(frame_h, height)
+
+
 def window_shape(window_id: str) -> None:
-    width, height = [int(part) for part in os.environ.get("DEMO_SCREEN_SIZE", "1920x1080").split("x", 1)]
-    subprocess.run(["xdotool", "windowmove", window_id, "0", "0"], cwd=ROOT, env=os.environ.copy(), check=False)
+    x, y, width, height = single_frame()
+    subprocess.run(["xdotool", "windowmove", window_id, str(x), str(y)], cwd=ROOT, env=os.environ.copy(), check=False)
     subprocess.run(["xdotool", "windowsize", window_id, str(width), str(height)], cwd=ROOT, env=os.environ.copy(), check=False)
     subprocess.run(["xdotool", "windowfocus", window_id], cwd=ROOT, env=os.environ.copy(), check=False)
     subprocess.run(["xdotool", "mousemove", str(width - 2), str(height - 2)], cwd=ROOT, env=os.environ.copy(), check=False)
@@ -119,29 +131,43 @@ def capture_screenshot(scene_id: str) -> Path:
     return output
 
 
-def launch(url: str, scene_id: str) -> subprocess.Popen:
+def launch(url: str, scene_id: str, *, force_dark: bool = True, offscreen: bool = False) -> subprocess.Popen:
     profile = ROOT / "demo-artifacts/browser-profiles" / scene_id
     if profile.exists():
         shutil.rmtree(profile)
     profile.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env["DISPLAY"] = env.get("DISPLAY", env.get("DEMO_DISPLAY", ":95"))
+    x, y, width, height = single_frame()
+    # Launch off-screen when the caller will reveal the window itself, so the
+    # page's first (white) paint and the still-visible terminal behind it are
+    # never recorded; window_shape() then moves it on-screen once painted.
+    pos_x, pos_y = (-32000, -32000) if offscreen else (x, y)
+    args = [
+        chrome_executable(),
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--no-sandbox",
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--disable-extensions",
+        "--disable-infobars",
+        "--test-type",
+    ]
+    # Chrome's force-dark filter briefly inverts already-dark content while a
+    # page first paints, which shows as a white flash. Slides are authored
+    # dark, so they must not be force-darkened; the Prometheus graph UI is
+    # light and still needs it.
+    if force_dark:
+        args += ["--force-dark-mode", "--enable-features=WebUIDarkMode"]
+    args += [
+        f"--window-position={pos_x},{pos_y}",
+        f"--window-size={width},{height}",
+        f"--user-data-dir={profile}",
+        f"--app={url}",
+    ]
     return subprocess.Popen(
-        [
-            chrome_executable(),
-            "--no-first-run",
-            "--no-default-browser-check",
-            "--no-sandbox",
-            "--disable-gpu",
-            "--disable-dev-shm-usage",
-            "--disable-extensions",
-            "--disable-infobars",
-            "--test-type",
-            "--window-position=0,0",
-            f"--window-size={os.environ.get('DEMO_SCREEN_SIZE', '1920x1080').replace('x', ',')}",
-            f"--user-data-dir={profile}",
-            f"--app={url}",
-        ],
+        args,
         cwd=ROOT,
         env=env,
         stdout=subprocess.DEVNULL,
@@ -149,14 +175,27 @@ def launch(url: str, scene_id: str) -> subprocess.Popen:
     )
 
 
-def run_scene(scene_id: str, url: str, seconds: float) -> int:
-    proc = launch(url, scene_id)
+def run_scene(scene_id: str, url: str, seconds: float, *, force_dark: bool = True, offscreen: bool = False) -> int:
+    proc = launch(url, scene_id, force_dark=force_dark, offscreen=offscreen)
     try:
         window_id = wait_for_chrome_window()
         window_shape(window_id)
         hide_mouse()
+        # Once the page is painted and on-screen, signal readiness so the
+        # orchestrator can start recording (it covers the terminal, so the
+        # terminal is never recorded before the slide appears).
+        ready_file = os.environ.get("DEMO_SLIDE_READY_FILE")
+        if ready_file:
+            Path(ready_file).write_text(f"{time.time()}\n")
         capture_screenshot(scene_id)
-        time.sleep(max(0.0, seconds - 1.5))
+        # In delayed-record mode the recorder starts after DEMO_SLIDE_READY_FILE
+        # is written, so the requested duration must be counted from readiness,
+        # not from browser launch. Non-delayed callers already record launch
+        # and shaping time, so keep their historical shorter hold.
+        if ready_file:
+            time.sleep(max(0.0, seconds))
+        else:
+            time.sleep(max(0.0, seconds - 1.5))
     finally:
         if proc.poll() is None:
             proc.terminate()
@@ -188,10 +227,13 @@ def main() -> int:
         path = Path(args.html)
         if not path.is_absolute():
             path = ROOT / path
-        return run_scene(args.scene_id, path.resolve().as_uri(), args.seconds)
+        # Slides are authored dark; force-dark would flash white on first paint.
+        # Prepare off-screen and reveal once painted so neither the white first
+        # paint nor the terminal behind it is recorded.
+        return run_scene(args.scene_id, path.resolve().as_uri(), args.seconds, force_dark=False, offscreen=True)
 
     url = f"http://localhost:9090/graph?g0.expr={quote(args.query)}&g0.tab=1&g0.show_tree=0"
-    return run_scene(args.scene_id, url, args.seconds)
+    return run_scene(args.scene_id, url, args.seconds, force_dark=True)
 
 
 if __name__ == "__main__":

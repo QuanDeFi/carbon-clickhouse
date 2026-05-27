@@ -1,18 +1,22 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" style="background:#05070a">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
   <title>Carbon ClickHouse Sink Architecture</title>
   <style>
+    html { background: #05070a; }
     :root {
-      --bg: #f5efe2;
-      --ink: #17201b;
-      --muted: #59635c;
-      --line: #9c6b38;
-      --node: #fffaf0;
-      --accent: #0f766e;
-      --accent2: #b45309;
+      --bg: #05070a;
+      --panel: #0f141a;
+      --ink: #f3f7fa;
+      --muted: #a8b2bd;
+      --line: #faff69;
+      --node: #121922;
+      --accent: #63e6be;
+      --accent2: #ffb454;
+      --blue: #65d4ff;
     }
     * { box-sizing: border-box; }
     body {
@@ -22,8 +26,9 @@
       display: grid;
       place-items: center;
       background:
-        radial-gradient(circle at 10% 15%, rgba(180, 83, 9, 0.15), transparent 28rem),
-        radial-gradient(circle at 90% 85%, rgba(15, 118, 110, 0.16), transparent 30rem),
+        radial-gradient(circle at 8% 14%, rgba(250, 255, 105, 0.15), transparent 28rem),
+        radial-gradient(circle at 92% 82%, rgba(101, 212, 255, 0.18), transparent 30rem),
+        linear-gradient(135deg, rgba(99, 230, 190, 0.08), transparent 44%),
         var(--bg);
       color: var(--ink);
       font-family: Georgia, "Times New Roman", serif;
@@ -32,10 +37,11 @@
       width: 1640px;
       height: 880px;
       padding: 52px 64px;
-      border: 2px solid rgba(23, 32, 27, 0.18);
+      border: 1px solid rgba(250, 255, 105, 0.20);
       border-radius: 28px;
-      background: rgba(255, 250, 240, 0.82);
-      box-shadow: 0 32px 80px rgba(23, 32, 27, 0.15);
+      background:
+        linear-gradient(180deg, rgba(18, 25, 34, 0.96), rgba(9, 13, 18, 0.96));
+      box-shadow: 0 32px 90px rgba(0, 0, 0, 0.48);
     }
     h1 {
       margin: 0;
@@ -58,7 +64,7 @@
     .node {
       min-height: 260px;
       padding: 24px 18px;
-      border: 2px solid rgba(23, 32, 27, 0.18);
+      border: 1px solid rgba(168, 178, 189, 0.24);
       border-radius: 22px;
       background: var(--node);
       position: relative;
@@ -66,7 +72,7 @@
       flex-direction: column;
       justify-content: center;
       text-align: center;
-      box-shadow: 0 12px 28px rgba(23, 32, 27, 0.08);
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.22);
     }
     .node:not(:last-child)::after {
       content: "→";
@@ -88,7 +94,7 @@
       color: var(--muted);
     }
     .node:nth-child(3), .node:nth-child(5) {
-      border-color: rgba(15, 118, 110, 0.45);
+      border-color: rgba(99, 230, 190, 0.52);
     }
     .node:nth-child(3) .label, .node:nth-child(5) .label {
       color: var(--accent);
@@ -106,9 +112,9 @@
     }
     .tag {
       padding: 12px 18px;
-      border: 1px solid rgba(23, 32, 27, 0.16);
+      border: 1px solid rgba(250, 255, 105, 0.22);
       border-radius: 999px;
-      background: rgba(255, 255, 255, 0.42);
+      background: rgba(250, 255, 105, 0.07);
       color: var(--ink);
     }
   </style>

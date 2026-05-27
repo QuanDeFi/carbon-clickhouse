@@ -17,11 +17,11 @@ ROOT = Path(__file__).resolve().parents[2]
 MIN_DURATIONS = {
     "scene-01-intro": 5.0,
     "scene-02-local-setup": 12.0,
-    "scene-03-jupiter-ingestion": 16.0,
-    "scene-04-clickhouse-validation": 9.0,
-    "scene-05-token-program": 18.0,
+    "scene-03-jupiter-ingestion": 14.0,
+    "scene-04-clickhouse-validation": 26.0,
+    "scene-05-token-program": 12.0,
     "scene-06-async-inserts": 16.0,
-    "scene-07-observability": 12.0,
+    "scene-07-observability": 32.0,
     "scene-08-production-boundaries": 6.0,
 }
 

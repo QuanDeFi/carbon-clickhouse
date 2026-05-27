@@ -15,7 +15,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "ops"
+          "unit": "short"
         },
         "overrides": []
       },
@@ -42,8 +42,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(carbon_updates_processed_total[1m])",
-          "legendFormat": "processed {{pipeline_id}}",
+          "expr": "increase(carbon_updates_processed_total[$__range])",
+          "legendFormat": "processed recent {{pipeline_id}}",
           "refId": "A"
         },
         {
@@ -51,12 +51,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(carbon_updates_failed_total[1m])",
-          "legendFormat": "failed {{pipeline_id}}",
+          "expr": "increase(carbon_updates_failed_total[$__range])",
+          "legendFormat": "failed recent {{pipeline_id}}",
           "refId": "B"
         }
       ],
-      "title": "Carbon Updates",
+      "title": "Carbon Updates Recent Window",
       "type": "timeseries"
     },
     {
@@ -93,7 +93,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "carbon_updates_queued",
+          "expr": "last_over_time(carbon_updates_queued[$__range])",
           "legendFormat": "queued {{pipeline_id}}",
           "refId": "A"
         }
@@ -135,7 +135,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(carbon_updates_process_time_milliseconds_sum[1m]) / rate(carbon_updates_process_time_milliseconds_count[1m])",
+          "expr": "increase(carbon_updates_process_time_milliseconds_sum[$__range]) / increase(carbon_updates_process_time_milliseconds_count[$__range])",
           "legendFormat": "avg {{pipeline_id}}",
           "refId": "A"
         }
@@ -177,7 +177,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "clickhouse_instructions_buffered_rows",
+          "expr": "last_over_time(clickhouse_instructions_buffered_rows[$__range])",
           "legendFormat": "instructions {{pipeline_id}}",
           "refId": "A"
         },
@@ -186,7 +186,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "clickhouse_accounts_buffered_rows",
+          "expr": "last_over_time(clickhouse_accounts_buffered_rows[$__range])",
           "legendFormat": "accounts {{pipeline_id}}",
           "refId": "B"
         }
@@ -228,7 +228,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "clickhouse_instructions_buffered_bytes",
+          "expr": "last_over_time(clickhouse_instructions_buffered_bytes[$__range])",
           "legendFormat": "instructions {{pipeline_id}}",
           "refId": "A"
         },
@@ -237,7 +237,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "clickhouse_accounts_buffered_bytes",
+          "expr": "last_over_time(clickhouse_accounts_buffered_bytes[$__range])",
           "legendFormat": "accounts {{pipeline_id}}",
           "refId": "B"
         }
@@ -279,7 +279,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "clickhouse_instructions_active_buffers",
+          "expr": "last_over_time(clickhouse_instructions_active_buffers[$__range])",
           "legendFormat": "instructions {{pipeline_id}}",
           "refId": "A"
         },
@@ -288,7 +288,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "clickhouse_accounts_active_buffers",
+          "expr": "last_over_time(clickhouse_accounts_active_buffers[$__range])",
           "legendFormat": "accounts {{pipeline_id}}",
           "refId": "B"
         }
@@ -303,7 +303,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "ops"
+          "unit": "short"
         },
         "overrides": []
       },
@@ -330,8 +330,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(clickhouse_instructions_inserted[1m])",
-          "legendFormat": "instructions {{pipeline_id}}",
+          "expr": "increase(clickhouse_instructions_inserted[$__range])",
+          "legendFormat": "instructions recent {{pipeline_id}}",
           "refId": "A"
         },
         {
@@ -339,12 +339,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(clickhouse_accounts_inserted[1m])",
-          "legendFormat": "accounts {{pipeline_id}}",
+          "expr": "increase(clickhouse_accounts_inserted[$__range])",
+          "legendFormat": "accounts recent {{pipeline_id}}",
           "refId": "B"
         }
       ],
-      "title": "ClickHouse Inserted Rows",
+      "title": "ClickHouse Inserted Rows Recent Window",
       "type": "timeseries"
     },
     {
@@ -354,7 +354,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "ops"
+          "unit": "short"
         },
         "overrides": []
       },
@@ -381,7 +381,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(clickhouse_instructions_flush_failed_batches[1m])",
+          "expr": "increase(clickhouse_instructions_flush_failed_batches[$__range])",
           "legendFormat": "instruction failures {{pipeline_id}}",
           "refId": "A"
         },
@@ -390,7 +390,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(clickhouse_accounts_flush_failed_batches[1m])",
+          "expr": "increase(clickhouse_accounts_flush_failed_batches[$__range])",
           "legendFormat": "account failures {{pipeline_id}}",
           "refId": "B"
         },
@@ -399,7 +399,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(clickhouse_instructions_retries[1m])",
+          "expr": "increase(clickhouse_instructions_retries[$__range])",
           "legendFormat": "instruction retries {{pipeline_id}}",
           "refId": "C"
         },
@@ -408,12 +408,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(clickhouse_accounts_retries[1m])",
+          "expr": "increase(clickhouse_accounts_retries[$__range])",
           "legendFormat": "account retries {{pipeline_id}}",
           "refId": "D"
         }
       ],
-      "title": "ClickHouse Errors And Retries",
+      "title": "ClickHouse Errors And Retries Recent Window",
       "type": "timeseries"
     },
     {
@@ -423,7 +423,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "ops"
+          "unit": "short"
         },
         "overrides": []
       },
@@ -450,7 +450,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(clickhouse_instructions_backpressure_rejected[1m])",
+          "expr": "increase(clickhouse_instructions_backpressure_rejected[$__range])",
           "legendFormat": "instructions {{pipeline_id}}",
           "refId": "A"
         },
@@ -459,18 +459,19 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(clickhouse_accounts_backpressure_rejected[1m])",
+          "expr": "increase(clickhouse_accounts_backpressure_rejected[$__range])",
           "legendFormat": "accounts {{pipeline_id}}",
           "refId": "B"
         }
       ],
-      "title": "ClickHouse Backpressure Rejections",
+      "title": "ClickHouse Backpressure Rejections Recent Window",
       "type": "timeseries"
     }
   ],
   "preload": false,
   "refresh": "5s",
   "schemaVersion": 41,
+  "style": "dark",
   "tags": [
     "carbon",
     "clickhouse"

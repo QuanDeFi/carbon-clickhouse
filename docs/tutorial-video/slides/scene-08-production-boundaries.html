@@ -1,17 +1,21 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" style="background:#05070a">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
   <title>Carbon ClickHouse Production Boundaries</title>
   <style>
+    html { background: #05070a; }
     :root {
-      --bg: #101820;
-      --panel: #f4ead8;
-      --ink: #152016;
-      --muted: #5d675e;
-      --green: #0f766e;
-      --amber: #b45309;
+      --bg: #05070a;
+      --panel: #101720;
+      --card: #141d27;
+      --ink: #f3f7fa;
+      --muted: #a8b2bd;
+      --green: #63e6be;
+      --amber: #ffb454;
+      --accent: #faff69;
     }
     * { box-sizing: border-box; }
     body {
@@ -21,8 +25,10 @@
       display: grid;
       place-items: center;
       background:
-        linear-gradient(135deg, rgba(15, 118, 110, 0.42), transparent 42%),
-        linear-gradient(315deg, rgba(180, 83, 9, 0.36), transparent 44%),
+        radial-gradient(circle at 14% 12%, rgba(250, 255, 105, 0.14), transparent 28rem),
+        radial-gradient(circle at 88% 82%, rgba(101, 212, 255, 0.14), transparent 30rem),
+        linear-gradient(135deg, rgba(99, 230, 190, 0.08), transparent 42%),
+        linear-gradient(315deg, rgba(255, 180, 84, 0.10), transparent 44%),
         var(--bg);
       color: var(--ink);
       font-family: "Trebuchet MS", sans-serif;
@@ -32,8 +38,10 @@
       height: 880px;
       padding: 54px 62px;
       border-radius: 30px;
-      background: rgba(244, 234, 216, 0.94);
-      box-shadow: 0 34px 90px rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(250, 255, 105, 0.20);
+      background:
+        linear-gradient(180deg, rgba(18, 25, 34, 0.96), rgba(9, 13, 18, 0.96));
+      box-shadow: 0 34px 90px rgba(0, 0, 0, 0.48);
     }
     h1 {
       margin: 0 0 14px;
@@ -54,8 +62,8 @@
       min-height: 610px;
       border-radius: 26px;
       padding: 34px 38px;
-      background: #fffaf0;
-      border: 2px solid rgba(21, 32, 22, 0.16);
+      background: var(--card);
+      border: 1px solid rgba(168, 178, 189, 0.24);
     }
     .card h2 {
       margin: 0 0 28px;
@@ -94,7 +102,8 @@
       margin-top: 34px;
       padding: 18px 22px;
       border-radius: 18px;
-      background: rgba(15, 118, 110, 0.08);
+      background: rgba(250, 255, 105, 0.07);
+      border: 1px solid rgba(250, 255, 105, 0.16);
       color: var(--muted);
       font-size: 22px;
     }

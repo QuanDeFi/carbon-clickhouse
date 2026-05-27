@@ -23,6 +23,7 @@ NOVNC_PORT="${DEMO_NOVNC_PORT:-6083}"
 PID_DIR="$ROOT/demo-artifacts/pids"
 LOG_DIR="$ROOT/demo-artifacts/logs"
 DISPLAY_ENV="$ROOT/demo-artifacts/display.env"
+SKIP_NOVNC="${DEMO_SKIP_NOVNC:-false}"
 
 display_number() {
   printf '%s\n' "${1#:}" | cut -d. -f1
@@ -75,19 +76,26 @@ choose_free_port() {
 start_cmd() {
   local name="$1"
   local pid_file="$PID_DIR/$name.pid"
+  local log_file="$LOG_DIR/$name.log"
   shift
   if [[ -f "$pid_file" ]] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
     log_info "$name already running with PID $(cat "$pid_file")"
     return 0
   fi
   log_info "Starting $name"
-  nohup "$@" > "$LOG_DIR/$name.log" 2>&1 < /dev/null &
-  local pid="$!"
-  echo "$pid" > "$pid_file"
-  disown "$pid" 2>/dev/null || true
+  rm -f "$pid_file"
+  setsid -f bash -c 'echo $$ > "$1"; shift; exec "$@"' _ "$pid_file" "$@" > "$log_file" 2>&1 < /dev/null
+  for _ in {1..20}; do
+    [[ -s "$pid_file" ]] && break
+    sleep 0.1
+  done
+  if [[ ! -s "$pid_file" ]]; then
+    log_error "$name failed to write a PID file; see $log_file"
+    return 1
+  fi
   sleep 1
   if ! kill -0 "$(cat "$pid_file")" 2>/dev/null; then
-    log_error "$name failed to start; see $LOG_DIR/$name.log"
+    log_error "$name failed to start; see $log_file"
     return 1
   fi
 }
@@ -103,7 +111,7 @@ if display_occupied "$DISPLAY_ID" && [[ ! -f "$PID_DIR/xvfb.pid" ]]; then
   fi
 fi
 
-if port_listener "$VNC_PORT" >/dev/null && [[ ! -f "$PID_DIR/x11vnc.pid" ]]; then
+if [[ "$SKIP_NOVNC" != "true" ]] && port_listener "$VNC_PORT" >/dev/null && [[ ! -f "$PID_DIR/x11vnc.pid" ]]; then
   if [[ "$AUTO" == true ]]; then
     choose_free_port VNC_PORT || { log_error "No free VNC port found near $VNC_PORT"; exit 1; }
   else
@@ -112,7 +120,7 @@ if port_listener "$VNC_PORT" >/dev/null && [[ ! -f "$PID_DIR/x11vnc.pid" ]]; the
     exit 1
   fi
 fi
-if port_listener "$NOVNC_PORT" >/dev/null && [[ ! -f "$PID_DIR/websockify.pid" ]]; then
+if [[ "$SKIP_NOVNC" != "true" ]] && port_listener "$NOVNC_PORT" >/dev/null && [[ ! -f "$PID_DIR/websockify.pid" ]]; then
   if [[ "$AUTO" == true ]]; then
     choose_free_port NOVNC_PORT || { log_error "No free noVNC port found near $NOVNC_PORT"; exit 1; }
   else
@@ -123,8 +131,13 @@ if port_listener "$NOVNC_PORT" >/dev/null && [[ ! -f "$PID_DIR/websockify.pid" ]
 fi
 
 start_cmd xvfb Xvfb "$DISPLAY_ID" -screen 0 "${SCREEN_SIZE}x${DEPTH}" -ac -noreset
-start_cmd x11vnc x11vnc -display "$DISPLAY_ID" -forever -shared -rfbport "$VNC_PORT" -nopw
-start_cmd websockify websockify --web=/usr/share/novnc/ "$NOVNC_PORT" "localhost:$VNC_PORT"
+if [[ "$SKIP_NOVNC" == "true" ]]; then
+  log_info "Skipping x11vnc/noVNC sidecars because DEMO_SKIP_NOVNC=true"
+  rm -f "$PID_DIR/x11vnc.pid" "$PID_DIR/websockify.pid"
+else
+  start_cmd x11vnc x11vnc -display "$DISPLAY_ID" -forever -shared -rfbport "$VNC_PORT" -nopw
+  start_cmd websockify websockify --web=/usr/share/novnc/ "$NOVNC_PORT" "localhost:$VNC_PORT"
+fi
 
 cat > "$DISPLAY_ENV" <<EOF
 DEMO_DISPLAY=$DISPLAY_ID
@@ -132,10 +145,11 @@ DISPLAY=$DISPLAY_ID
 DEMO_SCREEN_SIZE=$SCREEN_SIZE
 DEMO_VNC_PORT=$VNC_PORT
 DEMO_NOVNC_PORT=$NOVNC_PORT
+DEMO_SKIP_NOVNC=$SKIP_NOVNC
 DEMO_NOVNC_URL=http://localhost:$NOVNC_PORT/vnc.html
 EOF
 
 cat <<EOF
 DISPLAY=$DISPLAY_ID
-noVNC: http://localhost:$NOVNC_PORT/vnc.html
+noVNC: $(if [[ "$SKIP_NOVNC" == "true" ]]; then printf 'disabled'; else printf 'http://localhost:%s/vnc.html' "$NOVNC_PORT"; fi)
 EOF

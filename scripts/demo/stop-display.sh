@@ -30,5 +30,10 @@ stop_pid() {
 
 stop_pid websockify
 stop_pid x11vnc
+for browser_pid_file in "$PID_DIR"/browser-*.pid; do
+  [[ -e "$browser_pid_file" ]] || continue
+  browser_name="$(basename "$browser_pid_file" .pid)"
+  stop_pid "$browser_name"
+done
 stop_pid xvfb
 rm -f "$ROOT/demo-artifacts/display.env"

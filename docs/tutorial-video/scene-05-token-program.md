@@ -1,9 +1,10 @@
-# Scene 05: Token Program Account Snapshot
+# Scene 05: Live Observability
 
-The Token Program example fetches a fixed USDC account set. It demonstrates
-account-family landing tables for mint, multisig, and token-account snapshots.
+With both examples running, we open Grafana first. Grafana shows Carbon-side
+health: processed updates, queue depth, buffered rows, inserted rows, retries,
+and backpressure. This answers whether the Carbon pipelines are keeping up.
 
-After the example runs, the table list confirms that all three account-family
-landing tables exist. The count query summarizes token-account rows and slot
-coverage. The sample row then shows the kind of business data stored for a token
-account: account identity, mint identity, raw token amount, and account state.
+Then we open ClickStack. ClickStack answers a different question: what
+ClickHouse itself is doing while Carbon writes into it. It reads
+`system.query_log`, so the viewer can see query kinds, users, row counts, and
+durations from the database side.

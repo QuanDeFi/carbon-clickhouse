@@ -18,13 +18,14 @@ automation="$REVIEW_DIR/automation-scripts.md"
 {
   echo '# Demo Automation Scripts'
   echo
-  for file in AGENTS.md scripts/demo/README.md scripts/demo/runbook.yaml scripts/demo/*.sh scripts/demo/*.py scripts/demo/playwright/package.json scripts/demo/playwright/playwright.config.ts scripts/demo/playwright/*.spec.ts; do
+  for file in AGENTS.md scripts/demo/README.md scripts/demo/runbook.yaml scripts/demo/*.sh scripts/demo/*.py scripts/demo/*.js scripts/demo/playwright/package.json scripts/demo/playwright/playwright.config.ts scripts/demo/playwright/*.spec.ts; do
     [[ -f "$file" ]] || continue
     echo "## \`$file\`"
     echo
     case "$file" in
       *.py) echo '```python' ;;
       *.sh) echo '```bash' ;;
+      *.js) echo '```js' ;;
       *.ts) echo '```ts' ;;
       *.json) echo '```json' ;;
       *.yaml|*.yml) echo '```yaml' ;;
@@ -61,6 +62,7 @@ if [[ "$CREATE_ARCHIVE" == "true" ]]; then
     "$REVIEW_DIR/automation-scripts.md" \
     "$REVIEW_DIR/frame-contact-sheet.jpg" \
     "$REVIEW_DIR/videos" \
+    "$REVIEW_DIR/subtitles" \
     "$REVIEW_DIR/screenshots" \
     "$REVIEW_DIR/logs" \
     scripts/demo/README.md \

@@ -1,9 +1,10 @@
-# Scene 06: Async-Wait Inserts
+# Scene 06: ClickHouse Table Data Inspection
 
-The sink defaults to synchronous inserts. For live ingestion, callers can opt
-into ClickHouse async inserts while still waiting for acknowledgement.
+Now we inspect the generated landing tables through ClickHouse's built-in
+`/play` UI. This is the ClickHouse-specific browser surface for running SQL and
+looking directly at table contents.
 
-The source search shows where the async setting is wired. We then turn on the
-environment switch, run a small token snapshot, and inspect ClickHouse's
-asynchronous insert log. A successful row in that log proves that async insert
-was used while the client still waited for ClickHouse to accept the batch.
+The Jupiter queries show route rows and swap-event rows with slots, signature
+prefixes, amounts, slippage, route-leg counts, AMMs, and execution amounts. The
+Token Program queries show bootstrapped account-family tables and USDC account
+snapshot data such as mint, token owner, amount, state, and mode.

@@ -17,8 +17,8 @@ scripts/demo/runbook.yaml
 
 - Headless display: Xvfb on `${DEMO_DISPLAY:-:95}`.
 - Optional observation UI: x11vnc on `${DEMO_VNC_PORT:-5903}` and noVNC/websockify on `${DEMO_NOVNC_PORT:-6083}`.
-- Terminal scenes: wide `xterm` windows with smaller readable text and visibly typed commands.
-- Human-style browser scenes: Chromium app windows launched visibly on Xvfb, with browser chrome hidden.
+- Terminal scenes: wide dark-theme `xterm` windows with smaller readable text and visibly typed commands.
+- Human-style browser scenes: Chromium app windows launched visibly on Xvfb, with browser chrome hidden and dark rendering where possible.
 - Default recorder: FFmpeg `x11grab`.
 - Optional recorder: OBS through obs-websocket.
 - Voiceover: ElevenLabs.
@@ -132,19 +132,43 @@ python scripts/demo/run_scene.py --all
 ## Human-Style No-Audio Review
 
 Use this before final voiceover. It records a directed screen performance:
-visible terminal typing, readable pauses, browser slides, Prometheus UI, video
-validation, screenshots, contact sheet, and current review files.
-The current visual target is compact, roughly two minutes rather than a full
-end-to-end smoke-test recording.
-Terminal scenes reuse one shell, pause briefly before pressing Enter, and leave
-read time at scene boundaries so the output can be consumed.
+visible terminal typing, readable pauses, dark browser slides, ClickHouse `/play`
+inspection, Grafana dashboards after both examples, ClickStack query-log
+inspection, video validation, screenshots, contact sheet, and current review
+files.
+
+The current story is live-first: verify local services, start Jupiter live in
+one terminal, start Token Program live in a second terminal, inspect Grafana and
+ClickStack while both examples are running, inspect landing table data in
+ClickHouse `/play`, demonstrate async-wait inserts, and stop the live terminals
+during the final production-boundaries slide.
+
+Terminal scenes reuse named shells where appropriate, pause briefly before
+pressing Enter, and leave read time at scene boundaries so the output can be
+consumed. Typing uses a seeded human-style profile: skewed per-character delays,
+short burst pauses, slower shell-symbol timing, boundary pauses, and randomized
+pre-Enter pauses. The terminal driver also waits for the shell prompt to return
+before typing the next command, so long-running examples cannot be interrupted
+by the following command being typed into their active output.
+The terminal frame defaults to equal margins on all four screen edges and a
+larger readable dark-theme font. ClickHouse `/play` SQL is visibly typed into
+the editor, and sample queries should include enough columns to explain the
+landing-row data rather than only showing minimal counts.
+The current visual target is roughly three to three and a half minutes. If a run
+drifts toward four minutes or more, shorten scene content rather than returning
+to fixed robotic typing.
+The human rehearsal defaults to 60fps so the Mission-Control-style window
+transition keeps the smoother transform-based motion from the focused probe.
+Before cleaning screenshot folders, the runner preserves prior good browser
+screenshots into `demo-artifacts/window-transition-seeds/`; missing seeds are
+safe and fall back to the transition renderer's muted placeholder tiles.
 
 ```sh
 source .venv-demo/bin/activate
 export RECORDER_BACKEND=ffmpeg_x11
 export DEMO_DISPLAY=:95 DISPLAY=:95
 export DEMO_SCREEN_SIZE=1920x1080
-export DEMO_VNC_PORT=5903 DEMO_NOVNC_PORT=6083
+export DEMO_VNC_PORT=5903 DEMO_NOVNC_PORT=6083 DEMO_FPS=60
 DEMO_ALLOW_CLICKHOUSE_RESET=true python scripts/demo/run_human_rehearsal.py --no-voice
 ```
 
@@ -152,6 +176,35 @@ Outputs land under `demo-artifacts/review-human/`.
 
 The recorder disables mouse capture, so the cursor should not appear in the
 review videos.
+
+The rehearsal also generates subtitles from the scene narration markdown:
+
+- Sidecar SRT: `demo-artifacts/review-human/subtitles/clickhouse-sink-tutorial-human-no-audio.srt`
+- Sidecar WebVTT: `demo-artifacts/review-human/subtitles/clickhouse-sink-tutorial-human-no-audio.vtt`
+- Burned-in review video: `demo-artifacts/review-human/videos/clickhouse-sink-tutorial-human-no-audio-subtitled.mp4`
+
+To regenerate subtitles for the current review video without re-recording:
+
+```sh
+source .venv-demo/bin/activate
+python scripts/demo/subtitles.py
+```
+
+Current browser-scene flow:
+
+- `scene-04`: ClickHouse `/play` shows Jupiter counts/sample rows, then Grafana
+  shows Carbon pipeline and ClickHouse sink metrics after Jupiter ingestion.
+- `scene-07`: ClickHouse `/play` shows Token Program landing/sample rows,
+  Grafana shows the dashboard again after Token Program ingestion, then
+  ClickStack shows ClickHouse-side `system.query_log` activity.
+
+Current theme behavior:
+
+- Intro/outro slides are dark HTML slides.
+- ClickHouse `/play` and ClickStack are darkened through deterministic
+  recording-time CSS injection.
+- Grafana uses its native dark theme/dashboard URL.
+- Browser chrome and address bars are hidden/cropped from browser scenes.
 
 ## Stop Display
 

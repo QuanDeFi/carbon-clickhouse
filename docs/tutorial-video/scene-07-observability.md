@@ -1,9 +1,10 @@
-# Scene 07: Prometheus Observability
+# Scene 07: Async-Wait Inserts And Async Insert Log
 
-Carbon exposes process and ClickHouse sink metrics. In this rehearsal we use
-Prometheus directly so the scene always shows real data instead of an empty
-dashboard or a failed login screen.
+The sink defaults to synchronous inserts. For live ingestion, callers can opt
+into ClickHouse async inserts while still waiting for acknowledgement with
+`wait_for_async_insert=1`.
 
-The query is selected only after a pre-check confirms it has data. The value on
-screen summarizes recent processed updates, while related metrics can show queue
-depth, buffered rows, and ClickHouse flush failures.
+We enable the async insert switch for a short example run, then inspect the
+ClickHouse async insert log. In `/play`, the end user can query
+`system.asynchronous_insert_log` directly. In ClickStack, the same database-side
+activity is visible through `system.query_log`.

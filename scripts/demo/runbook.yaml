@@ -1,6 +1,6 @@
 title: Carbon ClickHouse Sink Tutorial
 resolution: 1920x1080
-fps: 30
+fps: 60
 env_file: .env.demo.local
 output_dir: demo-artifacts
 
@@ -22,6 +22,9 @@ scenes:
     command: scripts/demo/setup-monitoring.sh
     human:
       type: terminal
+      terminal_name: jupiter-live
+      terminal_title: Carbon ClickHouse - Local Services And Jupiter Live
+      reuse_terminal: true
       min_duration: 12
       scene_end_pause: 2.0
       steps:
@@ -35,90 +38,81 @@ scenes:
           pause_after: 2.0
 
   - id: scene-03-jupiter-ingestion
-    title: Jupiter instruction and CPI/event ingestion
+    title: Start Jupiter live ingestion
     type: terminal
     script: docs/tutorial-video/scene-03-jupiter-ingestion.md
-    command: scripts/demo/run-jupiter-bounded.sh
+    command: LOG_LEVEL=debug BLOCK_CRAWLER_START_SLOT= BLOCK_CRAWLER_END_SLOT= cargo run -p jupiter-swap-clickhouse-carbon-example
     human:
       type: terminal
-      min_duration: 24
-      scene_end_pause: 4.0
-      steps:
-        - command: cargo run -p jupiter-swap-clickhouse-carbon-example
-          pause_after: 11.0
-
-  - id: scene-04-clickhouse-validation
-    title: ClickHouse SQL validation
-    type: terminal
-    script: docs/tutorial-video/scene-04-clickhouse-validation.md
-    command: scripts/demo/query-clickhouse.sh jupiter
-    human:
-      type: terminal
-      min_duration: 22
-      scene_end_pause: 4.0
-      steps:
-        - command: docker exec clickhouse clickhouse-client --query "SHOW TABLES LIKE 'jupiter_swap_%landing'"
-          pause_after: 3.0
-        - command: docker exec clickhouse clickhouse-client --query "SELECT count() rows, uniq(signature) signatures FROM jupiter_swap_route_instruction_landing FORMAT PrettyCompact"
-          pause_after: 4.0
-        - command: docker exec clickhouse clickhouse-client --query "SELECT in_amount, quoted_out_amount, length(route_plan) legs FROM jupiter_swap_route_instruction_landing LIMIT 3 FORMAT PrettyCompact"
-          pause_after: 5.0
-        - command: docker exec clickhouse clickhouse-client --query "SELECT amm, input_amount, output_amount FROM jupiter_swap_swap_event_landing LIMIT 5 FORMAT PrettyCompact"
-          pause_after: 5.0
-
-  - id: scene-05-token-program
-    title: Token Program account snapshot
-    type: terminal
-    script: docs/tutorial-video/scene-05-token-program.md
-    command: scripts/demo/run-token-snapshot.sh
-    human:
-      type: terminal
+      terminal_name: jupiter-live
+      terminal_title: Carbon ClickHouse - Local Services And Jupiter Live
+      reuse_terminal: true
+      keep_open: true
       min_duration: 18
-      scene_end_pause: 4.0
-      steps:
-        - command: PROMETHEUS_METRICS_ADDR=0.0.0.0:9465 cargo run -p token-program-clickhouse-carbon-example
-          pause_after: 7.0
-        - command: docker exec clickhouse clickhouse-client --query "SHOW TABLES LIKE 'token_program_%account_landing'"
-          pause_after: 2.5
-        - command: docker exec clickhouse clickhouse-client --query "SELECT count() rows, uniq(pubkey) accounts, min(slot) min_slot, max(slot) max_slot FROM token_program_token_account_landing FORMAT PrettyCompact"
-          pause_after: 4.0
-        - command: docker exec clickhouse clickhouse-client --query "SELECT left(pubkey,8) account, left(mint,8) mint, amount, state FROM token_program_token_account_landing LIMIT 3 FORMAT PrettyCompact"
-          pause_after: 5.0
-
-  - id: scene-06-async-inserts
-    title: Async-wait inserts
-    type: terminal
-    script: docs/tutorial-video/scene-06-async-inserts.md
-    command: scripts/demo/query-clickhouse.sh async-log
-    human:
-      type: terminal
-      min_duration: 16
       scene_end_pause: 2.5
       steps:
-        - command: rg -n "CLICKHOUSE_ASYNC_INSERT|async_insert|wait_for_async_insert" crates/core/src/clickhouse examples
-          pause_after: 2.5
-        - command: export CLICKHOUSE_ASYNC_INSERT=true
-          pause_after: 0.7
-        - command: PROMETHEUS_METRICS_ADDR=0.0.0.0:9465 cargo run -p token-program-clickhouse-carbon-example
-          pause_after: 6.0
-        - command: docker exec clickhouse clickhouse-client --query "SYSTEM FLUSH LOGS"
-          pause_after: 1.0
-        - command: docker exec clickhouse clickhouse-client --query "SELECT table, rows, bytes, status FROM system.asynchronous_insert_log ORDER BY event_time DESC LIMIT 5 FORMAT PrettyCompact"
-          pause_after: 4.0
+        - command: LOG_LEVEL=debug BLOCK_CRAWLER_START_SLOT= BLOCK_CRAWLER_END_SLOT= cargo run -p jupiter-swap-clickhouse-carbon-example
+          wait_for_prompt: false
+          pause_after: 12.0
+
+  - id: scene-04-clickhouse-validation
+    title: Start Token Program live ingestion
+    type: terminal
+    script: docs/tutorial-video/scene-04-clickhouse-validation.md
+    command: LOG_LEVEL=debug PROMETHEUS_METRICS_ADDR=0.0.0.0:9465 cargo run -p token-program-clickhouse-carbon-example
+    human:
+      type: terminal
+      terminal_name: token-live
+      terminal_title: Carbon ClickHouse - Token Program Live
+      reuse_terminal: true
+      keep_open: true
+      min_duration: 18
+      scene_end_pause: 2.5
+      steps:
+        - command: LOG_LEVEL=debug PROMETHEUS_METRICS_ADDR=0.0.0.0:9465 cargo run -p token-program-clickhouse-carbon-example
+          wait_for_prompt: false
+          pause_after: 13.0
+
+  - id: scene-05-token-program
+    title: Live Carbon and ClickHouse observability
+    type: browser
+    script: docs/tutorial-video/scene-05-token-program.md
+    command: scripts/demo/query-clickhouse.sh token
+    human:
+      type: browser
+      workflow: live-observability
+      min_duration: 36
+
+  - id: scene-06-async-inserts
+    title: ClickHouse table data inspection
+    type: browser
+    script: docs/tutorial-video/scene-06-async-inserts.md
+    command: scripts/demo/query-clickhouse.sh jupiter && scripts/demo/query-clickhouse.sh token
+    human:
+      type: browser
+      workflow: table-inspection
+      min_duration: 36
 
   - id: scene-07-observability
-    title: Prometheus and Grafana observability
+    title: Async-wait inserts and async insert log
     type: browser
     script: docs/tutorial-video/scene-07-observability.md
     playwright:
       - scripts/demo/playwright/prometheus.spec.ts
       - scripts/demo/playwright/grafana.spec.ts
     human:
-      type: browser
-      min_duration: 12
-      prometheus_only: true
-      reason: Grafana is skipped in the human rehearsal unless local admin credentials are verified.
-      playwright: scripts/demo/playwright/human-observability.spec.ts
+      type: mixed_async
+      terminal_name: async-inserts
+      terminal_title: Carbon ClickHouse - Async Wait Inserts
+      reuse_terminal: true
+      workflow: async-log
+      min_duration: 34
+      scene_end_pause: 2.0
+      steps:
+        - command: grep -rnE "async_insert|wait_for_async_insert" crates/core/src/clickhouse | head
+          pause_after: 1.0
+        - command: CLICKHOUSE_ASYNC_INSERT=true PROMETHEUS_METRICS_ADDR=0.0.0.0:9466 timeout --signal=INT 5s cargo run -p token-program-clickhouse-carbon-example
+          pause_after: 6.0
 
   - id: scene-08-production-boundaries
     title: Production boundaries
@@ -129,3 +123,4 @@ scenes:
       slide: docs/tutorial-video/slides/scene-08-production-boundaries.html
       duration: 7
       min_duration: 6
+      cleanup_live_terminals_after_seconds: 2
