@@ -198,10 +198,31 @@ def append_manifest(review_dir: Path, text: str) -> None:
         out.write(text.rstrip() + "\n\n")
 
 
-def start_display(log_dir: Path) -> None:
+def display_reachable(display_id: str) -> bool:
+    return subprocess.run(
+        ["xdpyinfo", "-display", display_id],
+        cwd=ROOT,
+        env=os.environ.copy(),
+        text=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    ).returncode == 0
+
+
+def start_display(log_dir: Path) -> bool:
+    display_id = env().get("DEMO_DISPLAY", ":95")
+    if os.environ.get("DEMO_REUSE_EXTERNAL_DISPLAY", "true").lower() not in {"0", "false", "no", "off"} and display_reachable(display_id):
+        display_env = f"DEMO_DISPLAY={display_id}\nDISPLAY={display_id}\nDEMO_SCREEN_SIZE={env().get('DEMO_SCREEN_SIZE', '1920x1080')}\n"
+        append_manifest(
+            ROOT / "demo-artifacts/review-human",
+            "## Display\n\n```env\n" + display_env.strip() + "\n```\n\n- Existing display reused; display cleanup skipped.",
+        )
+        return False
     run(["scripts/demo/start-display.sh"], log=log_dir / "start-display.log")
     display_env = (ROOT / "demo-artifacts/display.env").read_text()
     append_manifest(ROOT / "demo-artifacts/review-human", "## Display\n\n```env\n" + display_env.strip() + "\n```")
+    return True
 
 
 def close_human_terminal(log_dir: Path) -> None:
@@ -582,28 +603,13 @@ def concat_final(review_dir: Path) -> None:
     concat = review_dir / "videos/concat.txt"
     concat.write_text("".join(f"file '{scene}.mp4'\n" for scene in SCENES))
     output = review_dir / "videos/clickhouse-sink-tutorial-human-no-audio.mp4"
-    # Drop any near-white frame (full-frame average brightness >= 150). This
-    # tutorial is uniformly dark, so the only frames that bright are transition
-    # white flashes -- the overlay window's first paint and, mainly, the target
-    # browser window's first paint when it is revealed from off-screen (Chrome
-    # does not paint a hidden window, so its first on-screen frame is white).
-    # Those cannot be removed at the window level in this Xvfb/ozone setup, so
-    # they are dropped here. setpts + -r 30 re-times to CFR with no gaps.
-    white_drop = (
-        "signalstats,"
-        "metadata=mode=select:key=lavfi.signalstats.YAVG:value=150:function=less,"
-        "setpts=N/FRAME_RATE/TB"
-    )
-    subprocess.run(
-        [
-            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "concat", "-safe", "0", "-i", str(concat.name),
-            "-vf", white_drop, "-r", "30",
-            "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-an", output.name,
-        ],
-        cwd=review_dir / "videos",
-        check=True,
-    )
+    proc = subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(concat.name), "-c", "copy", output.name], cwd=review_dir / "videos")
+    if proc.returncode != 0:
+        subprocess.run(
+            ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(concat.name), "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-an", output.name],
+            cwd=review_dir / "videos",
+            check=True,
+        )
 
 
 def copy_screenshots(review_dir: Path) -> None:
@@ -680,8 +686,9 @@ def main() -> int:
     reports: list[dict[str, Any]] = []
     scenes = scene_map()
     run(["scripts/demo/preflight.sh", "--no-elevenlabs", "--no-obs"], log=review_dir / "logs/preflight.log")
+    display_started = False
     try:
-        start_display(review_dir / "logs")
+        display_started = start_display(review_dir / "logs")
         close_human_terminal(review_dir / "logs")
         if not args.skip_reset:
             maybe_reset(review_dir / "logs")
@@ -715,7 +722,10 @@ def main() -> int:
         append_manifest(review_dir, "## Review Archive\n\n- Archive creation: skipped for the current review workflow.")
     finally:
         close_human_terminal(review_dir / "logs")
-        run(["scripts/demo/stop-display.sh"], check=False, log=review_dir / "logs/stop-display.log")
+        if display_started:
+            run(["scripts/demo/stop-display.sh"], check=False, log=review_dir / "logs/stop-display.log")
+        else:
+            append_manifest(review_dir, "## Display Cleanup\n\n- Existing display was reused and left running.")
 
     append_manifest(
         review_dir,

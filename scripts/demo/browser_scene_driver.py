@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -64,36 +63,14 @@ def chrome_executable() -> str:
     return path
 
 
-def numeric_window_ids(raw: str) -> list[str]:
-    return [line.strip() for line in raw.splitlines() if line.strip().isdigit()]
-
-
-def html_title(path: Path) -> str | None:
-    match = re.search(r"<title>(.*?)</title>", path.read_text(errors="ignore"), flags=re.IGNORECASE | re.DOTALL)
-    if not match:
-        return None
-    return re.sub(r"\s+", " ", match.group(1)).strip()
-
-
-def wait_for_chrome_window(*, expected_title: str | None = None, only_visible: bool = True) -> str:
+def wait_for_chrome_window() -> str:
     for _ in range(120):
-        if expected_title:
-            result = run(["xdotool", "search", "--name", expected_title], check=False)
-            ids = numeric_window_ids(result.stdout)
-            if ids:
-                return ids[-1]
-        command = ["xdotool", "search"]
-        if only_visible:
-            command.append("--onlyvisible")
-        command += ["--class", "chrome"]
-        result = run(command, check=False)
-        ids = numeric_window_ids(result.stdout)
+        result = run(["xdotool", "search", "--onlyvisible", "--class", "chrom"], check=False)
+        ids = [line.strip() for line in result.stdout.splitlines() if line.strip().isdigit()]
         if ids:
             return ids[-1]
         time.sleep(0.25)
-    visibility = "visible " if only_visible else ""
-    expected = f" with title {expected_title!r}" if expected_title else ""
-    raise RuntimeError(f"{visibility}Chromium window{expected} was not found on the demo display")
+    raise RuntimeError("visible Chromium window was not found on the demo display")
 
 
 def screen_size() -> tuple[int, int]:
@@ -198,10 +175,10 @@ def launch(url: str, scene_id: str, *, force_dark: bool = True, offscreen: bool 
     )
 
 
-def run_scene(scene_id: str, url: str, seconds: float, *, force_dark: bool = True, offscreen: bool = False, expected_title: str | None = None) -> int:
+def run_scene(scene_id: str, url: str, seconds: float, *, force_dark: bool = True, offscreen: bool = False) -> int:
     proc = launch(url, scene_id, force_dark=force_dark, offscreen=offscreen)
     try:
-        window_id = wait_for_chrome_window(expected_title=expected_title, only_visible=not offscreen)
+        window_id = wait_for_chrome_window()
         window_shape(window_id)
         hide_mouse()
         # Once the page is painted and on-screen, signal readiness so the
@@ -262,7 +239,6 @@ def main() -> int:
             args.seconds,
             force_dark=False,
             offscreen=False,
-            expected_title=html_title(path),
         )
 
     url = f"http://localhost:9090/graph?g0.expr={quote(args.query)}&g0.tab=1&g0.show_tree=0"

@@ -313,7 +313,7 @@ function demoWindows() {
 
 function latestChromiumWindow() {
   try {
-    const ids = sh("xdotool", ["search", "--onlyvisible", "--class", "chrome"])
+    const ids = sh("xdotool", ["search", "--onlyvisible", "--class", "chrom"])
       .split("\n")
       .map((line) => line.trim())
       .filter((line) => /^\d+$/.test(line));
