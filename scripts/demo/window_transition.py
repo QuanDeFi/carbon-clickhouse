@@ -130,21 +130,9 @@ def slot_image(slot: int) -> Path:
 
 
 def resolve_slot_image(slot: int) -> Path | None:
-    """Pick the thumbnail for a non-target overview slot.
-
-    Prefers a slot image captured during this run, then falls back to a
-    pre-seeded image from ``DEMO_SLOT_SEED_DIR`` so the overview can be fully
-    populated before any slot has been visited. Returns ``None`` when neither
-    exists, in which case the card renders a muted placeholder.
-    """
     captured = slot_image(slot)
     if captured.is_file():
         return captured
-    seed_dir = os.environ.get("DEMO_SLOT_SEED_DIR")
-    if seed_dir:
-        seeded = Path(seed_dir) / f"slot-{slot}.png"
-        if seeded.is_file():
-            return seeded
     return None
 
 
@@ -629,18 +617,6 @@ def main() -> int:
     parser.add_argument("label", nargs="?")
     parser.add_argument("--reset", action="store_true")
     parser.add_argument(
-        "--capture-slot",
-        type=int,
-        metavar="N",
-        help="capture the current display into overview slot N and exit (pre-seed a tile)",
-    )
-    parser.add_argument(
-        "--seed-slot",
-        nargs=2,
-        metavar=("N", "IMAGE"),
-        help="copy IMAGE into overview slot N and exit (pre-seed a tile)",
-    )
-    parser.add_argument(
         "--capture-current",
         metavar="LABEL",
         help="capture the current visible window region as the latest transition state for LABEL",
@@ -652,17 +628,8 @@ def main() -> int:
     if args.capture_current:
         capture_current_state(args.capture_current)
         return 0
-    if args.capture_slot is not None:
-        STATE_DIR.mkdir(parents=True, exist_ok=True)
-        capture_display(slot_image(args.capture_slot))
-        return 0
-    if args.seed_slot is not None:
-        slot_str, image = args.seed_slot
-        STATE_DIR.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(image, slot_image(int(slot_str)))
-        return 0
     if not args.label:
-        parser.error("label is required unless --reset/--capture-slot/--seed-slot/--capture-current is used")
+        parser.error("label is required unless --reset or --capture-current is used")
     run_transition(args.label)
     return 0
 

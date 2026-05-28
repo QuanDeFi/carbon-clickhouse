@@ -159,9 +159,6 @@ drifts toward four minutes or more, shorten scene content rather than returning
 to fixed robotic typing.
 The human rehearsal defaults to 60fps so the Mission-Control-style window
 transition keeps the smoother transform-based motion from the focused probe.
-Before cleaning screenshot folders, the runner preserves prior good browser
-screenshots into `demo-artifacts/window-transition-seeds/`; missing seeds are
-safe and fall back to the transition renderer's muted placeholder tiles.
 
 ```sh
 source .venv-demo/bin/activate
@@ -177,13 +174,7 @@ Outputs land under `demo-artifacts/review-human/`.
 The recorder disables mouse capture, so the cursor should not appear in the
 review videos.
 
-The rehearsal also generates subtitles from the scene narration markdown:
-
-- Sidecar SRT: `demo-artifacts/review-human/subtitles/clickhouse-sink-tutorial-human-no-audio.srt`
-- Sidecar WebVTT: `demo-artifacts/review-human/subtitles/clickhouse-sink-tutorial-human-no-audio.vtt`
-- Burned-in review video: `demo-artifacts/review-human/videos/clickhouse-sink-tutorial-human-no-audio-subtitled.mp4`
-
-To regenerate subtitles for the current review video without re-recording:
+Subtitles are generated separately from the visual rehearsal:
 
 ```sh
 source .venv-demo/bin/activate

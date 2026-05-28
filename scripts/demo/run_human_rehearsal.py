@@ -28,24 +28,6 @@ SCENES = [
 
 LAST_VIEW_KEY: str | None = None
 
-TRANSITION_SEED_SOURCES = {
-    2: (
-        "scene-05-token-program-grafana-live-examples.png",
-        "scene-05-token-program-grafana-live-examples-raw.png",
-    ),
-    3: (
-        "scene-05-token-program-clickstack-query-log-live-examples.png",
-        "scene-07-observability-clickstack-query-log-after-async.png",
-    ),
-    4: (
-        "scene-06-async-inserts-clickhouse-play-jupiter-sample.png",
-        "scene-06-async-inserts-clickhouse-play-token-sample.png",
-    ),
-    5: (
-        "scene-07-observability-clickhouse-play-async-log.png",
-    ),
-}
-
 
 def load_env() -> None:
     initial = set(os.environ)
@@ -82,36 +64,6 @@ def env() -> dict[str, str]:
     data.setdefault("DEMO_NOVNC_PORT", "6083")
     data.setdefault("DEMO_SKIP_NOVNC", "true")
     return data
-
-
-def preserve_transition_seed_sources() -> tuple[Path, list[int]]:
-    """Preserve useful browser thumbnails before review cleanup removes screenshots.
-
-    The transition renderer can show graceful placeholders, but prior good
-    browser captures make the overview read as a real workspace immediately.
-    This is opportunistic: missing seeds are fine and fall back to placeholders.
-    """
-    seed_dir = ROOT / "demo-artifacts/window-transition-seeds"
-    seed_dir.mkdir(parents=True, exist_ok=True)
-    for stale in seed_dir.glob("slot-*.png"):
-        stale.unlink()
-
-    roots = [
-        ROOT / "demo-artifacts/screenshots",
-        ROOT / "demo-artifacts/review-human/screenshots",
-    ]
-    seeded: list[int] = []
-    for slot, names in TRANSITION_SEED_SOURCES.items():
-        for root in roots:
-            for name in names:
-                candidate = root / name
-                if candidate.is_file():
-                    shutil.copy2(candidate, seed_dir / f"slot-{slot}.png")
-                    seeded.append(slot)
-                    break
-            if slot in seeded:
-                break
-    return seed_dir, sorted(set(seeded))
 
 
 def run(cmd: list[str], *, check: bool = True, log: Path | None = None, extra_env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -636,22 +588,6 @@ def post_run_summary(review_dir: Path) -> None:
     append_manifest(review_dir, "## Post-Run Data Summary\n\n```text\n" + log.read_text() + "```")
 
 
-def generate_subtitles(review_dir: Path) -> None:
-    run([sys.executable, "scripts/demo/subtitles.py"], log=review_dir / "logs/subtitles.log")
-    append_manifest(
-        review_dir,
-        "\n".join(
-            [
-                "## Subtitles",
-                "",
-                "- SRT: `demo-artifacts/review-human/subtitles/clickhouse-sink-tutorial-human-no-audio.srt`",
-                "- WebVTT: `demo-artifacts/review-human/subtitles/clickhouse-sink-tutorial-human-no-audio.vtt`",
-                "- Burned-in review video: `demo-artifacts/review-human/videos/clickhouse-sink-tutorial-human-no-audio-subtitled.mp4`",
-            ]
-        ),
-    )
-
-
 def main() -> int:
     load_env()
     parser = argparse.ArgumentParser()
@@ -659,29 +595,12 @@ def main() -> int:
     parser.add_argument("--skip-reset", action="store_true")
     args = parser.parse_args()
 
-    seed_dir, seeded_slots = preserve_transition_seed_sources()
     os.environ.update(env())
-    os.environ.setdefault("DEMO_SLOT_SEED_DIR", str(seed_dir))
     review_dir = ROOT / "demo-artifacts/review-human"
     timestamp = prepare_review_dir(review_dir)
     write_scene_scripts(review_dir)
     shutil.copy2(ROOT / "scripts/demo/runbook.yaml", review_dir / "runbook.yaml")
     write_manifest_start(review_dir, timestamp)
-    if seeded_slots:
-        append_manifest(
-            review_dir,
-            "## Window Transition Seeds\n\n"
-            + f"- Seed directory: `{seed_dir.relative_to(ROOT)}`\n"
-            + "- Seeded slots: "
-            + ", ".join(str(slot) for slot in seeded_slots),
-        )
-    else:
-        append_manifest(
-            review_dir,
-            "## Window Transition Seeds\n\n"
-            + f"- Seed directory: `{seed_dir.relative_to(ROOT)}`\n"
-            + "- Seeded slots: none; transition overview will use built-in placeholders until each slot is visited.",
-        )
 
     reports: list[dict[str, Any]] = []
     scenes = scene_map()
@@ -717,7 +636,6 @@ def main() -> int:
         copy_screenshots(review_dir)
         post_run_summary(review_dir)
         validation = run([sys.executable, "scripts/demo/validate-video.py"], log=review_dir / "logs/video-validation.log")
-        generate_subtitles(review_dir)
         run(["scripts/demo/export-review-bundle.sh", "--no-archive", str(review_dir)])
         append_manifest(review_dir, "## Review Archive\n\n- Archive creation: skipped for the current review workflow.")
     finally:

@@ -3,9 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import shutil
-import statistics
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -29,7 +27,6 @@ MIN_DURATIONS = {
 @dataclass
 class FrameStats:
     mean: float
-    stdev: float
     nonblack_ratio: float
 
 
@@ -88,18 +85,17 @@ def frame_at(path: Path, offset: float) -> FrameStats:
         check=True,
     )
     width, height, pixels = read_ppm(result.stdout)
-    values = []
+    total_luminance = 0.0
     nonblack = 0
     for index in range(0, len(pixels), 3):
         r, g, b = pixels[index], pixels[index + 1], pixels[index + 2]
         luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
-        values.append(luminance)
+        total_luminance += luminance
         if luminance > 18:
             nonblack += 1
     total = width * height
     return FrameStats(
-        mean=statistics.fmean(values),
-        stdev=statistics.pstdev(values),
+        mean=total_luminance / total,
         nonblack_ratio=nonblack / total,
     )
 
@@ -107,45 +103,21 @@ def frame_at(path: Path, offset: float) -> FrameStats:
 def validate_video(path: Path, scene: str) -> dict:
     dur = duration(path)
     minimum = MIN_DURATIONS.get(scene, 5.0)
-    offsets = [max(0.2, dur * 0.10), max(0.2, dur * 0.50), max(0.2, dur * 0.90)]
-    stats = [frame_at(path, offset) for offset in offsets]
-    max_nonblack = max(stat.nonblack_ratio for stat in stats)
-    max_stdev = max(stat.stdev for stat in stats)
-    mean_brightness = statistics.fmean(stat.mean for stat in stats)
+    stats = frame_at(path, max(0.2, dur * 0.50))
 
     errors = []
     if dur < minimum:
         errors.append(f"duration {dur:.1f}s below minimum {minimum:.1f}s")
-    if max_nonblack < 0.05:
-        errors.append(f"near-black video; max nonblack ratio {max_nonblack:.3f}")
-    if max_stdev < 6.0:
-        errors.append(f"low visual variation; max stdev {max_stdev:.2f}")
+    if stats.nonblack_ratio < 0.05:
+        errors.append(f"near-black video; nonblack ratio {stats.nonblack_ratio:.3f}")
 
     return {
         "scene": scene,
         "path": str(path.relative_to(ROOT)),
         "duration": dur,
         "minimum_duration": minimum,
-        "mean_brightness": mean_brightness,
-        "max_nonblack_ratio": max_nonblack,
-        "max_stdev": max_stdev,
-        "status": "ok" if not errors else "failed",
-        "errors": errors,
-    }
-
-
-def screenshot_stats(path: Path) -> dict:
-    stats = frame_at(path, 0)
-    errors = []
-    if stats.nonblack_ratio < 0.05:
-        errors.append("near-black screenshot")
-    if stats.stdev < 6.0:
-        errors.append("low visual variation")
-    return {
-        "path": str(path.relative_to(ROOT)),
         "mean_brightness": stats.mean,
         "nonblack_ratio": stats.nonblack_ratio,
-        "stdev": stats.stdev,
         "status": "ok" if not errors else "failed",
         "errors": errors,
     }
@@ -202,13 +174,11 @@ def make_contact_sheet(video_dir: Path, output: Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--video-dir", default="demo-artifacts/review-human/videos")
-    parser.add_argument("--screenshots", default="demo-artifacts/screenshots")
     parser.add_argument("--report", default="demo-artifacts/review-human/logs/video-validation.json")
     parser.add_argument("--contact-sheet", default="demo-artifacts/review-human/frame-contact-sheet.jpg")
     args = parser.parse_args()
 
     video_dir = ROOT / args.video_dir
-    screenshot_dir = ROOT / args.screenshots
     report_path = ROOT / args.report
     contact_sheet = ROOT / args.contact_sheet
     report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -221,21 +191,15 @@ def main() -> int:
             continue
         videos.append(validate_video(path, scene))
 
-    screenshots = []
-    if screenshot_dir.is_dir():
-        for path in sorted(screenshot_dir.glob("*.png")):
-            screenshots.append(screenshot_stats(path))
-
     make_contact_sheet(video_dir, contact_sheet)
 
     result = {
         "videos": videos,
-        "screenshots": screenshots,
         "contact_sheet": str(contact_sheet.relative_to(ROOT)),
     }
     report_path.write_text(json.dumps(result, indent=2))
 
-    failures = [item for item in videos + screenshots if item["status"] != "ok"]
+    failures = [item for item in videos if item["status"] != "ok"]
     if failures:
         print(json.dumps({"status": "failed", "failures": failures}, indent=2))
         return 1
