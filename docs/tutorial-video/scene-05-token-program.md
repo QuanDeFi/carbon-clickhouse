@@ -1,10 +1,11 @@
 # Scene 05: Live Observability
 
-With both examples running, we open Grafana first. Grafana shows Carbon-side
-health: processed updates, queue depth, buffered rows, inserted rows, retries,
-and backpressure. This answers whether the Carbon pipelines are keeping up.
+With both examples running, we open Grafana first. This dashboard is the Carbon
+view of the system: processed updates, queue depth, buffered rows, inserted
+rows, retries, and backpressure. It answers whether the pipelines are keeping
+up while live data is flowing.
 
-Then we open ClickStack. ClickStack answers a different question: what
-ClickHouse itself is doing while Carbon writes into it. It reads
-`system.query_log`, so the viewer can see query kinds, users, row counts, and
-durations from the database side.
+Then we switch to ClickStack. ClickStack answers the database-side question:
+what ClickHouse is doing while Carbon writes into it. The source is
+system.query_log, so the viewer can compare query kinds, users, row counts, and
+durations against the Carbon metrics from Grafana.

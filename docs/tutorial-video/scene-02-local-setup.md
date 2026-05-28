@@ -1,10 +1,10 @@
-# Scene 02: Local Setup
+# Scene 02: Local Services Check
 
-We start from the repository root with the local stack already configured.
-The first command checks the containers that matter for this tutorial:
-ClickHouse for storage, Prometheus for metrics, and Grafana as an optional UI.
+We start from the repository root with the local stack already running. The
+first command checks the services that matter for the tutorial: ClickHouse for
+storage, Prometheus for metric scraping, and Grafana for the dashboard.
 
-The next three checks prove the local endpoints are reachable. ClickHouse
-returns `1`, Prometheus reports that it is ready, and Grafana returns its health
-payload. We do not need to show runtime secrets or recording configuration here;
-those are already loaded outside the visible terminal.
+The next commands are simple health checks. ClickHouse returns 1, Prometheus
+reports that it is ready, and Grafana returns its health payload. Runtime values
+such as the provider RPC URL are already loaded outside the visible terminal, so
+the viewer sees only the local wiring.

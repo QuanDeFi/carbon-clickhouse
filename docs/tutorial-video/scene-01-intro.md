@@ -1,8 +1,9 @@
-# Scene 01: Intro And Architecture
+# Scene 01: Architecture And Tutorial Path
 
-Carbon decodes Solana data into typed Rust structures. The ClickHouse sink
-writes those decoded records into generated landing tables.
+Carbon turns Solana RPC data into typed Rust records. The ClickHouse sink takes
+those decoded records and writes them into generated landing tables.
 
-In this tutorial, we will run the Jupiter Swap and Token Program canaries,
-validate rows in ClickHouse, and inspect the same pipeline through Prometheus
-and Grafana.
+In this walkthrough, we start the two canary examples as live runs. Then we
+watch the running pipelines in Grafana, compare that with ClickHouse-side
+activity in ClickStack, inspect the landing tables in ClickHouse Play, and
+finish with the production boundaries.

@@ -1,10 +1,11 @@
-# Scene 03: Jupiter Instruction And Event Ingestion
+# Scene 03: Start The Jupiter Live Run
 
-Now we start the Jupiter Swap ClickHouse example as a live head-follow run. The
-environment already provides the provider RPC URL and ClickHouse endpoint, so
-the visible command can stay focused on the example itself.
+Now we start the Jupiter Swap ClickHouse example. This is a live head-follow
+run, so the process keeps reading finalized blocks instead of stopping after a
+fixed slot range.
 
-While the command runs, watch for the Carbon pipeline startup, the block crawler
-following finalized blocks, and the ClickHouse sink counters. We leave this
-process running so the dashboard scenes can show live Carbon and ClickHouse
-activity instead of only post-run logs.
+The command stays focused on the example package; the RPC URL and ClickHouse
+endpoint are provided by the environment. As the logs move, the important thing
+is that the Carbon pipeline starts, the block crawler follows head, and the
+ClickHouse sink begins flushing decoded Jupiter rows. We leave this terminal
+running so later dashboard scenes show live activity.
