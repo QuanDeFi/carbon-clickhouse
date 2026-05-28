@@ -65,8 +65,8 @@ def chrome_executable() -> str:
 
 def wait_for_chrome_window() -> str:
     for _ in range(120):
-        result = run(["xdotool", "search", "--onlyvisible", "--class", "chrom"], check=False)
-        ids = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        result = run(["xdotool", "search", "--onlyvisible", "--class", "chrome"], check=False)
+        ids = [line.strip() for line in result.stdout.splitlines() if line.strip().isdigit()]
         if ids:
             return ids[-1]
         time.sleep(0.25)

@@ -313,10 +313,10 @@ function demoWindows() {
 
 function latestChromiumWindow() {
   try {
-    const ids = sh("xdotool", ["search", "--onlyvisible", "--class", "chrom"])
+    const ids = sh("xdotool", ["search", "--onlyvisible", "--class", "chrome"])
       .split("\n")
       .map((line) => line.trim())
-      .filter(Boolean);
+      .filter((line) => /^\d+$/.test(line));
     return ids[ids.length - 1] || null;
   } catch (_) {
     return null;

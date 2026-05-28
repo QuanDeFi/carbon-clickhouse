@@ -121,6 +121,18 @@ def write_state(slot: int, label: str) -> None:
     STATE_FILE.write_text(json.dumps({"slot": slot, "label": label}, indent=2))
 
 
+def numeric_window_ids(raw: str) -> list[str]:
+    return [line.strip() for line in raw.splitlines() if line.strip().isdigit()]
+
+
+def debug(message: str) -> None:
+    path = os.environ.get("DEMO_WINDOW_TRANSITION_DEBUG_LOG")
+    if not path:
+        return
+    with Path(path).open("a") as handle:
+        handle.write(f"{time.time():.3f} {message}\n")
+
+
 def image_uri(path: Path) -> str:
     return path.resolve().as_uri()
 
@@ -255,6 +267,7 @@ def write_html(
 <head>
 <meta charset="utf-8">
 <meta name="color-scheme" content="dark">
+<title>Carbon Window Transition</title>
 <style>
 html, body {{
   margin: 0;
@@ -470,10 +483,11 @@ def run_transition(label: str) -> None:
     width, height = screen_size()
     display = os.environ.get("DISPLAY", os.environ.get("DEMO_DISPLAY", ":95"))
     profile = STATE_DIR / f"profile-{int(time.time() * 1000)}"
-    # Off-screen by default so Chrome's white window-creation paint happens
-    # off-screen (never recorded); the window is moved on-screen only after the
-    # dark page below is prepared.
-    prepare_offscreen = os.environ.get("DEMO_TRANSITION_PREPARE_OFFSCREEN", "false").lower() not in {"0", "false", "no", "off"}
+    # Launch the overlay off-screen so Chromium's white window-creation paint
+    # is never recorded, then move the titled transition window on-screen. This
+    # is safe only because lookup below requires the stable transition title;
+    # PID-based lookup is intentionally avoided on this X server.
+    prepare_offscreen = os.environ.get("DEMO_TRANSITION_PREPARE_OFFSCREEN", "true").lower() not in {"0", "false", "no", "off"}
     initial_x = -32000 if prepare_offscreen else 0
     initial_y = -32000 if prepare_offscreen else 0
     transition_url = html_path.resolve().as_uri()
@@ -488,8 +502,8 @@ def run_transition(label: str) -> None:
             "--disable-extensions",
             "--disable-infobars",
             "--test-type",
-            # Keep painting while off-screen so the dark first paint is ready
-            # before the overlay is moved on-screen (no white window flash).
+            # Keep painting even if a caller explicitly opts into off-screen
+            # preparation.
             "--disable-backgrounding-occluded-windows",
             "--disable-renderer-backgrounding",
             "--disable-features=CalculateNativeWinOcclusion",
@@ -507,22 +521,33 @@ def run_transition(label: str) -> None:
     min_transition_seconds = (transition_start_ms() + 1760 + 1220) / 1000 + 0.35
     requested_transition_seconds = float(os.environ.get("DEMO_WINDOW_TRANSITION_SECONDS", "3.4"))
     transition_seconds = max(requested_transition_seconds, min_transition_seconds)
+    debug(f"launched pid={proc.pid} prepare_offscreen={prepare_offscreen} transition_seconds={transition_seconds:.3f}")
     try:
         deadline = time.time() + float(os.environ.get("DEMO_WINDOW_TRANSITION_START_TIMEOUT_SECONDS", "5.0"))
         window_id = ""
-        fallback_window_id = ""
         while time.time() < deadline:
+            by_name = subprocess.run(
+                ["xdotool", "search", "--name", "Carbon Window Transition"],
+                cwd=ROOT,
+                env={**os.environ, "DISPLAY": display},
+                text=True,
+                capture_output=True,
+            )
+            if by_name.returncode == 0 and by_name.stdout.strip():
+                ids = numeric_window_ids(by_name.stdout)
+                if ids:
+                    window_id = ids[-1]
+                    debug(f"selected by_name window_id={window_id} ids={ids}")
+                    break
             found = subprocess.run(
-                ["xdotool", "search", "--class", "chrom"],
+                ["xdotool", "search", "--class", "chrome"],
                 cwd=ROOT,
                 env={**os.environ, "DISPLAY": display},
                 text=True,
                 capture_output=True,
             )
             if found.returncode == 0 and found.stdout.strip():
-                ids = [line.strip() for line in found.stdout.splitlines() if line.strip()]
-                if ids:
-                    fallback_window_id = ids[-1]
+                ids = numeric_window_ids(found.stdout)
                 for candidate in reversed(ids):
                     title = subprocess.run(
                         ["xdotool", "getwindowname", candidate],
@@ -531,16 +556,22 @@ def run_transition(label: str) -> None:
                         text=True,
                         capture_output=True,
                     )
-                    if "transition.html" in title.stdout or str(html_path.name) in title.stdout:
+                    if (
+                        "Carbon Window Transition" in title.stdout
+                        or "transition.html" in title.stdout
+                        or str(html_path.name) in title.stdout
+                    ):
                         window_id = candidate
+                        debug(f"selected by_class window_id={window_id} ids={ids} title={title.stdout.strip()!r}")
                         break
                 if window_id:
                     break
             time.sleep(0.05)
-        if not window_id:
-            window_id = fallback_window_id
         time.sleep(float(os.environ.get("DEMO_WINDOW_TRANSITION_READY_DELAY_SECONDS", "0.6")))
+        if not window_id:
+            raise RuntimeError("transition overlay window was not found")
         if window_id:
+            debug(f"raising window_id={window_id}")
             subprocess.run(
                 ["xdotool", "windowmove", window_id, "0", "0"],
                 cwd=ROOT,
@@ -599,8 +630,19 @@ def run_transition(label: str) -> None:
         ready_file = os.environ.get("DEMO_WINDOW_TRANSITION_READY_FILE")
         if ready_file:
             Path(ready_file).write_text(f"{time.time()}\n")
+        debug("transition ready; sleeping")
         time.sleep(transition_seconds)
+        if window_id:
+            exists = subprocess.run(
+                ["xdotool", "getwindowname", window_id],
+                cwd=ROOT,
+                env={**os.environ, "DISPLAY": display},
+                text=True,
+                capture_output=True,
+            )
+            debug(f"post-sleep window returncode={exists.returncode} title={exists.stdout.strip()!r}")
     finally:
+        debug("terminating chrome")
         proc.terminate()
         try:
             proc.wait(timeout=4)

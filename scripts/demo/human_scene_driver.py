@@ -74,7 +74,7 @@ def run(cmd: list[str], *, check: bool = True) -> subprocess.CompletedProcess[st
 def wait_for_window(title: str) -> str:
     for _ in range(80):
         result = run(["xdotool", "search", "--name", title], check=False)
-        ids = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        ids = [line.strip() for line in result.stdout.splitlines() if line.strip().isdigit()]
         if ids:
             return ids[-1]
         time.sleep(0.15)
