@@ -17,6 +17,8 @@ scripts/demo/runbook.yaml
 
 - Headless display: Xvfb on `${DEMO_DISPLAY:-:95}`.
 - Optional observation UI: x11vnc on `${DEMO_VNC_PORT:-5903}` and noVNC/websockify on `${DEMO_NOVNC_PORT:-6083}`.
+- VS Code scenes: real desktop VS Code on the recording display for code and
+  configuration walkthroughs.
 - Terminal scenes: wide dark-theme `xterm` windows with smaller readable text and visibly typed commands.
 - Human-style browser scenes: Chromium app windows launched visibly on Xvfb, with browser chrome hidden and dark rendering where possible.
 - Default recorder: FFmpeg `x11grab`.
@@ -129,19 +131,25 @@ source .venv-demo/bin/activate
 python scripts/demo/run_scene.py --all
 ```
 
+For the current human-style tutorial flow, use:
+
+```sh
+python scripts/demo/run_scene.py --human --all --no-voice
+```
+
 ## Human-Style No-Audio Review
 
 Use this before final voiceover. It records a directed screen performance:
-visible terminal typing, readable pauses, dark browser slides, ClickHouse `/play`
-inspection, Grafana dashboards after both examples, ClickStack query-log
-inspection, video validation, screenshots, contact sheet, and current review
-files.
+VS Code code/config walkthroughs, visible terminal typing, readable pauses,
+ClickHouse `/play` inspection, Grafana dashboards after both examples,
+ClickStack query-log inspection, video validation, screenshots, contact sheet,
+and current review files.
 
-The current story is live-first: verify local services, start Jupiter live in
-one terminal, start Token Program live in a second terminal, inspect Grafana and
-ClickStack while both examples are running, inspect landing table data in
-ClickHouse `/play`, demonstrate async-wait inserts, and stop the live terminals
-during the final production-boundaries slide.
+The current story is live-first but config-aware: show the stack setup files in
+VS Code, verify local services, show the example ClickHouse/RPC config in VS
+Code, start Jupiter live in one terminal, start Token Program live in a second
+terminal, inspect Grafana and ClickStack while both examples are running, and
+inspect landing table data in ClickHouse `/play`.
 
 Terminal scenes reuse named shells where appropriate, pause briefly before
 pressing Enter, and leave read time at scene boundaries so the output can be
@@ -181,17 +189,24 @@ source .venv-demo/bin/activate
 python scripts/demo/subtitles.py
 ```
 
-Current browser-scene flow:
+Current human-scene flow:
 
-- `scene-04`: ClickHouse `/play` shows Jupiter counts/sample rows, then Grafana
-  shows Carbon pipeline and ClickHouse sink metrics after Jupiter ingestion.
-- `scene-07`: ClickHouse `/play` shows Token Program landing/sample rows,
-  Grafana shows the dashboard again after Token Program ingestion, then
-  ClickStack shows ClickHouse-side `system.query_log` activity.
+- `scene-01`: VS Code shows `monitoring/compose.yaml`,
+  `monitoring/prometheus/prometheus.yml`, and `scripts/demo/setup-monitoring.sh`.
+- `scene-02`: terminal health checks prove ClickHouse, Prometheus, and Grafana
+  are online.
+- `scene-03`: VS Code shows sanitized example env inputs, then the core
+  ClickHouse sink config, writer, and schema setup paths that consume them.
+- `scene-04`: terminal starts the Jupiter live example.
+- `scene-05`: terminal starts the Token Program example.
+- `scene-06`: Grafana and ClickStack show the running pipelines through
+  structured telemetry.
+- `scene-07`: ClickHouse `/play` verifies generated Jupiter and Token Program
+  landing tables and sample rows.
 
 Current theme behavior:
 
-- Intro/outro slides are dark HTML slides.
+- VS Code uses a dedicated recording profile under `/home/ops/dev/vnc`.
 - ClickHouse `/play` and ClickStack are darkened through deterministic
   recording-time CSS injection.
 - Grafana uses its native dark theme/dashboard URL.

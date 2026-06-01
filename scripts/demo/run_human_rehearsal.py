@@ -16,14 +16,13 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 SCENES = [
-    "scene-01-intro",
+    "scene-01-stack-config",
     "scene-02-local-setup",
-    "scene-03-jupiter-ingestion",
-    "scene-04-clickhouse-validation",
-    "scene-05-token-program",
-    "scene-06-async-inserts",
-    "scene-07-observability",
-    "scene-08-production-boundaries",
+    "scene-03-example-config",
+    "scene-04-jupiter-live",
+    "scene-05-token-live",
+    "scene-06-observability",
+    "scene-07-clickhouse-play",
 ]
 
 LAST_VIEW_KEY: str | None = None
@@ -179,6 +178,7 @@ def start_display(log_dir: Path) -> bool:
 
 def close_human_terminal(log_dir: Path) -> None:
     run([sys.executable, "scripts/demo/human_scene_driver.py", "--close-terminal"], check=False, log=log_dir / "close-human-terminal.log")
+    run([sys.executable, "scripts/demo/vscode_scene_driver.py", "--close"], check=False, log=log_dir / "close-vscode.log")
     run([sys.executable, "scripts/demo/window_transition.py", "--reset"], check=False, log=log_dir / "window-transition-reset.log")
 
 
@@ -318,6 +318,42 @@ def run_browser_workflow_with_delayed_record(scene: str, workflow: str, log: Pat
             raise subprocess.CalledProcessError(return_code, ["node", "scripts/demo/browser_workflow.js", scene, workflow])
 
 
+def run_vscode_scene_with_delayed_record(scene: str, log: Path) -> None:
+    ready_file = ROOT / "demo-artifacts/pids" / f"{scene}-vscode-ready"
+    ready_file.parent.mkdir(parents=True, exist_ok=True)
+    if ready_file.exists():
+        ready_file.unlink()
+    merged = env()
+    merged["DEMO_VSCODE_READY_FILE"] = str(ready_file)
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with log.open("a") as handle:
+        handle.write(f"$ {sys.executable} scripts/demo/vscode_scene_driver.py {scene}\n")
+        proc = subprocess.Popen(
+            [sys.executable, "scripts/demo/vscode_scene_driver.py", scene],
+            cwd=ROOT,
+            env=merged,
+            text=True,
+            stdout=handle,
+            stderr=subprocess.STDOUT,
+        )
+        deadline = time.time() + 20
+        while time.time() < deadline and proc.poll() is None:
+            if ready_file.exists():
+                break
+            time.sleep(0.1)
+        if not ready_file.exists():
+            proc.terminate()
+            try:
+                proc.wait(timeout=4)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+            raise RuntimeError(f"VS Code scene did not become ready for {scene}")
+        start_record(scene)
+        return_code = proc.wait()
+        if return_code != 0:
+            raise subprocess.CalledProcessError(return_code, [sys.executable, "scripts/demo/vscode_scene_driver.py", scene])
+
+
 def run_playwright(spec: str, extra_env: dict[str, str], log: Path) -> None:
     command = [
         "npm",
@@ -345,6 +381,8 @@ def run_scene(scene: dict[str, Any], review_dir: Path) -> dict[str, Any]:
     view_key = f"{kind}:{scene_id}"
     if kind == "terminal":
         view_key = f"terminal:{human.get('terminal_name') or scene_id}"
+    elif kind == "vscode":
+        view_key = f"vscode:{scene_id}"
     elif kind == "mixed_async":
         view_key = f"mixed:{human.get('terminal_name') or scene_id}:{human.get('workflow', 'async-log')}"
     elif kind == "browser":
@@ -359,7 +397,7 @@ def run_scene(scene: dict[str, Any], review_dir: Path) -> dict[str, Any]:
                     "DEMO_WINDOW_OVERVIEW": "false",
                 },
             )
-        if not (kind in {"terminal", "mixed_async", "slide"} or (kind == "browser" and human.get("workflow"))):
+        if not (kind in {"terminal", "mixed_async", "slide", "vscode"} or (kind == "browser" and human.get("workflow"))):
             start_record(scene_id)
         try:
             if kind == "terminal":
@@ -403,6 +441,9 @@ def run_scene(scene: dict[str, Any], review_dir: Path) -> dict[str, Any]:
                     float(human.get("duration", 10)),
                     log_dir / f"{scene_id}.log",
                 )
+            elif kind == "vscode":
+                run_vscode_scene_with_delayed_record(scene_id, log_dir / f"{scene_id}.log")
+                capture_transition_current(str(scene.get("title") or "Visual Studio Code"), log_dir / f"{scene_id}-transition-state.log")
             elif kind == "browser":
                 workflow = human.get("workflow")
                 if workflow:
@@ -465,11 +506,10 @@ def normalize_video(scene: str, review_dir: Path) -> None:
         raise FileNotFoundError(source)
     target = review_dir / "videos" / f"{scene}.mp4"
     tail_trim_seconds = {
-        "scene-05-token-program": 0.8,
-        "scene-06-async-inserts": 0.8,
-        "scene-07-observability": 2.0,
+        "scene-06-observability": 0.8,
+        "scene-07-clickhouse-play": 0.8,
     }.get(scene, 0.0)
-    needs_filter = scene in {"scene-01-intro", "scene-02-local-setup", "scene-07-observability", "scene-08-production-boundaries"} or tail_trim_seconds > 0
+    needs_filter = scene in {"scene-01-stack-config", "scene-02-local-setup"} or tail_trim_seconds > 0
     if needs_filter:
         duration = float(
             subprocess.check_output(
@@ -492,9 +532,9 @@ def normalize_video(scene: str, review_dir: Path) -> None:
         if tail_trim_seconds > 0:
             filters.append(f"trim=end={output_duration:.3f}")
             filters.append("setpts=PTS-STARTPTS")
-        if scene in {"scene-01-intro", "scene-07-observability"}:
+        if scene in {"scene-01-stack-config"}:
             filters.append(f"fade=t=out:st={max(0.0, output_duration - 0.8):.3f}:d=0.8")
-        if scene in {"scene-02-local-setup", "scene-08-production-boundaries"}:
+        if scene in {"scene-02-local-setup"}:
             filters.append("fade=t=in:st=0:d=0.35")
         vf = ",".join(filters)
         subprocess.run(
@@ -580,7 +620,6 @@ def post_run_summary(review_dir: Path) -> None:
             ("ClickHouse health", ["scripts/demo/query-clickhouse.sh", "health"]),
             ("Jupiter", ["scripts/demo/query-clickhouse.sh", "jupiter"]),
             ("Token Program", ["scripts/demo/query-clickhouse.sh", "token"]),
-            ("Async log", ["scripts/demo/query-clickhouse.sh", "async-log"]),
         ]:
             handle.write(f"## {label}\n")
             proc = subprocess.run(command, cwd=ROOT, env=env(), text=True, stdout=handle, stderr=subprocess.STDOUT)
