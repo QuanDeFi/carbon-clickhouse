@@ -6,7 +6,11 @@ This curriculum teaches engineers how to use Carbon's ClickHouse sink to write
 decoded Solana data into typed ClickHouse landing tables. It is organized as a
 hands-on tutorial path, starting with the sink model and ending with local
 validation, browser-based data inspection, real-time observability, and
-production boundaries.
+direct ClickHouse row verification.
+
+The current recording source of truth is `scripts/demo/runbook.yaml`. This
+curriculum is the human-readable narrative plan for that runbook, and the
+per-scene narration lives in `docs/tutorial-video/scene-*.md`.
 
 The curriculum uses the current canary examples:
 
@@ -40,75 +44,72 @@ tests need a production/provider RPC endpoint.
 
 After completing the curriculum, learners should be able to:
 
-- explain where ClickHouse fits in Carbon's datasource, decoder, processor, and
-  writer flow
-- run the Jupiter ClickHouse example in bounded and live modes
+- locate the local setup files for ClickHouse, Prometheus, and Grafana
+- verify that ClickHouse, Prometheus, and Grafana are online before ingestion
+- identify the runtime inputs for ClickHouse and Solana RPC configuration
+- find the core ClickHouse sink configuration surface in `carbon-core`
+- run the Jupiter ClickHouse example in live mode
 - run the Token Program ClickHouse fixed-USDC account snapshot plus live
   instruction example
 - identify the generated landing tables created by each example
-- validate inserted rows with ClickHouse SQL in both terminal and browser UI
-- inspect generated landing table contents through ClickHouse's built-in web UI
-- distinguish synchronous inserts from async-wait inserts
-- explain how query IDs, exact-batch deduplication tokens, source metadata, and
-  async-wait inserts support many Carbon writers writing to the same ClickHouse
-  deployment
-- inspect ClickHouse sink metrics through the local Prometheus stack
-- read the local Grafana dashboard while examples are actively ingesting data
-- explain the sink's boundaries around replay, deduplication, canonicalization,
-  finality, durable queues, and serving APIs
-- explain managed ClickHouse schema reconciliation and when it is safe
-- explain which shared Carbon runtime or datasource paths this branch touches
-  and why those changes are needed for buffered ClickHouse ingestion
+- observe both live examples through Grafana and ClickStack
+- inspect generated landing table contents through ClickHouse Play
+- validate that ClickHouse config, RPC input, decoding, and writes all worked
+- understand that insert modes, architecture, and production boundaries are
+  deeper follow-up topics, not part of the current recording path
 
-## Recommended Tutorial Video Flow
+## Current Tutorial Recording Flow
 
-The tutorial recording should feel like a guided product walkthrough, not a
-smoke-test log capture. The recommended screen flow is:
+The tutorial recording should feel like a guided live walkthrough, not a
+smoke-test log capture. The primary path is: prove the local stack is online,
+show the relevant setup and configuration in VS Code, run both examples, observe
+the running pipelines, and verify generated rows in ClickHouse.
 
-1. Start with a visual architecture slide that explains Carbon datasource,
-   decoder, processor, ClickHouse sink, typed landing tables, and
-   Prometheus/Grafana monitoring.
-2. Show the local services in a terminal: ClickHouse, Prometheus, Grafana, and
-   the two Carbon metrics ports.
-3. Explain the implementation shape from the architecture and implementation
-   docs: generated decoder-owned schemas, landing-only writes, batching,
-   retries, schema reconciliation, and the responsibility split.
-4. Start the Jupiter example as a live head-follow run so instruction,
-   CPI/event, and live TokenLedger account paths can produce data while the
-   rest of the tutorial continues.
-5. Start the Token Program example in a second terminal window so the fixed
+The current seven-scene flow is:
+
+1. In VS Code, show the setup files that make the local stack reproducible:
+   `monitoring/compose.yaml`, `monitoring/prometheus/prometheus.yml`, and
+   `scripts/demo/setup-monitoring.sh`.
+2. In a terminal, validate that ClickHouse, Prometheus, and Grafana are already
+   online.
+3. In VS Code, show the example README env inputs for `DATABASE_URL` and
+   `RPC_URL`, then move into the core ClickHouse sink code:
+   `crates/core/src/clickhouse/config.rs`,
+   `crates/core/src/clickhouse/writer.rs`, and
+   `crates/core/src/clickhouse/admin.rs`.
+4. Start the Jupiter Swap ClickHouse example as a live head-follow run so it
+   can decode Jupiter activity and write generated landing rows while the
+   walkthrough continues.
+5. Start the Token Program ClickHouse example in a second terminal so the fixed
    USDC account snapshot and live instruction tail run alongside Jupiter.
-6. Show the local Grafana `Carbon ClickHouse Overview` dashboard while both
-   examples are actively running, so Carbon pipeline and sink metrics are
-   visibly changing.
-7. Open ClickStack and inspect `system.query_log` so the viewer can compare
-   Carbon pipeline metrics from Grafana with ClickHouse-side insert/query
-   activity, query kinds, row counts, and query durations.
-8. Open ClickHouse's built-in browser UI at `/play` and inspect real
-   bootstrapped landing tables and sample rows. This is the preferred
-   browser-based ClickHouse data explorer for generated landing-table rows
-   because it ships with ClickHouse and requires no extra service.
-9. Show async-wait insert configuration, then inspect the ClickHouse async
-   insert log in `/play` and ClickStack.
-10. End with a production-boundaries slide that separates Carbon sink
-   responsibilities, ClickHouse responsibilities, and external control-plane
-   responsibilities. Stop the live example terminals in the background while
-   this final slide is visible.
+6. Show Grafana and ClickStack while both examples are active. Grafana is the
+   Carbon-side pipeline view; ClickStack is the ClickHouse-side insert/query-log
+   view.
+7. Open ClickHouse Play at `/play` and inspect generated Jupiter and Token
+   Program landing tables and sample rows. This is the final validation that the
+   ClickHouse config was accepted, the RPC input was accepted, decoding
+   happened, generated rows were written, and the rows are queryable.
+
+Architecture slides, async-insert demonstrations, and production-boundary
+slides are intentionally out of the current recording path. They remain useful
+follow-up topics, but they should not be added back unless the runbook changes.
 
 ClickHouse UI note:
 
 - The current local tutorial stack should use ClickHouse `/play` for table
   inspection.
-- ClickStack is available in the current local ClickHouse build and should be
-  shown after the Token Program example. Configure it against
-  `system.query_log` and use it as the ClickHouse-native observability view for
-  insert/query activity.
-- ClickHouse `/dashboards` can still be mentioned as an optional server-health
-  view, but the tutorial's primary dashboard comparison is Grafana for Carbon
-  pipeline metrics plus ClickStack for ClickHouse-side query-log activity.
+- ClickStack should be shown after both live examples are running. Configure it
+  against `system.query_log` and use it as the ClickHouse-native observability
+  view for insert/query activity.
+- ClickHouse `/dashboards` is optional background context. The recording's
+  primary observability comparison is Grafana for Carbon pipeline metrics plus
+  ClickStack for ClickHouse-side query-log activity.
 - Richer third-party ClickHouse web explorers can be evaluated later, but they
   add installation, credentials, and recording complexity that is unnecessary
   for the first tutorial.
+
+The detailed modules below are broader curriculum material. The current video
+recording uses the flow above.
 
 ## Module 1: Architecture Primer
 
@@ -223,8 +224,8 @@ Teaching notes:
 - For the tutorial recording, use pure head-follow mode instead of a bounded
   backfill. The live run keeps producing Carbon metrics and ClickHouse query-log
   activity while the tutorial moves through Grafana, ClickStack, and `/play`.
-- Keep the Jupiter terminal open in the background until the final production
-  boundaries slide, then stop it while that slide is visible.
+- Keep the Jupiter terminal open while the Token Program, observability, and
+  ClickHouse Play scenes run.
 - In pure head-follow mode, it attaches the generated TokenLedger account
   processor and fetches current confirmed TokenLedger account snapshots for
   first-seen TokenLedger pubkeys.
@@ -332,8 +333,7 @@ Teaching notes:
   account and instruction metrics at `PROMETHEUS_METRICS_ADDR`.
 - For the tutorial recording, start this example in a second terminal window
   after Jupiter is already running. Keep both examples active while Grafana and
-  ClickStack are shown, then stop both live terminals during the final
-  production-boundaries slide.
+  ClickStack are shown and while ClickHouse Play verifies generated rows.
 
 Validation queries:
 
