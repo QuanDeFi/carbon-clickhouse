@@ -14,11 +14,11 @@ ROOT = Path(__file__).resolve().parents[2]
 
 MIN_DURATIONS = {
     "scene-01-stack-config": 14.0,
-    "scene-02-local-setup": 12.0,
+    "scene-02-local-setup": 9.0,
     "scene-03-example-config": 28.0,
-    "scene-04-jupiter-live": 14.0,
-    "scene-05-token-live": 18.0,
-    "scene-06-observability": 30.0,
+    "scene-04-jupiter-live": 12.0,
+    "scene-05-token-live": 12.0,
+    "scene-06-observability": 36.0,
     "scene-07-clickhouse-play": 30.0,
 }
 

@@ -23,7 +23,7 @@ scenes:
           pause_after: 5.0
         - file: scripts/demo/setup-monitoring.sh
           line: 10
-          pause_after: 4.0
+          pause_after: 5.0
 
   - id: scene-02-local-setup
     title: Local services check
@@ -35,17 +35,17 @@ scenes:
       terminal_name: setup-check
       terminal_title: Carbon ClickHouse - Local Services Check
       reuse_terminal: true
-      min_duration: 12
-      scene_end_pause: 2.0
+      min_duration: 9
+      scene_end_pause: 0.8
       steps:
         - command: docker compose -f monitoring/compose.yaml ps
-          pause_after: 3.0
+          pause_after: 1.4
         - command: curl -fsS 'http://carbon:carbon@localhost:8123/?query=SELECT%201'
-          pause_after: 1.5
+          pause_after: 0.8
         - command: curl -fsS http://localhost:9090/-/ready
-          pause_after: 1.5
+          pause_after: 0.8
         - command: curl -fsS http://localhost:3000/api/health
-          pause_after: 2.0
+          pause_after: 1.0
 
   - id: scene-03-example-config
     title: Core ClickHouse sink configuration
@@ -57,11 +57,11 @@ scenes:
       initial_pause: 1.0
       scene_end_pause: 1.0
       steps:
-        - file: examples/token-program-clickhouse/README.md
-          line: 25
+        - file: examples/jupiter-swap-clickhouse/.env.example
+          line: 1
           pause_after: 4.0
-        - file: examples/jupiter-swap-clickhouse/README.md
-          line: 8
+        - file: examples/token-program-clickhouse/.env.example
+          line: 1
           pause_after: 4.0
         - file: crates/core/src/clickhouse/config.rs
           line: 23
@@ -71,52 +71,52 @@ scenes:
           pause_after: 6.0
         - file: crates/core/src/clickhouse/config.rs
           line: 148
-          pause_after: 5.0
+          pause_after: 4.5
         - file: crates/core/src/clickhouse/config.rs
           line: 199
-          pause_after: 5.0
+          pause_after: 4.5
         - file: crates/core/src/clickhouse/writer.rs
           line: 615
-          pause_after: 5.0
+          pause_after: 4.0
         - file: crates/core/src/clickhouse/admin.rs
           line: 118
-          pause_after: 5.0
+          pause_after: 4.0
 
   - id: scene-04-jupiter-live
     title: Start Jupiter live run
     type: terminal
     script: docs/tutorial-video/scene-04-jupiter-live.md
-    command: LOG_LEVEL=debug BLOCK_CRAWLER_START_SLOT= BLOCK_CRAWLER_END_SLOT= cargo run -p jupiter-swap-clickhouse-carbon-example
+    command: cargo run -p jupiter-swap-clickhouse-carbon-example
     human:
       type: terminal
       terminal_name: jupiter-live
       terminal_title: Carbon ClickHouse - Local Services And Jupiter Live
       reuse_terminal: true
       keep_open: true
-      min_duration: 18
-      scene_end_pause: 2.5
+      min_duration: 12
+      scene_end_pause: 1.2
       steps:
-        - command: LOG_LEVEL=debug BLOCK_CRAWLER_START_SLOT= BLOCK_CRAWLER_END_SLOT= cargo run -p jupiter-swap-clickhouse-carbon-example
+        - command: cargo run -p jupiter-swap-clickhouse-carbon-example
           wait_for_prompt: false
-          pause_after: 12.0
+          pause_after: 7.5
 
   - id: scene-05-token-live
     title: Start Token Program live run
     type: terminal
     script: docs/tutorial-video/scene-05-token-live.md
-    command: LOG_LEVEL=debug PROMETHEUS_METRICS_ADDR=0.0.0.0:9465 cargo run -p token-program-clickhouse-carbon-example
+    command: cargo run -p token-program-clickhouse-carbon-example
     human:
       type: terminal
       terminal_name: token-live
       terminal_title: Carbon ClickHouse - Token Program Live
       reuse_terminal: true
       keep_open: true
-      min_duration: 18
-      scene_end_pause: 2.5
+      min_duration: 12
+      scene_end_pause: 1.2
       steps:
-        - command: LOG_LEVEL=debug PROMETHEUS_METRICS_ADDR=0.0.0.0:9465 cargo run -p token-program-clickhouse-carbon-example
+        - command: cargo run -p token-program-clickhouse-carbon-example
           wait_for_prompt: false
-          pause_after: 13.0
+          pause_after: 8.0
 
   - id: scene-06-observability
     title: Live observability
@@ -126,7 +126,7 @@ scenes:
     human:
       type: browser
       workflow: live-observability
-      min_duration: 36
+      min_duration: 44
 
   - id: scene-07-clickhouse-play
     title: Landing table inspection

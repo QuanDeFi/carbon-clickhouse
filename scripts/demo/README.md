@@ -165,8 +165,9 @@ landing-row data rather than only showing minimal counts.
 The current visual target is roughly three to three and a half minutes. If a run
 drifts toward four minutes or more, shorten scene content rather than returning
 to fixed robotic typing.
-The human rehearsal defaults to 60fps so the Mission-Control-style window
-transition keeps the smoother transform-based motion from the focused probe.
+The human rehearsal defaults to 60fps. Active window switches use a short
+blackout transition; the previous Mission-Control-style transition is archived
+in `scripts/demo/window_transition_mission_control.py`.
 
 ```sh
 source .venv-demo/bin/activate
@@ -195,12 +196,12 @@ Current human-scene flow:
   `monitoring/prometheus/prometheus.yml`, and `scripts/demo/setup-monitoring.sh`.
 - `scene-02`: terminal health checks prove ClickHouse, Prometheus, and Grafana
   are online.
-- `scene-03`: VS Code shows sanitized example env inputs, then the core
+- `scene-03`: VS Code shows both example `.env.example` files, then the core
   ClickHouse sink config, writer, and schema setup paths that consume them.
 - `scene-04`: terminal starts the Jupiter live example.
 - `scene-05`: terminal starts the Token Program example.
-- `scene-06`: Grafana and ClickStack show the running pipelines through
-  structured telemetry.
+- `scene-06`: filtered Jupiter and Token Program Grafana dashboards show the
+  running Carbon pipelines, then ClickStack shows ClickHouse-side telemetry.
 - `scene-07`: ClickHouse `/play` verifies generated Jupiter and Token Program
   landing tables and sample rows.
 

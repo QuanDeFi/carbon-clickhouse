@@ -1,0 +1,502 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "increase(carbon_updates_processed_total{pipeline_id=\"jupiter-swap-clickhouse\"}[$__range])",
+          "legendFormat": "processed recent",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "increase(carbon_updates_failed_total{pipeline_id=\"jupiter-swap-clickhouse\"}[$__range])",
+          "legendFormat": "failed recent",
+          "refId": "B"
+        }
+      ],
+      "title": "Carbon Updates Recent Window",
+      "type": "timeseries",
+      "description": "Filtered to pipeline_id=jupiter-swap-clickhouse for the tutorial recording."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "last_over_time(carbon_updates_queued{pipeline_id=\"jupiter-swap-clickhouse\"}[$__range])",
+          "legendFormat": "queued",
+          "refId": "A"
+        }
+      ],
+      "title": "Carbon Queue Depth",
+      "type": "timeseries",
+      "description": "Filtered to pipeline_id=jupiter-swap-clickhouse for the tutorial recording."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "increase(carbon_updates_process_time_milliseconds_sum{pipeline_id=\"jupiter-swap-clickhouse\"}[$__range]) / increase(carbon_updates_process_time_milliseconds_count{pipeline_id=\"jupiter-swap-clickhouse\"}[$__range])",
+          "legendFormat": "avg",
+          "refId": "A"
+        }
+      ],
+      "title": "Carbon Processing Latency",
+      "type": "timeseries",
+      "description": "Filtered to pipeline_id=jupiter-swap-clickhouse for the tutorial recording."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "rows"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 8
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "last_over_time(clickhouse_instructions_buffered_rows{pipeline_id=\"jupiter-swap-clickhouse\"}[$__range])",
+          "legendFormat": "instructions",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "last_over_time(clickhouse_accounts_buffered_rows{pipeline_id=\"jupiter-swap-clickhouse\"}[$__range])",
+          "legendFormat": "accounts",
+          "refId": "B"
+        }
+      ],
+      "title": "ClickHouse Buffered Rows",
+      "type": "timeseries",
+      "description": "Filtered to pipeline_id=jupiter-swap-clickhouse for the tutorial recording."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 8
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "last_over_time(clickhouse_instructions_buffered_bytes{pipeline_id=\"jupiter-swap-clickhouse\"}[$__range])",
+          "legendFormat": "instructions",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "last_over_time(clickhouse_accounts_buffered_bytes{pipeline_id=\"jupiter-swap-clickhouse\"}[$__range])",
+          "legendFormat": "accounts",
+          "refId": "B"
+        }
+      ],
+      "title": "ClickHouse Buffered Bytes",
+      "type": "timeseries",
+      "description": "Filtered to pipeline_id=jupiter-swap-clickhouse for the tutorial recording."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 8
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "last_over_time(clickhouse_instructions_active_buffers{pipeline_id=\"jupiter-swap-clickhouse\"}[$__range])",
+          "legendFormat": "instructions",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "last_over_time(clickhouse_accounts_active_buffers{pipeline_id=\"jupiter-swap-clickhouse\"}[$__range])",
+          "legendFormat": "accounts",
+          "refId": "B"
+        }
+      ],
+      "title": "ClickHouse Active Buffers",
+      "type": "timeseries",
+      "description": "Filtered to pipeline_id=jupiter-swap-clickhouse for the tutorial recording."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 16
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "increase(clickhouse_instructions_inserted{pipeline_id=\"jupiter-swap-clickhouse\"}[$__range])",
+          "legendFormat": "instructions recent",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "increase(clickhouse_accounts_inserted{pipeline_id=\"jupiter-swap-clickhouse\"}[$__range])",
+          "legendFormat": "accounts recent",
+          "refId": "B"
+        }
+      ],
+      "title": "ClickHouse Inserted Rows Recent Window",
+      "type": "timeseries",
+      "description": "Filtered to pipeline_id=jupiter-swap-clickhouse for the tutorial recording."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 16
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "increase(clickhouse_instructions_flush_failed_batches{pipeline_id=\"jupiter-swap-clickhouse\"}[$__range])",
+          "legendFormat": "instruction failures",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "increase(clickhouse_accounts_flush_failed_batches{pipeline_id=\"jupiter-swap-clickhouse\"}[$__range])",
+          "legendFormat": "account failures",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "increase(clickhouse_instructions_retries{pipeline_id=\"jupiter-swap-clickhouse\"}[$__range])",
+          "legendFormat": "instruction retries",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "increase(clickhouse_accounts_retries{pipeline_id=\"jupiter-swap-clickhouse\"}[$__range])",
+          "legendFormat": "account retries",
+          "refId": "D"
+        }
+      ],
+      "title": "ClickHouse Errors And Retries Recent Window",
+      "type": "timeseries",
+      "description": "Filtered to pipeline_id=jupiter-swap-clickhouse for the tutorial recording."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 16
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "increase(clickhouse_instructions_backpressure_rejected{pipeline_id=\"jupiter-swap-clickhouse\"}[$__range])",
+          "legendFormat": "instructions",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "increase(clickhouse_accounts_backpressure_rejected{pipeline_id=\"jupiter-swap-clickhouse\"}[$__range])",
+          "legendFormat": "accounts",
+          "refId": "B"
+        }
+      ],
+      "title": "ClickHouse Backpressure Rejections Recent Window",
+      "type": "timeseries",
+      "description": "Filtered to pipeline_id=jupiter-swap-clickhouse for the tutorial recording."
+    }
+  ],
+  "preload": false,
+  "refresh": "5s",
+  "schemaVersion": 41,
+  "style": "dark",
+  "tags": [
+    "carbon",
+    "carbon-clickhouse",
+    "clickhouse",
+    "jupiter-swap-clickhouse"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Carbon ClickHouse Jupiter",
+  "uid": "carbon-clickhouse-jupiter",
+  "version": 1
+}

@@ -62,6 +62,18 @@ def env() -> dict[str, str]:
     data.setdefault("DEMO_VNC_PORT", "5903")
     data.setdefault("DEMO_NOVNC_PORT", "6083")
     data.setdefault("DEMO_SKIP_NOVNC", "true")
+    data.setdefault("DEMO_TYPE_BASE_DELAY_MS", "24")
+    data.setdefault("DEMO_BROWSER_TYPE_BASE_DELAY_MS", "26")
+    data.setdefault("DEMO_PLAY_QUERY_TYPE_DELAY_MS", "24")
+    data.setdefault("DEMO_UI_TYPE_DELAY_MS", "24")
+    data.setdefault("DEMO_TYPE_MIN_DELAY_MS", "14")
+    data.setdefault("DEMO_TYPE_MAX_DELAY_MS", "78")
+    data.setdefault("DEMO_TYPE_SPACE_PAUSE_MS", "16,52")
+    data.setdefault("DEMO_TYPE_BURST_PAUSE_MS", "16,64")
+    data.setdefault("DEMO_TYPE_OPERATOR_PAUSE_MS", "48,136")
+    data.setdefault("DEMO_PRE_ENTER_PAUSE_MS", "220,390")
+    data.setdefault("DEMO_WINDOW_TRANSITION_SECONDS", "0.72")
+    data.setdefault("DEMO_WINDOW_TRANSITION_READY_DELAY_SECONDS", "0.16")
     return data
 
 
@@ -212,13 +224,15 @@ def capture_transition_current(label: str, log: Path) -> None:
     run([sys.executable, "scripts/demo/window_transition.py", "--capture-current", label], check=False, log=log)
 
 
-def run_transition_before_scene(scene: str, label: str, log: Path) -> None:
+def run_transition_before_scene(scene: str, label: str, log: Path, *, target_window_id: str | None = None) -> None:
     ready_file = ROOT / "demo-artifacts/pids" / f"{scene}-transition-ready"
     ready_file.parent.mkdir(parents=True, exist_ok=True)
     if ready_file.exists():
         ready_file.unlink()
     merged = env()
     merged["DEMO_WINDOW_TRANSITION_READY_FILE"] = str(ready_file)
+    if target_window_id:
+        merged["DEMO_WINDOW_TRANSITION_TARGET_WINDOW_ID"] = target_window_id
     log.parent.mkdir(parents=True, exist_ok=True)
     with log.open("a") as handle:
         handle.write(f"$ {sys.executable} scripts/demo/window_transition.py {label}\n")
@@ -318,7 +332,17 @@ def run_browser_workflow_with_delayed_record(scene: str, workflow: str, log: Pat
             raise subprocess.CalledProcessError(return_code, ["node", "scripts/demo/browser_workflow.js", scene, workflow])
 
 
-def run_vscode_scene_with_delayed_record(scene: str, log: Path) -> None:
+def vscode_window_id() -> str | None:
+    state_file = ROOT / "demo-artifacts/pids/vscode-window.json"
+    try:
+        state = json.loads(state_file.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+    window_id = str(state.get("window_id", "")).strip()
+    return window_id if window_id else None
+
+
+def run_vscode_scene_with_delayed_record(scene: str, log: Path, *, use_transition: bool = False) -> None:
     ready_file = ROOT / "demo-artifacts/pids" / f"{scene}-vscode-ready"
     ready_file.parent.mkdir(parents=True, exist_ok=True)
     if ready_file.exists():
@@ -348,7 +372,15 @@ def run_vscode_scene_with_delayed_record(scene: str, log: Path) -> None:
             except subprocess.TimeoutExpired:
                 proc.kill()
             raise RuntimeError(f"VS Code scene did not become ready for {scene}")
-        start_record(scene)
+        if use_transition:
+            run_transition_before_scene(
+                scene,
+                "Visual Studio Code",
+                log.with_name(f"{scene}-transition.log"),
+                target_window_id=vscode_window_id(),
+            )
+        else:
+            start_record(scene)
         return_code = proc.wait()
         if return_code != 0:
             raise subprocess.CalledProcessError(return_code, [sys.executable, "scripts/demo/vscode_scene_driver.py", scene])
@@ -442,7 +474,7 @@ def run_scene(scene: dict[str, Any], review_dir: Path) -> dict[str, Any]:
                     log_dir / f"{scene_id}.log",
                 )
             elif kind == "vscode":
-                run_vscode_scene_with_delayed_record(scene_id, log_dir / f"{scene_id}.log")
+                run_vscode_scene_with_delayed_record(scene_id, log_dir / f"{scene_id}.log", use_transition=LAST_VIEW_KEY is not None)
                 capture_transition_current(str(scene.get("title") or "Visual Studio Code"), log_dir / f"{scene_id}-transition-state.log")
             elif kind == "browser":
                 workflow = human.get("workflow")
@@ -509,7 +541,9 @@ def normalize_video(scene: str, review_dir: Path) -> None:
         "scene-06-observability": 0.8,
         "scene-07-clickhouse-play": 0.8,
     }.get(scene, 0.0)
-    needs_filter = scene in {"scene-01-stack-config", "scene-02-local-setup"} or tail_trim_seconds > 0
+    fade_in_scenes = {item for item in SCENES if item != SCENES[0]}
+    fade_out_scenes = {item for item in SCENES if item != SCENES[-1]}
+    needs_filter = scene in fade_in_scenes or scene in fade_out_scenes or tail_trim_seconds > 0
     if needs_filter:
         duration = float(
             subprocess.check_output(
@@ -532,10 +566,10 @@ def normalize_video(scene: str, review_dir: Path) -> None:
         if tail_trim_seconds > 0:
             filters.append(f"trim=end={output_duration:.3f}")
             filters.append("setpts=PTS-STARTPTS")
-        if scene in {"scene-01-stack-config"}:
-            filters.append(f"fade=t=out:st={max(0.0, output_duration - 0.8):.3f}:d=0.8")
-        if scene in {"scene-02-local-setup"}:
-            filters.append("fade=t=in:st=0:d=0.35")
+        if scene in fade_in_scenes and output_duration > 0.9:
+            filters.append("fade=t=in:st=0.48:d=0.28")
+        if scene in fade_out_scenes and output_duration > 0.4:
+            filters.append(f"fade=t=out:st={max(0.0, output_duration - 0.24):.3f}:d=0.24")
         vf = ",".join(filters)
         subprocess.run(
             [

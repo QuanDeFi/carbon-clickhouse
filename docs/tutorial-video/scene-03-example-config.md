@@ -1,9 +1,9 @@
 Now we connect the tutorial env values to the core ClickHouse sink configuration.
 
-The example READMEs show the two runtime inputs the viewer cares about:
-`DATABASE_URL` for ClickHouse and `RPC_URL` for Solana. The RPC value proves
-where live chain data comes from; the database value tells the sink where to
-write.
+The example `.env.example` files show the runtime inputs the viewer cares
+about before any command runs: `DATABASE_URL` for ClickHouse, `RPC_URL` for
+Solana, the Jupiter slot mode, each Prometheus metrics port, and `LOG_LEVEL`.
+That lets the terminal commands stay clean later.
 
 Then we move into the core sink code instead of the example wiring. The config
 module is the reference surface: insert mode, batch sizing, transport behavior,

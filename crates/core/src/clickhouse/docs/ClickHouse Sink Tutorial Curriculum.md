@@ -72,8 +72,9 @@ The current seven-scene flow is:
    `scripts/demo/setup-monitoring.sh`.
 2. In a terminal, validate that ClickHouse, Prometheus, and Grafana are already
    online.
-3. In VS Code, show the example README env inputs for `DATABASE_URL` and
-   `RPC_URL`, then move into the core ClickHouse sink code:
+3. In VS Code, show both example `.env.example` files for `DATABASE_URL`,
+   `RPC_URL`, slot mode, metrics ports, and log level, then move into the core
+   ClickHouse sink code:
    `crates/core/src/clickhouse/config.rs`,
    `crates/core/src/clickhouse/writer.rs`, and
    `crates/core/src/clickhouse/admin.rs`.
@@ -82,9 +83,9 @@ The current seven-scene flow is:
    walkthrough continues.
 5. Start the Token Program ClickHouse example in a second terminal so the fixed
    USDC account snapshot and live instruction tail run alongside Jupiter.
-6. Show Grafana and ClickStack while both examples are active. Grafana is the
-   Carbon-side pipeline view; ClickStack is the ClickHouse-side insert/query-log
-   view.
+6. Show the filtered Jupiter and Token Program Grafana dashboards, then
+   ClickStack, while both examples are active. Grafana is the Carbon-side
+   pipeline view; ClickStack is the ClickHouse-side insert/query-log view.
 7. Open ClickHouse Play at `/play` and inspect generated Jupiter and Token
    Program landing tables and sample rows. This is the final validation that the
    ClickHouse config was accepted, the RPC input was accepted, decoding
@@ -107,6 +108,43 @@ ClickHouse UI note:
 - Richer third-party ClickHouse web explorers can be evaluated later, but they
   add installation, credentials, and recording complexity that is unnecessary
   for the first tutorial.
+
+## Recording Scene And Narration Plan
+
+Use this as the timing contract between the deterministic runbook and the
+voiceover. The examples are intentionally not stopped after their terminal
+scenes; Jupiter and Token Program keep running in parallel through the Grafana,
+ClickStack, and ClickHouse Play validation scenes.
+
+The latest validated no-audio run before this planning pass was about 3:15. The
+tab-preloaded VS Code flow should keep the same overall shape while replacing
+Explorer navigation time with narration time.
+
+| Scene | Target visual budget | Subscene | Narration point |
+| --- | ---: | --- | --- |
+| 1. Stack setup files | 22-24s | `monitoring/compose.yaml` | Prometheus and Grafana are local services on host networking. |
+|  |  | `monitoring/prometheus/prometheus.yml` | Prometheus scrapes Jupiter on 9464 and Token Program on 9465. |
+|  |  | `scripts/demo/setup-monitoring.sh` | The setup script starts the stack and performs deterministic health checks. |
+| 2. Local services check | 14-16s | `docker compose ... ps` | The local observability stack is already online. |
+|  |  | ClickHouse `SELECT 1` | ClickHouse accepts local HTTP queries before ingestion starts. |
+|  |  | Prometheus and Grafana health checks | Metrics and dashboards are reachable before either example runs. |
+| 3. Example and sink config | 46-50s | Jupiter `.env.example` | Jupiter has the ClickHouse URL, RPC URL, slot mode, metrics port, and log level configured before the run command. |
+|  |  | Token Program `.env.example` | Token Program uses its own metrics port so both examples can run together. |
+|  |  | `ClickHouseConfig` fields | The core config surface owns endpoint, database, auth, source, mode, decoder version, and insert settings. |
+|  |  | URL parsing and builder methods | Defaults come from `DATABASE_URL`; callers override behavior through the builder surface. |
+|  |  | insert/retry/dedup settings | Insert mode, retries, and deduplication are configuration, not ad-hoc example code. |
+|  |  | writer and admin paths | The writer consumes the config for inserts; the admin path uses it to set up generated tables before rows land. |
+| 4. Jupiter live run | 12-15s | plain `cargo run` | The command is clean because env/config was shown earlier; startup connects to RPC, decodes Jupiter activity, and writes generated landing rows. |
+| 5. Token Program live run | 13-16s | plain `cargo run` | The second pipeline starts beside Jupiter, writes the fixed USDC account snapshot, and tails live Token Program instructions. |
+| 6. Observability | 44-50s | Jupiter Grafana dashboard | Jupiter is still running; Grafana shows Carbon-side processed updates and ClickHouse sink metrics for that pipeline. |
+|  |  | Token Program Grafana dashboard | Token Program has its own filtered dashboard, proving both pipelines are active in parallel. |
+|  |  | ClickStack query log | ClickStack is the ClickHouse-side view of inserts and query-log activity after both examples are active. |
+| 7. ClickHouse Play validation | 36-40s | Jupiter landing table query | Generated Jupiter rows are present and queryable in ClickHouse. |
+|  |  | Token Program landing table query | Generated Token Program account/instruction rows are present and queryable. |
+|  |  | closing proof | The final proof combines accepted config, accepted RPC input, decoding, writes, and queryable landing rows. |
+
+Voiceover should stay one idea per subscene. Do not read code line-by-line; use
+the visible file or dashboard as evidence for the point being narrated.
 
 The detailed modules below are broader curriculum material. The current video
 recording uses the flow above.
@@ -168,8 +206,8 @@ Expected outcome:
   `http://localhost:8123/play`.
 - Prometheus is available at `http://localhost:9090`.
 - Grafana is available at `http://localhost:3000`.
-- Grafana provisions the `Carbon ClickHouse Overview` dashboard from
-  `monitoring/grafana/dashboards/carbon-clickhouse-overview.json`.
+- Grafana provisions the combined overview plus filtered Jupiter and Token
+  Program dashboards from `monitoring/grafana/dashboards/`.
 - The Jupiter example can expose metrics at `0.0.0.0:9464/metrics`.
 - The Token Program example can expose metrics at `0.0.0.0:9465/metrics`.
 
@@ -199,7 +237,7 @@ BLOCK_CRAWLER_START_SLOT=<start-slot-or-empty>
 BLOCK_CRAWLER_END_SLOT=<end-slot-or-empty>
 BLOCK_CRAWLER_HEAD_LAG_SLOTS=3
 PROMETHEUS_METRICS_ADDR=0.0.0.0:9464
-LOG_LEVEL=debug
+LOG_LEVEL=info
 ```
 
 Run:
@@ -303,7 +341,7 @@ Environment:
 DATABASE_URL=http://carbon:carbon@localhost:8123
 RPC_URL=<provider-rpc-url>
 PROMETHEUS_METRICS_ADDR=0.0.0.0:9465
-LOG_LEVEL=debug
+LOG_LEVEL=info
 ```
 
 Run the fixed USDC snapshot plus live instruction tail:

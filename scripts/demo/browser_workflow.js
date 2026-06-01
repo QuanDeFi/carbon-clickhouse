@@ -33,6 +33,23 @@ const CHROME_ARGS = [
 ];
 const GRAFANA_USER = process.env.GRAFANA_DEMO_USER || "admin";
 const GRAFANA_PASSWORD = process.env.GRAFANA_DEMO_PASSWORD || "carbon";
+const GRAFANA_DASHBOARDS = {
+  overview: {
+    uid: "carbon-clickhouse-overview",
+    slug: "carbon-clickhouse-overview",
+    title: /Carbon ClickHouse Overview|Carbon Updates|ClickHouse Buffered Rows/i,
+  },
+  jupiter: {
+    uid: "carbon-clickhouse-jupiter",
+    slug: "carbon-clickhouse-jupiter",
+    title: /Carbon ClickHouse Jupiter|Carbon Updates|ClickHouse Buffered Rows/i,
+  },
+  token: {
+    uid: "carbon-clickhouse-token-program",
+    slug: "carbon-clickhouse-token-program",
+    title: /Carbon ClickHouse Token Program|Carbon Updates|ClickHouse Buffered Rows/i,
+  },
+};
 
 const DARK_BROWSER_CSS = `
   :root {
@@ -390,6 +407,26 @@ function ensureGrafanaDemoPassword() {
     }
   }
   throw new Error("Unable to reset local Grafana demo password before recording");
+}
+
+function reloadGrafanaDashboards() {
+  try {
+    execFileSync(
+      "curl",
+      [
+        "-fsS",
+        "-u",
+        `${GRAFANA_USER}:${GRAFANA_PASSWORD}`,
+        "-X",
+        "POST",
+        "http://localhost:3000/api/admin/provisioning/dashboards/reload",
+      ],
+      { cwd: ROOT, env: process.env, stdio: "ignore" },
+    );
+  } catch (_) {
+    // Grafana also polls provisioned dashboard files. Treat explicit reload as
+    // a best-effort freshness nudge, not a hard dependency for recording.
+  }
 }
 
 async function openBrowser(sceneId, initialUrl, transitionLabel = "browser") {
@@ -795,7 +832,8 @@ async function dismissGrafanaPasswordModal(page) {
   await page.waitForTimeout(500);
 }
 
-async function grafanaDashboard(page, sceneId, label) {
+async function grafanaDashboard(page, sceneId, label, dashboardKey = "overview") {
+  const dashboard = GRAFANA_DASHBOARDS[dashboardKey] || GRAFANA_DASHBOARDS.overview;
   await page.goto("http://localhost:3000/login", { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(500);
   const username = page.locator('input[placeholder="email or username"], input[name="user"]').first();
@@ -816,13 +854,13 @@ async function grafanaDashboard(page, sceneId, label) {
     await dismissGrafanaPasswordModal(page);
   }
   await page.goto(
-    "http://localhost:3000/d/carbon-clickhouse-overview/carbon-clickhouse-overview?orgId=1&from=now-15m&to=now&refresh=1s&theme=dark",
+    `http://localhost:3000/d/${dashboard.uid}/${dashboard.slug}?orgId=1&from=now-15m&to=now&refresh=1s&theme=dark`,
     { waitUntil: "domcontentloaded" },
   );
   await page.waitForTimeout(2500);
   await dismissGrafanaPasswordModal(page);
   await shot(page, sceneId, `grafana-${label}-raw`);
-  const text = await requireText(page, /Carbon ClickHouse Overview|Carbon Updates|ClickHouse Buffered Rows/i, "Grafana dashboard");
+  const text = await requireText(page, dashboard.title, "Grafana dashboard");
   if (/invalid username|password|login failed/i.test(text)) {
     throw new Error("Grafana login failed");
   }
@@ -834,7 +872,7 @@ async function grafanaDashboard(page, sceneId, label) {
     throw new Error("Grafana dashboard did not render enough metric data");
   }
   setTransitionCurrent("Grafana", await shot(page, sceneId, `grafana-${label}`));
-  await pause(1.6);
+  await pause(4.0);
 }
 
 async function clickHouseDashboards(page, sceneId, label) {
@@ -1038,17 +1076,20 @@ async function clickStackQueryLog(page, sceneId, label) {
   await shot(page, sceneId, `clickstack-query-log-${label}-raw`);
   await requireText(page, /Results Table/i, "ClickStack query log");
   setTransitionCurrent("ClickStack", await shot(page, sceneId, `clickstack-query-log-${label}`));
-  await pause(1.8);
+  await pause(5.0);
 }
 
 async function runWorkflow(sceneId, workflow) {
   ensureGrafanaDemoPassword();
+  reloadGrafanaDashboards();
   if (workflow === "live-observability") {
     const checks = [];
     const grafana = await openBrowser(sceneId, "http://localhost:3000/login", "Grafana");
     try {
-      await grafanaDashboard(grafana.page, sceneId, "live-examples");
-      checks.push("grafana-live-examples");
+      await grafanaDashboard(grafana.page, sceneId, "jupiter-live", "jupiter");
+      checks.push("grafana-jupiter-live");
+      await grafanaDashboard(grafana.page, sceneId, "token-live", "token");
+      checks.push("grafana-token-live");
     } catch (err) {
       await closeBrowser(grafana.browser, grafana.child);
       throw err;

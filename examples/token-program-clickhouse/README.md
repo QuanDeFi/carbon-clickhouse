@@ -30,7 +30,7 @@ Create `.env` from `.env.example`:
 DATABASE_URL=http://carbon:carbon@localhost:8123
 RPC_URL=<provider-rpc-url>
 PROMETHEUS_METRICS_ADDR=0.0.0.0:9465
-LOG_LEVEL=debug
+LOG_LEVEL=info
 ```
 
 Use the production/provider RPC URL from the local `.env`. The public

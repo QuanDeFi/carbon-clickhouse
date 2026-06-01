@@ -507,6 +507,16 @@ def run_terminal_scene(scene_id: str, *, dry_run: bool = False, prepare_only: bo
         env["BLOCK_CRAWLER_START_SLOT"] = env["JUPITER_START_SLOT"]
     if env.get("JUPITER_END_SLOT") and not env.get("BLOCK_CRAWLER_END_SLOT"):
         env["BLOCK_CRAWLER_END_SLOT"] = env["JUPITER_END_SLOT"]
+    if "jupiter" in terminal_name.lower() or "jupiter" in scene_id.lower():
+        env["PROMETHEUS_METRICS_ADDR"] = env.get(
+            "JUPITER_PROMETHEUS_METRICS_ADDR",
+            "0.0.0.0:9464",
+        )
+    if "token" in terminal_name.lower() or "token" in scene_id.lower():
+        env["PROMETHEUS_METRICS_ADDR"] = env.get(
+            "TOKEN_PROMETHEUS_METRICS_ADDR",
+            "0.0.0.0:9465",
+        )
     env.setdefault("BLOCK_CRAWLER_HEAD_LAG_SLOTS", "3")
     env.setdefault("LOG_LEVEL", "info")
 

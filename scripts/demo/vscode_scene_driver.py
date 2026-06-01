@@ -17,6 +17,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 STATE_FILE = ROOT / "demo-artifacts/pids/vscode-window.json"
 DEFAULT_LAUNCHER = Path("/home/ops/dev/vnc/vscode-recording/launch-code-recording.sh")
+DEFAULT_PROFILE_DIR = Path("/home/ops/dev/vnc/vscode-recording/profile")
 
 
 def load_env() -> None:
@@ -53,6 +54,76 @@ def env() -> dict[str, str]:
 
 def run(cmd: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
     return subprocess.run(cmd, cwd=ROOT, env=env(), text=True, capture_output=True, check=check)
+
+
+def ensure_recording_profile() -> None:
+    profile_dir = Path(os.environ.get("DEMO_VSCODE_PROFILE_DIR", str(DEFAULT_PROFILE_DIR)))
+    user_dir = profile_dir / "User"
+    user_dir.mkdir(parents=True, exist_ok=True)
+
+    settings_path = user_dir / "settings.json"
+    try:
+        settings = json.loads(settings_path.read_text()) if settings_path.is_file() else {}
+    except json.JSONDecodeError:
+        settings = {}
+    excluded_tree_paths = {
+        "**/.claude": True,
+        "**/.cloud": True,
+        "**/.clickhouse": True,
+        "**/.github": True,
+        "**/.venv": True,
+        "**/.venv-demo": True,
+        "**/.vscode": True,
+        "**/__pycache__": True,
+        "**/demo-artifacts": True,
+        "**/node_modules": True,
+        "**/target": True,
+        "**/.env": True,
+        "**/.env.demo.local": True,
+    }
+    files_exclude = settings.get("files.exclude")
+    if not isinstance(files_exclude, dict):
+        files_exclude = {}
+    files_exclude.update(excluded_tree_paths)
+    settings.update(
+        {
+            "explorer.autoReveal": True,
+            "explorer.compactFolders": False,
+            "explorer.decorations.badges": False,
+            "explorer.decorations.colors": False,
+            "files.exclude": files_exclude,
+            "files.hotExit": "off",
+            "git.decorations.enabled": False,
+            "git.enabled": False,
+            "scm.countBadge": "off",
+            "scm.diffDecorations": "none",
+            "workbench.editor.enablePreview": False,
+            "workbench.editor.showTabs": "multiple",
+            "workbench.sideBar.location": "left",
+            "workbench.startupEditor": "none",
+        }
+    )
+    settings_path.write_text(json.dumps(settings, indent=2) + "\n")
+
+    keybindings_path = user_dir / "keybindings.json"
+    try:
+        keybindings = json.loads(keybindings_path.read_text()) if keybindings_path.is_file() else []
+    except json.JSONDecodeError:
+        keybindings = []
+    required = [
+        {"key": "ctrl+alt+shift+e", "command": "workbench.action.closeAuxiliaryBar"},
+        {"key": "ctrl+alt+shift+n", "command": "notifications.hideToasts"},
+        {"key": "ctrl+alt+shift+l", "command": "notifications.hideList"},
+        {"key": "ctrl+alt+shift+w", "command": "workbench.action.closeAllEditors"},
+        {"key": "ctrl+alt+shift+c", "command": "workbench.files.action.collapseExplorerFolders"},
+        {"key": "ctrl+shift+e", "command": "workbench.view.explorer"},
+    ]
+    existing = {(str(item.get("key")), str(item.get("command"))) for item in keybindings if isinstance(item, dict)}
+    for item in required:
+        identity = (item["key"], item["command"])
+        if identity not in existing:
+            keybindings.append(item)
+    keybindings_path.write_text(json.dumps(keybindings, indent=2) + "\n")
 
 
 def runbook() -> dict[str, Any]:
@@ -113,12 +184,23 @@ def focus_explorer(window_id: str) -> None:
     hide_mouse()
 
 
+def collapse_explorer(window_id: str) -> None:
+    focus_explorer(window_id)
+    xdo("key", "ctrl+alt+shift+c", check=False)
+    time.sleep(0.35)
+    xdo("key", "Home", check=False)
+    time.sleep(0.08)
+    xdo("key", "Right", check=False)
+    time.sleep(0.2)
+    hide_mouse()
+
+
 def close_all_editors(window_id: str) -> None:
     xdo("windowraise", window_id, check=False)
     xdo("windowfocus", window_id, check=False)
     xdo("key", "ctrl+alt+shift+w", check=False)
     time.sleep(0.25)
-    focus_explorer(window_id)
+    collapse_explorer(window_id)
 
 
 def hide_mouse() -> None:
@@ -161,6 +243,7 @@ def wait_for_code_window(expected_name: str | None = None) -> str:
 
 
 def launcher_path() -> Path:
+    ensure_recording_profile()
     configured = os.environ.get("DEMO_VSCODE_LAUNCHER")
     launcher = Path(configured) if configured else DEFAULT_LAUNCHER
     if not launcher.is_file():
@@ -184,15 +267,10 @@ def open_workspace() -> str:
     return window_id
 
 
-def open_file(step: dict[str, Any], *, first: bool) -> str:
-    relative = str(step["file"])
-    line = int(step.get("line", 1))
+def open_file_at_line(relative: str, line: int) -> str:
     path = ROOT / relative
     if not path.is_file():
         raise FileNotFoundError(path)
-    if first:
-        window_id = open_workspace()
-        time.sleep(0.7)
     command = [
         str(launcher_path()),
         "--reuse-window",
@@ -204,9 +282,39 @@ def open_file(step: dict[str, Any], *, first: bool) -> str:
         raise RuntimeError(result.stdout + result.stderr)
     window_id = wait_for_code_window(path.name)
     move_window(window_id)
-    focus_explorer(window_id)
     write_state(window_id)
-    print(f"opened {relative}:{line}")
+    hide_mouse()
+    return window_id
+
+
+def first_steps_by_file(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    unique: list[dict[str, Any]] = []
+    for step in steps:
+        relative = str(step["file"])
+        if relative in seen:
+            continue
+        seen.add(relative)
+        unique.append(step)
+    return unique
+
+
+def preload_tabs(window_id: str, steps: list[dict[str, Any]]) -> str:
+    for step in first_steps_by_file(steps):
+        window_id = open_file_at_line(str(step["file"]), int(step.get("line", 1)))
+        time.sleep(float(os.environ.get("DEMO_VSCODE_PRELOAD_FILE_PAUSE_SECONDS", "0.22")))
+    first = steps[0]
+    window_id = open_file_at_line(str(first["file"]), int(first.get("line", 1)))
+    focus_explorer(window_id)
+    return window_id
+
+
+def show_file(window_id: str, step: dict[str, Any]) -> str:
+    relative = str(step["file"])
+    line = int(step.get("line", 1))
+    window_id = open_file_at_line(relative, line)
+    focus_explorer(window_id)
+    print(f"shown {relative}:{line}")
     return window_id
 
 
@@ -280,18 +388,19 @@ def run_scene(scene_id: str) -> None:
     if not steps:
         raise RuntimeError(f"{scene_id} has no VS Code steps")
     close_window()
-    first = True
+    window_id = open_workspace()
+    window_id = preload_tabs(window_id, steps)
+    mark_ready()
+    time.sleep(float(human.get("initial_pause", 1.0)))
+    previous_file: str | None = None
     for index, step in enumerate(steps):
-        window_id = open_file(step, first=first)
-        first = False
-        if index == 0:
-            # Let VS Code finish first paint before ffmpeg starts capturing.
-            time.sleep(float(human.get("initial_pause", 1.0)))
-            mark_ready()
+        window_id = show_file(window_id, step)
+        previous_file = str(step["file"])
         pause = float(step.get("pause_after", human.get("pause_after", 3.0)))
         time.sleep(max(0.0, pause))
         move_window(window_id)
-        focus_explorer(window_id)
+        if index + 1 < len(steps) and str(steps[index + 1]["file"]) != previous_file:
+            focus_explorer(window_id)
     time.sleep(float(human.get("scene_end_pause", 0.8)))
     hide_mouse()
 
