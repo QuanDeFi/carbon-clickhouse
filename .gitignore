@@ -121,3 +121,4 @@ crates/core/src/clickhouse/docs/Jupiter Live Run Failure Log Extracts.md
 .env.demo.local
 demo-artifacts/*
 !demo-artifacts/.gitkeep
+docs/.research

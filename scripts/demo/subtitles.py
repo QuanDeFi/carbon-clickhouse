@@ -28,8 +28,8 @@ MIN_INTER_CUE_GAP_SECONDS = 0.12
 MAX_INTER_CUE_GAP_SECONDS = 0.72
 DEFAULT_SUBTITLE_WPM = 145.0
 TERMINAL_SUBTITLE_SCENES = {
-    "scene-04-jupiter-live",
-    "scene-05-token-live",
+    "scene-03-jupiter-live",
+    "scene-04-token-live",
 }
 SUBTITLE_LAYOUTS = {
     "default": {

@@ -111,39 +111,13 @@ source .venv-demo/bin/activate
 python scripts/demo/voice.py all
 ```
 
-## Run One Scene
-
-```sh
-source .venv-demo/bin/activate
-python scripts/demo/run_scene.py scene-02-local-setup
-```
-
-For a no-voice rehearsal:
-
-```sh
-python scripts/demo/run_scene.py scene-02-local-setup --no-voice
-```
-
-## Run All Scenes
-
-```sh
-source .venv-demo/bin/activate
-python scripts/demo/run_scene.py --all
-```
-
-For the current human-style tutorial flow, use:
-
-```sh
-python scripts/demo/run_scene.py --human --all --no-voice
-```
-
 ## Human-Style No-Audio Review
 
 Use this before final voiceover. It records a directed screen performance:
 VS Code code/config walkthroughs, visible terminal typing, readable pauses,
-ClickHouse `/play` inspection, Grafana dashboards after both examples,
-ClickStack Inserts dashboard inspection, video validation, screenshots, contact sheet,
-and current review files.
+ClickHouse `/play` table-browser inspection, Grafana dashboards after both
+examples, ClickStack Inserts dashboard inspection, video validation,
+screenshots, contact sheet, and current review files.
 
 The current story is live-first but config-aware: verify required local
 services, show the example database/RPC config in VS Code, briefly point to the
@@ -160,9 +134,9 @@ pre-Enter pauses. The terminal driver also waits for the shell prompt to return
 before typing the next command, so long-running examples cannot be interrupted
 by the following command being typed into their active output.
 The terminal frame defaults to equal margins on all four screen edges and a
-larger readable dark-theme font. ClickHouse `/play` SQL is visibly typed into
-the editor, and sample queries should include enough columns to explain the
-landing-row data rather than only showing minimal counts.
+larger readable dark-theme font. ClickHouse `/play` expands the table browser,
+scrolls through generated landing tables, and opens representative tables with
+queries focused on readable landing-row data rather than minimal counts.
 The current visual target is roughly two and a half minutes. If a run drifts
 toward four minutes or more, shorten scene content rather than returning to
 fixed robotic typing.
@@ -193,19 +167,21 @@ python scripts/demo/subtitles.py
 
 Current human-scene flow:
 
-- `scene-01`: terminal health checks prove ClickHouse, Prometheus, Grafana, and
-  RPC reachability are online.
-- `scene-02`: VS Code shows both example `.env.example` files and briefly
+- `scene-01-readiness-checks`: terminal health checks prove ClickHouse,
+  Prometheus, Grafana, and RPC reachability are online.
+- `scene-02-example-env`: VS Code shows both example `.env.example` files and
   points to `crates/core/src/clickhouse/config.rs` as the full sink config
   reference.
-- `scene-04`: terminal starts the Jupiter live example with async-wait inserts.
-- `scene-05`: terminal starts the Token Program example with async-wait inserts.
-- `scene-06`: filtered Jupiter and Token Program Grafana dashboards show the
-  running Carbon pipelines, then ClickStack shows ClickHouse-side insert rows
-  and bytes per table.
-- `scene-07`: ClickHouse `/play` uses the table browser and representative
-  Jupiter and Token Program rows to verify generated landing tables, data
-  volume, and queryable rows.
+- `scene-03-jupiter-live`: terminal starts the Jupiter live example with
+  async-wait inserts.
+- `scene-04-token-live`: terminal starts the Token Program example with
+  async-wait inserts.
+- `scene-05-observability`: filtered Jupiter and Token Program Grafana
+  dashboards show the running Carbon pipelines, then ClickStack shows
+  ClickHouse-side insert rows and bytes per table.
+- `scene-06-clickhouse-play`: ClickHouse `/play` uses the table browser and
+  representative Jupiter and Token Program rows to verify generated landing
+  tables, data volume, and queryable rows.
 
 Current theme behavior:
 

@@ -47,12 +47,8 @@ case "$command" in
   token-sample)
     run_query "SELECT left(pubkey,8) AS account, left(mint,8) AS mint, amount, state FROM default.token_program_token_account_landing LIMIT 3 FORMAT PrettyCompact;"
     ;;
-  async-log)
-    run_query "SYSTEM FLUSH LOGS;"
-    run_query "SELECT event_time, table, rows, bytes, status, query_id, flush_query_id FROM system.asynchronous_insert_log WHERE event_time >= now() - INTERVAL 15 MINUTE ORDER BY event_time DESC FORMAT PrettyCompact;"
-    ;;
   *)
-    echo "Usage: $0 {jupiter|jupiter-tables|jupiter-counts|jupiter-route-sample|jupiter-event-sample|token|token-tables|token-counts|token-sample|async-log|health}" >&2
+    echo "Usage: $0 {jupiter|jupiter-tables|jupiter-counts|jupiter-route-sample|jupiter-event-sample|token|token-tables|token-counts|token-sample|health}" >&2
     exit 2
     ;;
 esac

@@ -427,21 +427,19 @@ def run_scene(scene: dict[str, Any], review_dir: Path) -> dict[str, Any]:
         view_key = f"terminal:{human.get('terminal_name') or scene_id}"
     elif kind == "vscode":
         view_key = f"vscode:{scene_id}"
-    elif kind == "mixed_async":
-        view_key = f"mixed:{human.get('terminal_name') or scene_id}:{human.get('workflow', 'async-log')}"
     elif kind == "browser":
         view_key = f"browser:{human.get('workflow') or scene_id}"
     try:
-        if kind in {"terminal", "mixed_async"}:
+        if kind == "terminal":
             run(
                 [sys.executable, "scripts/demo/human_scene_driver.py", "--prepare-terminal", scene_id],
                 log=log_dir / f"{scene_id}-prepare.log",
                 extra_env={
-                    "DEMO_REUSE_TERMINAL": "true" if kind == "terminal" else "false",
+                    "DEMO_REUSE_TERMINAL": "true",
                     "DEMO_WINDOW_OVERVIEW": "false",
                 },
             )
-        if not (kind in {"terminal", "mixed_async", "slide", "vscode"} or (kind == "browser" and human.get("workflow"))):
+        if not (kind in {"terminal", "slide", "vscode"} or (kind == "browser" and human.get("workflow"))):
             start_record(scene_id)
         try:
             if kind == "terminal":
@@ -508,27 +506,6 @@ def run_scene(scene: dict[str, Any], review_dir: Path) -> dict[str, Any]:
                         ],
                         log=log_dir / f"{scene_id}.log",
                     )
-            elif kind == "mixed_async":
-                transition_label = str(human.get("terminal_title") or scene.get("title") or scene_id)
-                run_transition_before_scene(
-                    scene_id,
-                    transition_label,
-                    log_dir / f"{scene_id}-transition.log",
-                )
-                run(
-                    [sys.executable, "scripts/demo/human_scene_driver.py", scene_id],
-                    log=log_dir / f"{scene_id}-terminal.log",
-                    extra_env={
-                        "DEMO_REUSE_TERMINAL": "false",
-                        "DEMO_WINDOW_OVERVIEW": "false",
-                        "DEMO_SUPPRESS_DRIVER_TRANSITION": "true",
-                    },
-                )
-                capture_transition_current(transition_label, log_dir / f"{scene_id}-transition-state.log")
-                run(
-                    ["node", "scripts/demo/browser_workflow.js", scene_id, str(human.get("workflow", "async-log"))],
-                    log=log_dir / f"{scene_id}-browser.log",
-                )
             else:
                 raise RuntimeError(f"unsupported human scene type: {kind}")
         finally:
@@ -551,8 +528,8 @@ def normalize_video(scene: str, review_dir: Path) -> None:
         raise FileNotFoundError(source)
     target = review_dir / "videos" / f"{scene}.mp4"
     tail_trim_seconds = {
-        "scene-06-observability": 0.8,
-        "scene-07-clickhouse-play": 0.8,
+        "scene-05-observability": 0.8,
+        "scene-06-clickhouse-play": 0.8,
     }.get(scene, 0.0)
     scenes = scene_ids()
     fade_in_scenes = {item for item in scenes if item != scenes[0]}

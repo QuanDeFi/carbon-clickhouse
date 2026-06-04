@@ -5,16 +5,16 @@ env_file: .env.demo.local
 output_dir: demo-artifacts
 
 scenes:
-  - id: scene-01-stack-config
+  - id: scene-01-readiness-checks
     title: Local readiness checks
     type: terminal
-    script: docs/tutorial-video/scene-01-stack-config.md
+    script: docs/tutorial-video/scene-01-readiness-checks.md
     human:
       type: terminal
       terminal_name: setup-check
       terminal_title: Carbon ClickHouse - Readiness Checks
       reuse_terminal: true
-      min_duration: 21
+      min_duration: 32
       scene_end_pause: 4.0
       steps:
         - command: docker compose -f monitoring/compose.yaml ps
@@ -31,13 +31,13 @@ scenes:
             -d '{"jsonrpc":"2.0","id":1,"method":"getHealth"}'
           pause_after: 1.0
 
-  - id: scene-02-local-setup
+  - id: scene-02-example-env
     title: Example environment files
     type: voice_only
-    script: docs/tutorial-video/scene-02-local-setup.md
+    script: docs/tutorial-video/scene-02-example-env.md
     human:
       type: vscode
-      min_duration: 23
+      min_duration: 43
       initial_pause: 1.0
       scene_end_pause: 3.2
       steps:
@@ -48,10 +48,10 @@ scenes:
           line: 1
           pause_after: 8.0
 
-  - id: scene-04-jupiter-live
+  - id: scene-03-jupiter-live
     title: Start Jupiter example run
     type: terminal
-    script: docs/tutorial-video/scene-04-jupiter-live.md
+    script: docs/tutorial-video/scene-03-jupiter-live.md
     command: cargo run -p jupiter-swap-clickhouse-carbon-example
     human:
       type: terminal
@@ -63,17 +63,17 @@ scenes:
         BLOCK_CRAWLER_START_SLOT: ""
         BLOCK_CRAWLER_END_SLOT: ""
         CLICKHOUSE_ASYNC_INSERT: "true"
-      min_duration: 21
+      min_duration: 40
       scene_end_pause: 1.2
       steps:
         - command: cargo run -p jupiter-swap-clickhouse-carbon-example
           wait_for_prompt: false
           pause_after: 16.8
 
-  - id: scene-05-token-live
+  - id: scene-04-token-live
     title: Start Token Program live run
     type: terminal
-    script: docs/tutorial-video/scene-05-token-live.md
+    script: docs/tutorial-video/scene-04-token-live.md
     command: cargo run -p token-program-clickhouse-carbon-example
     human:
       type: terminal
@@ -83,29 +83,29 @@ scenes:
       keep_open: true
       env:
         CLICKHOUSE_ASYNC_INSERT: "true"
-      min_duration: 24
+      min_duration: 41
       scene_end_pause: 1.2
       steps:
         - command: cargo run -p token-program-clickhouse-carbon-example
           wait_for_prompt: false
           pause_after: 20.0
 
-  - id: scene-06-observability
+  - id: scene-05-observability
     title: Live observability
     type: browser
-    script: docs/tutorial-video/scene-06-observability.md
+    script: docs/tutorial-video/scene-05-observability.md
     command: scripts/demo/query-clickhouse.sh token
     human:
       type: browser
       workflow: live-observability
-      min_duration: 25
+      min_duration: 56
 
-  - id: scene-07-clickhouse-play
+  - id: scene-06-clickhouse-play
     title: Landing table inspection
     type: browser
-    script: docs/tutorial-video/scene-07-clickhouse-play.md
+    script: docs/tutorial-video/scene-06-clickhouse-play.md
     command: scripts/demo/query-clickhouse.sh jupiter && scripts/demo/query-clickhouse.sh token
     human:
       type: browser
       workflow: table-inspection
-      min_duration: 30
+      min_duration: 58

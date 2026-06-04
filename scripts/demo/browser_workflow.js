@@ -226,60 +226,8 @@ function seededRng(seedText) {
   };
 }
 
-function normalish(rng) {
-  const a = Math.max(rng(), 1e-6);
-  const b = Math.max(rng(), 1e-6);
-  return Math.sqrt(-2 * Math.log(a)) * Math.cos(2 * Math.PI * b);
-}
-
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-
 async function humanPause(page, ms) {
   await page.waitForTimeout(Math.max(0, Math.round(ms)));
-}
-
-async function typeHumanText(page, text, seedText, options = {}) {
-  const rng = seededRng(seedText);
-  const base = Number(options.baseDelayMs || process.env.DEMO_BROWSER_TYPE_BASE_DELAY_MS || process.env.DEMO_TYPE_BASE_DELAY_MS || "50");
-  const minDelay = Number(process.env.DEMO_TYPE_MIN_DELAY_MS || "28");
-  const maxDelay = Number(process.env.DEMO_TYPE_MAX_DELAY_MS || "145");
-  const lengthFactor =
-    text.length <= 30 ? 1 : Math.max(0.67, 1 - ((Math.min(text.length, 110) - 30) / 80) * 0.33);
-  const minEffective = minDelay * lengthFactor;
-  const maxEffective = maxDelay * Math.max(lengthFactor, 0.82);
-  let burstRemaining = 8 + Math.floor(rng() * 11);
-  let previous = "";
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index];
-    const next = index + 1 < text.length ? text[index + 1] : "";
-    await page.keyboard.type(char, { delay: 0 });
-    let delay = base * Math.exp(normalish(rng) * 0.34);
-    if ("\"'`$(){}[]<>|&;:=+".includes(char)) {
-      delay *= 1.45;
-    } else if (/-_.\/\\/.test(char)) {
-      delay *= 1.2;
-    } else if (char.toUpperCase() === char && char.toLowerCase() !== char) {
-      delay *= 1.12;
-    }
-    if (previous === char) {
-      delay *= 1.18;
-    }
-    delay *= lengthFactor;
-    await humanPause(page, clamp(delay, minEffective, maxEffective));
-    if (char === " ") {
-      await humanPause(page, (45 + rng() * 80) * lengthFactor);
-    } else if ("|&;".includes(char) || next === "|" || next === "&" || next === ";") {
-      await humanPause(page, (110 + rng() * 210) * lengthFactor);
-    }
-    burstRemaining -= 1;
-    if (burstRemaining <= 0 && next && char !== " ") {
-      await humanPause(page, (45 + rng() * 115) * lengthFactor);
-      burstRemaining = 8 + Math.floor(rng() * 11);
-    }
-    previous = char;
-  }
 }
 
 function moveWindow(windowId, frame) {
@@ -780,39 +728,6 @@ async function enhanceClickHousePlayTableBrowser(page) {
     .catch(() => {});
 }
 
-async function typeSql(page, query) {
-  await typeHumanText(page, query, `sql:${query}`, {
-    baseDelayMs: Number(process.env.DEMO_PLAY_QUERY_TYPE_DELAY_MS || process.env.DEMO_BROWSER_TYPE_BASE_DELAY_MS || "44"),
-  });
-}
-
-async function typeUiText(page, locator, value) {
-  await locator.fill("");
-  await locator.click({ force: true }).catch(() => {});
-  await typeHumanText(page, value, `ui:${value}`, {
-    baseDelayMs: Number(process.env.DEMO_UI_TYPE_DELAY_MS || process.env.DEMO_BROWSER_TYPE_BASE_DELAY_MS || "50"),
-  });
-  await page.waitForTimeout(180);
-}
-
-async function runPlayQuery(page, query, expected) {
-  await loginClickHousePlay(page);
-  const editor = page.locator("textarea").first();
-  await editor.click();
-  await editor.press("Control+A");
-  await editor.press("Backspace");
-  await page.waitForTimeout(250);
-  await typeSql(page, query);
-  await page.waitForTimeout(500);
-  await page.locator("button").filter({ hasText: /^Run$/ }).first().click();
-  hideMouse();
-  await page.waitForTimeout(1200);
-  const text = await waitForPlayResult(page, expected, "ClickHouse /play query");
-  if (/Exception|DB::Exception|Code:\s*\d+/.test(text)) {
-    throw new Error("ClickHouse /play query failed");
-  }
-}
-
 async function waitForPlayResult(page, expected, label) {
   const deadline = Date.now() + 15_000;
   let lastText = "";
@@ -1019,22 +934,6 @@ async function clickHousePlayToken(page, sceneId) {
   );
 }
 
-async function clickHousePlayAsyncLog(page, sceneId) {
-  execFileSync("docker", ["exec", "clickhouse", "clickhouse-client", "-q", "SYSTEM FLUSH LOGS"], {
-    cwd: ROOT,
-    stdio: "ignore",
-    env: process.env,
-  });
-  await loginClickHousePlay(page);
-  await runPlayQuery(
-    page,
-    "SELECT event_time, table, rows, bytes, status, left(query_id,32) query_id, left(flush_query_id,12) flush_id\nFROM system.asynchronous_insert_log\nORDER BY event_time DESC\nLIMIT 20",
-    /event_time|table|rows|bytes|status|query_id|flush_id/i,
-  );
-  setTransitionCurrent("ClickHouse Play", await shot(page, sceneId, "clickhouse-play-async-log"));
-  await pause(1.5);
-}
-
 async function dismissGrafanaPasswordModal(page) {
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const bodyText = await page.locator("body").innerText({ timeout: 800 }).catch(() => "");
@@ -1114,86 +1013,6 @@ async function grafanaDashboard(page, sceneId, label, dashboardKey = "overview")
   }
 }
 
-async function clickHouseDashboards(page, sceneId, label) {
-  await page.goto("http://carbon:carbon@localhost:8123/dashboards", { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(800);
-  const inputs = page.locator("input");
-  if ((await inputs.count()) >= 3) {
-    await inputs.nth(0).fill("http://localhost:8123");
-    await inputs.nth(1).fill("carbon");
-    await inputs.nth(2).fill("carbon");
-    await page.getByRole("button", { name: /^ok$/i }).click().catch(() => {});
-  }
-  await page.getByRole("button", { name: /Reload/i }).click().catch(() => {});
-  await page.waitForTimeout(3000);
-  await shot(page, sceneId, `clickhouse-dashboard-${label}-raw`);
-  await requireText(page, /Queries\/second|CPU Usage|Merges Running|Selected Bytes/i, "ClickHouse dashboard");
-  await shot(page, sceneId, `clickhouse-dashboard-${label}`);
-  await pause(4.0);
-}
-
-async function setHiddenInputValue(page, name, value) {
-  await page.evaluate(
-    ([fieldName, expected]) => {
-      const input = document.querySelector(`input[name="${fieldName}"]`);
-      if (!input) {
-        return false;
-      }
-      const descriptor = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value");
-      descriptor?.set?.call(input, expected);
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.dispatchEvent(new Event("change", { bubbles: true }));
-      return true;
-    },
-    [name, value],
-  );
-}
-
-async function setVisibleInputValue(locator, value) {
-  await locator.evaluate((input, expected) => {
-    const descriptor = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value");
-    descriptor?.set?.call(input, expected);
-    input.setAttribute("value", expected);
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-  }, value);
-}
-
-async function choose(page, input, value, hiddenName = null) {
-  await typeUiText(page, input, value);
-  const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const option = page.getByText(new RegExp(`^${escaped}$`)).last();
-  if (await option.isVisible({ timeout: 700 }).catch(() => false)) {
-    await option.click({ force: true }).catch(() => {});
-  } else {
-    await page.keyboard.press("Enter").catch(() => {});
-  }
-  if (hiddenName) {
-    await setHiddenInputValue(page, hiddenName, value);
-  }
-  await setVisibleInputValue(input, value);
-  await page.keyboard.press("Escape").catch(() => {});
-  await page.waitForTimeout(500);
-}
-
-async function expectHiddenValue(page, name, value) {
-  return page.waitForFunction(
-    ([fieldName, expected]) => document.querySelector(`input[name="${fieldName}"]`)?.value === expected,
-    [name, value],
-    { timeout: 5000 },
-  ).then(() => true).catch(() => false);
-}
-
-async function setCodeMirror(page, index, text) {
-  const editor = page.locator('.cm-content[role="textbox"]').nth(index);
-  await editor.fill("");
-  await editor.click({ force: true }).catch(() => {});
-  await typeHumanText(page, text, `codemirror:${index}:${text}`, {
-    baseDelayMs: Number(process.env.DEMO_UI_TYPE_DELAY_MS || process.env.DEMO_BROWSER_TYPE_BASE_DELAY_MS || "50"),
-  });
-  await page.waitForTimeout(300);
-}
-
 async function seedClickStackConnection(page) {
   await page.evaluate(() => {
     sessionStorage.setItem(
@@ -1209,30 +1028,6 @@ async function seedClickStackConnection(page) {
         },
       ]),
     );
-  });
-}
-
-async function seedClickStackQueryLogSource(page) {
-  await seedClickStackConnection(page);
-  await page.evaluate(() => {
-    localStorage.setItem(
-      "hdx-local-source",
-      JSON.stringify([
-        {
-          id: "local-query-log",
-          name: "ClickHouse Query Log",
-          kind: "log",
-          connection: "local",
-          from: { databaseName: "system", tableName: "query_log" },
-          timestampValueExpression: "event_time",
-          defaultTableSelectExpression:
-            "event_time, query_kind, query, initial_user, read_rows, written_rows, query_duration_ms",
-          implicitColumnExpression: "query",
-          querySettings: [],
-        },
-      ]),
-    );
-    localStorage.setItem("hdx-last-selected-source-id", "local-query-log");
   });
 }
 
@@ -1364,94 +1159,6 @@ async function clickStackInsertsDashboard(page, sceneId, label) {
   await pause(7.0);
 }
 
-async function clickStackQueryLog(page, sceneId, label) {
-  if (!page.url().includes("/clickstack")) {
-    await page.goto("http://localhost:8123/clickstack", { waitUntil: "domcontentloaded" });
-  }
-  await page.waitForTimeout(1200);
-  await applyDarkTheme(page);
-  await dismissClickStackBanner(page);
-  const skipSourceSetup =
-    label === "after-async" || (process.env.DEMO_CLICKSTACK_SKIP_SOURCE_SETUP || "false").toLowerCase() === "true";
-  if (skipSourceSetup) {
-    await seedClickStackQueryLogSource(page);
-    await page.goto("http://localhost:8123/clickstack/search?source=local-query-log", { waitUntil: "domcontentloaded" });
-    await page.waitForTimeout(1600);
-    await applyDarkTheme(page);
-    await dismissClickStackBanner(page);
-    await page.getByRole("button", { name: /^Run$/ }).click({ force: true }).catch(() => {});
-    await page.waitForTimeout(1800);
-    await applyDarkTheme(page);
-    await dismissClickStackBanner(page);
-    await shot(page, sceneId, `clickstack-query-log-${label}-raw`);
-    await requireText(page, /Results Table/i, "ClickStack query log");
-    setTransitionCurrent("ClickStack", await shot(page, sceneId, `clickstack-query-log-${label}`));
-    await pause(1.0);
-    return;
-  }
-  if (await page.getByTestId("connection-username-input").isVisible().catch(() => false)) {
-    await typeUiText(page, page.getByTestId("connection-name-input"), "Local ClickHouse");
-    await typeUiText(page, page.getByTestId("connection-host-input"), "http://localhost:8123");
-    await typeUiText(page, page.getByTestId("connection-username-input"), "carbon");
-    await typeUiText(page, page.getByTestId("connection-password-input"), "carbon");
-    await page.getByRole("button", { name: /test connection/i }).click({ force: true }).catch(() => {});
-    await page.waitForTimeout(900);
-    await page
-      .locator("button")
-      .filter({ hasText: "Create Connection" })
-      .evaluate((button) => button.click());
-    await page.waitForTimeout(700);
-  }
-  await page
-    .locator('input[placeholder="Database"], input[name="name"]')
-    .last()
-    .waitFor({ state: "visible", timeout: 8000 })
-    .catch(() => {});
-  const sourceName = page.locator('input[name="name"], input[placeholder="Name"]').first();
-  const databaseInput = page.locator('input[placeholder="Database"]').last();
-  const tableInput = page.locator('input[placeholder="Table"]').last();
-  if (
-    (await sourceName.isVisible().catch(() => false)) &&
-    (await databaseInput.isVisible().catch(() => false)) &&
-    (await tableInput.isVisible().catch(() => false))
-  ) {
-    await typeUiText(page, sourceName, "ClickHouse Query Log");
-    await choose(page, databaseInput, "system", "from.databaseName");
-    if (!(await expectHiddenValue(page, "from.databaseName", "system"))) {
-      console.warn("ClickStack database hidden field did not update; falling back to seeded source state");
-    }
-    await choose(page, tableInput, "query_log", "from.tableName");
-    if (!(await expectHiddenValue(page, "from.tableName", "query_log"))) {
-      console.warn("ClickStack table hidden field did not update; falling back to seeded source state");
-    }
-    await setCodeMirror(page, 2, "event_time");
-    await setCodeMirror(
-      page,
-      3,
-      "event_time, query_kind, query, initial_user, read_rows, written_rows, query_duration_ms",
-    );
-    await setVisibleInputValue(databaseInput, "system");
-    await setVisibleInputValue(tableInput, "query_log");
-    updateTransitionSlot("ClickStack", await shot(page, sceneId, `clickstack-source-${label}`));
-    await seedClickStackQueryLogSource(page);
-    await page.locator("button").filter({ hasText: "Save New Source" }).first().click({ force: true }).catch(() => {});
-    await page.waitForTimeout(500);
-  }
-  await seedClickStackQueryLogSource(page);
-  await page.goto("http://localhost:8123/clickstack/search?source=local-query-log", { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(1600);
-  await applyDarkTheme(page);
-  await dismissClickStackBanner(page);
-  await page.getByRole("button", { name: /^Run$/ }).click({ force: true }).catch(() => {});
-  await page.waitForTimeout(3000);
-  await applyDarkTheme(page);
-  await dismissClickStackBanner(page);
-  await shot(page, sceneId, `clickstack-query-log-${label}-raw`);
-  await requireText(page, /Results Table/i, "ClickStack query log");
-  setTransitionCurrent("ClickStack", await shot(page, sceneId, `clickstack-query-log-${label}`));
-  await pause(5.0);
-}
-
 async function runWorkflow(sceneId, workflow) {
   ensureGrafanaDemoPassword();
   reloadGrafanaDashboards();
@@ -1489,61 +1196,16 @@ async function runWorkflow(sceneId, workflow) {
     return;
   }
 
-  if (workflow === "async-log") {
-    const checks = [];
-    const play = await openBrowser(sceneId, "http://localhost:8123/play", "ClickHouse Play");
-    try {
-      await clickHousePlayAsyncLog(play.page, sceneId);
-      checks.push("clickhouse-play-async-log");
-    } catch (err) {
-      await closeBrowser(play.browser, play.child);
-      throw err;
-    }
-    let clickstack;
-    try {
-      clickstack = await openBrowser(sceneId, "http://localhost:8123/clickstack", "ClickStack");
-    } catch (err) {
-      await closeBrowser(play.browser, play.child);
-      throw err;
-    }
-    await closeBrowser(play.browser, play.child);
-    try {
-      await clickStackQueryLog(clickstack.page, sceneId, "after-async");
-      checks.push("clickstack-query-log-after-async");
-    } finally {
-      await closeBrowser(clickstack.browser, clickstack.child);
-    }
-    fs.mkdirSync(REPORT_DIR, { recursive: true });
-    fs.writeFileSync(
-      path.join(REPORT_DIR, `${sceneId}-browser-workflow.json`),
-      JSON.stringify({ scene: sceneId, workflow, checks }, null, 2),
-    );
-    return;
+  if (workflow !== "table-inspection") {
+    throw new Error(`unknown workflow: ${workflow}`);
   }
-
   const { browser, page, child } = await openBrowser(sceneId, "http://localhost:8123/play", "ClickHouse Play");
   const checks = [];
   try {
-    if (workflow === "post-jupiter") {
-      await clickHousePlayJupiter(page, sceneId);
-      checks.push("clickhouse-play-jupiter");
-      await grafanaDashboard(page, sceneId, "after-jupiter");
-      checks.push("grafana-after-jupiter");
-    } else if (workflow === "post-token") {
-      await clickHousePlayToken(page, sceneId);
-      checks.push("clickhouse-play-token");
-      await grafanaDashboard(page, sceneId, "after-token");
-      checks.push("grafana-after-token");
-      await clickStackQueryLog(page, sceneId, "after-token");
-      checks.push("clickstack-query-log-after-token");
-    } else if (workflow === "table-inspection") {
-      await clickHousePlayJupiter(page, sceneId);
-      checks.push("clickhouse-play-jupiter");
-      await clickHousePlayToken(page, sceneId);
-      checks.push("clickhouse-play-token");
-    } else {
-      throw new Error(`unknown workflow: ${workflow}`);
-    }
+    await clickHousePlayJupiter(page, sceneId);
+    checks.push("clickhouse-play-jupiter");
+    await clickHousePlayToken(page, sceneId);
+    checks.push("clickhouse-play-token");
   } finally {
     await closeBrowser(browser, child);
   }
@@ -1559,7 +1221,7 @@ async function main() {
   const sceneId = process.argv[2];
   const workflow = process.argv[3];
   if (!sceneId || !workflow) {
-    console.error("usage: browser_workflow.js <scene-id> <post-jupiter|post-token|live-observability|table-inspection|async-log>");
+    console.error("usage: browser_workflow.js <scene-id> <live-observability|table-inspection>");
     process.exit(2);
   }
   await runWorkflow(sceneId, workflow);
