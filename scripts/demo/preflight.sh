@@ -142,18 +142,21 @@ if [[ "$CHECK_BROWSER" == true ]]; then
 fi
 
 require_env SOLANA_RPC_URL || failures=$((failures + 1))
-require_env JUPITER_START_SLOT || failures=$((failures + 1))
-require_env JUPITER_END_SLOT || failures=$((failures + 1))
+if [[ -n "${JUPITER_START_SLOT:-}" || -n "${JUPITER_END_SLOT:-}" ]]; then
+  ok "Jupiter bounded slot env present"
+else
+  warn "Jupiter slot range is empty; visible tutorial run will use live head-follow mode"
+fi
 
-DISPLAY_ID="${DEMO_DISPLAY:-:95}"
+DISPLAY_ID="${DEMO_DISPLAY:-:96}"
 SCREEN_SIZE="${DEMO_SCREEN_SIZE:-1920x1080}"
-VNC_PORT="${DEMO_VNC_PORT:-5903}"
-NOVNC_PORT="${DEMO_NOVNC_PORT:-6083}"
+VNC_PORT="${DEMO_VNC_PORT:-5904}"
+NOVNC_PORT="${DEMO_NOVNC_PORT:-6084}"
 
-[[ "$DISPLAY_ID" == :95 ]] && ok "clean display default $DISPLAY_ID" || warn "selected display is $DISPLAY_ID"
+[[ "$DISPLAY_ID" == :96 ]] && ok "clean display default $DISPLAY_ID" || warn "selected display is $DISPLAY_ID"
 [[ "$SCREEN_SIZE" == "1920x1080" ]] && ok "screen size $SCREEN_SIZE" || warn "screen size is $SCREEN_SIZE"
-[[ "$VNC_PORT" == "5903" ]] && ok "VNC port $VNC_PORT" || warn "VNC port is $VNC_PORT"
-[[ "$NOVNC_PORT" == "6083" ]] && ok "noVNC port $NOVNC_PORT" || warn "noVNC port is $NOVNC_PORT"
+[[ "$VNC_PORT" == "5904" ]] && ok "VNC port $VNC_PORT" || warn "VNC port is $VNC_PORT"
+[[ "$NOVNC_PORT" == "6084" ]] && ok "noVNC port $NOVNC_PORT" || warn "noVNC port is $NOVNC_PORT"
 
 if display_stale "$DISPLAY_ID"; then
   warn "display $DISPLAY_ID has stale X socket/lock files; start-display will clean them"

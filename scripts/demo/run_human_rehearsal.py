@@ -15,15 +15,6 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SCENES = [
-    "scene-01-stack-config",
-    "scene-02-local-setup",
-    "scene-03-example-config",
-    "scene-04-jupiter-live",
-    "scene-05-token-live",
-    "scene-06-observability",
-    "scene-07-clickhouse-play",
-]
 
 LAST_VIEW_KEY: str | None = None
 
@@ -50,17 +41,18 @@ def load_env() -> None:
             load_file(path)
             break
     load_file(ROOT / "demo-artifacts/display.env", override_loaded=True)
+    load_file(Path("/home/ops/dev/vnc/recording-96/display.env"), override_loaded=True)
 
 
 def env() -> dict[str, str]:
     data = os.environ.copy()
     data.setdefault("RECORDER_BACKEND", "ffmpeg_x11")
     data.setdefault("DEMO_FPS", "60")
-    data.setdefault("DEMO_DISPLAY", ":95")
+    data.setdefault("DEMO_DISPLAY", ":96")
     data.setdefault("DISPLAY", data["DEMO_DISPLAY"])
     data.setdefault("DEMO_SCREEN_SIZE", "1920x1080")
-    data.setdefault("DEMO_VNC_PORT", "5903")
-    data.setdefault("DEMO_NOVNC_PORT", "6083")
+    data.setdefault("DEMO_VNC_PORT", "5904")
+    data.setdefault("DEMO_NOVNC_PORT", "6084")
     data.setdefault("DEMO_SKIP_NOVNC", "true")
     data.setdefault("DEMO_TYPE_BASE_DELAY_MS", "24")
     data.setdefault("DEMO_BROWSER_TYPE_BASE_DELAY_MS", "26")
@@ -101,6 +93,10 @@ def scene_map() -> dict[str, dict[str, Any]]:
     return {scene["id"]: scene for scene in runbook()["scenes"]}
 
 
+def scene_ids() -> list[str]:
+    return [scene["id"] for scene in runbook()["scenes"]]
+
+
 def prepare_review_dir(review_dir: Path) -> str:
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     if review_dir.exists():
@@ -121,7 +117,7 @@ def prepare_review_dir(review_dir: Path) -> str:
 def write_scene_scripts(review_dir: Path) -> None:
     with (review_dir / "scene-scripts.md").open("w") as out:
         out.write("# ClickHouse Sink Tutorial Scene Scripts\n")
-        for scene in SCENES:
+        for scene in scene_ids():
             path = ROOT / "docs/tutorial-video" / f"{scene}.md"
             out.write(f"\n## {scene}\n\n")
             out.write(path.read_text())
@@ -174,7 +170,7 @@ def display_reachable(display_id: str) -> bool:
 
 
 def start_display(log_dir: Path) -> bool:
-    display_id = env().get("DEMO_DISPLAY", ":95")
+    display_id = env().get("DEMO_DISPLAY", ":96")
     if os.environ.get("DEMO_REUSE_EXTERNAL_DISPLAY", "true").lower() not in {"0", "false", "no", "off"} and display_reachable(display_id):
         display_env = f"DEMO_DISPLAY={display_id}\nDISPLAY={display_id}\nDEMO_SCREEN_SIZE={env().get('DEMO_SCREEN_SIZE', '1920x1080')}\n"
         append_manifest(
@@ -342,6 +338,22 @@ def vscode_window_id() -> str | None:
     return window_id if window_id else None
 
 
+def terminal_state_file(name: str) -> Path:
+    safe = "".join(char if char.isalnum() or char in {"-", "_"} else "-" for char in name.strip()) or "default"
+    return ROOT / "demo-artifacts/pids" / f"human-terminal-{safe}.json"
+
+
+def terminal_window_id(scene: dict[str, Any]) -> str | None:
+    human = scene.get("human") or {}
+    terminal_name = str(human.get("terminal_name") or scene.get("id") or "default")
+    try:
+        state = json.loads(terminal_state_file(terminal_name).read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+    window_id = str(state.get("window_id", "")).strip()
+    return window_id if window_id else None
+
+
 def run_vscode_scene_with_delayed_record(scene: str, log: Path, *, use_transition: bool = False) -> None:
     ready_file = ROOT / "demo-artifacts/pids" / f"{scene}-vscode-ready"
     ready_file.parent.mkdir(parents=True, exist_ok=True)
@@ -442,6 +454,7 @@ def run_scene(scene: dict[str, Any], review_dir: Path) -> dict[str, Any]:
                         scene_id,
                         transition_label,
                         log_dir / f"{scene_id}-transition.log",
+                        target_window_id=terminal_window_id(scene),
                     )
                 run(
                     [sys.executable, "scripts/demo/human_scene_driver.py", scene_id],
@@ -541,8 +554,9 @@ def normalize_video(scene: str, review_dir: Path) -> None:
         "scene-06-observability": 0.8,
         "scene-07-clickhouse-play": 0.8,
     }.get(scene, 0.0)
-    fade_in_scenes = {item for item in SCENES if item != SCENES[0]}
-    fade_out_scenes = {item for item in SCENES if item != SCENES[-1]}
+    scenes = scene_ids()
+    fade_in_scenes = {item for item in scenes if item != scenes[0]}
+    fade_out_scenes = {item for item in scenes if item != scenes[-1]}
     needs_filter = scene in fade_in_scenes or scene in fade_out_scenes or tail_trim_seconds > 0
     if needs_filter:
         duration = float(
@@ -627,7 +641,7 @@ def normalize_video(scene: str, review_dir: Path) -> None:
 
 def concat_final(review_dir: Path) -> None:
     concat = review_dir / "videos/concat.txt"
-    concat.write_text("".join(f"file '{scene}.mp4'\n" for scene in SCENES))
+    concat.write_text("".join(f"file '{scene}.mp4'\n" for scene in scene_ids()))
     output = review_dir / "videos/clickhouse-sink-tutorial-human-no-audio.mp4"
     proc = subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(concat.name), "-c", "copy", output.name], cwd=review_dir / "videos")
     if proc.returncode != 0:
@@ -685,7 +699,7 @@ def main() -> int:
         if not args.skip_reset:
             maybe_reset(review_dir / "logs")
         completed_scenes: list[str] = []
-        for scene_id in SCENES:
+        for scene_id in scene_ids():
             report = run_scene(scenes[scene_id], review_dir)
             reports.append(report)
             if report["status"] != "ok":

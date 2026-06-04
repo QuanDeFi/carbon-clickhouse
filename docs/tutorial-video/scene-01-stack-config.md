@@ -1,12 +1,7 @@
-Before checking any runtime output, we show the local setup files that make the
-demo environment reproducible.
+Before starting, we verify the local stack.
 
-`monitoring/compose.yaml` brings up Prometheus and Grafana on the host network.
-`monitoring/prometheus/prometheus.yml` scrapes the two example metrics ports:
-Jupiter on 9464 and Token Program on 9465. `scripts/demo/setup-monitoring.sh`
-is the small deterministic setup command that starts the stack and checks each
-endpoint.
+Docker Compose shows ClickHouse, Prometheus, and Grafana are up. ClickHouse
+answers `SELECT 1`, Prometheus is ready, Grafana health is green, and the
+configured RPC endpoint answers `getHealth`.
 
-The next scene runs those checks in a terminal. This scene is just the map: where
-the setup lives, and which files someone would change if they needed to adjust
-the local observability stack.
+That proves local services and Solana network access are reachable.

@@ -46,7 +46,7 @@ def load_env() -> None:
 
 def env() -> dict[str, str]:
     data = os.environ.copy()
-    data.setdefault("DEMO_DISPLAY", ":95")
+    data.setdefault("DEMO_DISPLAY", ":96")
     data.setdefault("DISPLAY", data["DEMO_DISPLAY"])
     data.setdefault("DEMO_SCREEN_SIZE", "1920x1080")
     return data

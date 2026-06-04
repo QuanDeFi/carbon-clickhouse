@@ -58,7 +58,7 @@ def scene_paths(scene: str) -> tuple[Path, Path]:
 
 def status() -> int:
     print(f"recorder_backend: {backend()}")
-    print(f"display: {os.environ.get('DEMO_DISPLAY', ':95')}")
+    print(f"display: {os.environ.get('DEMO_DISPLAY', ':96')}")
     print(f"screen_size: {os.environ.get('DEMO_SCREEN_SIZE', '1920x1080')}")
     print(f"fps: {os.environ.get('DEMO_FPS', '30')}")
     ffmpeg = subprocess.run(["bash", "-lc", "command -v ffmpeg"], capture_output=True, text=True)
@@ -83,7 +83,7 @@ def status() -> int:
 
 def start_ffmpeg(scene: str) -> int:
     output, meta = scene_paths(scene)
-    display = os.environ.get("DEMO_DISPLAY", ":95")
+    display = os.environ.get("DEMO_DISPLAY", ":96")
     size = os.environ.get("DEMO_SCREEN_SIZE", "1920x1080")
     fps = os.environ.get("DEMO_FPS", "30")
     log_path = output.with_suffix(".ffmpeg.log")

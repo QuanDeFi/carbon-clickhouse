@@ -54,7 +54,7 @@ def chrome_executable() -> str:
 
 def capture_display(path: Path) -> None:
     x, y, width, height = window_frame()
-    display = os.environ.get("DISPLAY", os.environ.get("DEMO_DISPLAY", ":95"))
+    display = os.environ.get("DISPLAY", os.environ.get("DEMO_DISPLAY", ":96"))
     path.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         [
@@ -456,7 +456,7 @@ def run_transition(label: str) -> None:
         target_slot=target_slot,
     )
     width, height = screen_size()
-    display = os.environ.get("DISPLAY", os.environ.get("DEMO_DISPLAY", ":95"))
+    display = os.environ.get("DISPLAY", os.environ.get("DEMO_DISPLAY", ":96"))
     profile = STATE_DIR / f"profile-{int(time.time() * 1000)}"
     # Keep the transition window visible by default. Recording starts only after
     # the ready-file handshake, so Chromium's initial paint is not part of the

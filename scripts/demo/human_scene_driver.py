@@ -332,6 +332,15 @@ def env_flag(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def apply_scene_env(env: dict[str, str], human: dict[str, Any]) -> None:
+    overrides = human.get("env") if isinstance(human.get("env"), dict) else {}
+    for key, value in overrides.items():
+        if value is None:
+            env.pop(str(key), None)
+        else:
+            env[str(key)] = str(value)
+
+
 def pid_alive(pid: int) -> bool:
     try:
         os.kill(pid, 0)
@@ -426,6 +435,12 @@ def launch_terminal(title: str, env: dict[str, str]) -> tuple[subprocess.Popen[b
             os.environ.get("DEMO_TERMINAL_BG", "#1e1e2e"),
             "-fg",
             os.environ.get("DEMO_TERMINAL_FG", "#cdd6f4"),
+            "-bd",
+            os.environ.get("DEMO_TERMINAL_BORDER", "#313244"),
+            "-xrm",
+            f"XTerm*borderWidth: {os.environ.get('DEMO_TERMINAL_BORDER_WIDTH', '2')}",
+            "-xrm",
+            f"XTerm*internalBorder: {os.environ.get('DEMO_TERMINAL_INTERNAL_BORDER', '6')}",
             "-cr",
             os.environ.get("DEMO_TERMINAL_CURSOR", "#f5e0dc"),
             "-xrm",
@@ -481,7 +496,7 @@ def run_terminal_scene(scene_id: str, *, dry_run: bool = False, prepare_only: bo
     keep_open = bool(human.get("keep_open", False))
     title = os.environ.get("DEMO_TERMINAL_TITLE", str(human.get("terminal_title") or (DEFAULT_TERMINAL_TITLE if reuse_terminal else f"{DEFAULT_TERMINAL_TITLE} - {scene_id}")))
     env = os.environ.copy()
-    env.setdefault("DISPLAY", os.environ.get("DEMO_DISPLAY", ":95"))
+    env.setdefault("DISPLAY", os.environ.get("DEMO_DISPLAY", ":96"))
     for key, env_key in {
         "x": "DEMO_TERMINAL_X",
         "y": "DEMO_TERMINAL_Y",
@@ -519,6 +534,7 @@ def run_terminal_scene(scene_id: str, *, dry_run: bool = False, prepare_only: bo
         )
     env.setdefault("BLOCK_CRAWLER_HEAD_LAG_SLOTS", "3")
     env.setdefault("LOG_LEVEL", "info")
+    apply_scene_env(env, human)
 
     if dry_run:
         for step in steps:

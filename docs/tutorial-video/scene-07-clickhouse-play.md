@@ -1,9 +1,8 @@
-Finally we verify the landing rows directly in ClickHouse Play.
+Finally, ClickHouse Play validates the data.
 
-The Jupiter queries show generated Jupiter landing tables and sample decoded
-rows. The Token Program queries show generated account and instruction landing
-tables, including account fields from the USDC canary snapshot.
+We open the database menu, choose `default`, and browse generated landing tables
+with row and byte metadata. Then we inspect representative Jupiter event and
+instruction rows, plus Token Program instruction and account rows.
 
-This is the end-state proof: the ClickHouse config was accepted, the RPC input
-was accepted, decoding happened, generated rows were written, and the rows are
-queryable in ClickHouse.
+The rows show decoded Solana activity by table family, slot, signature, amounts,
+source, and mode. At this point the pipeline is proven end to end.

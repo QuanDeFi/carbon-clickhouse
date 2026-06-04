@@ -7,7 +7,7 @@ source "$ROOT/scripts/demo/common.sh"
 load_demo_env
 ensure_demo_dirs
 
-DISPLAY_ID="${DEMO_DISPLAY:-:95}"
+DISPLAY_ID="${DEMO_DISPLAY:-:96}"
 SCREEN_SIZE="${DEMO_SCREEN_SIZE:-1920x1080}"
 DEPTH="${DEMO_SCREEN_DEPTH:-24}"
 OBS_PORT="${OBS_WEBSOCKET_PORT:-4455}"
@@ -152,9 +152,9 @@ cat > "$DISPLAY_ENV" <<EOF
 DEMO_DISPLAY=$DISPLAY_ID
 DISPLAY=$DISPLAY_ID
 DEMO_SCREEN_SIZE=$SCREEN_SIZE
-DEMO_VNC_PORT=${DEMO_VNC_PORT:-5903}
-DEMO_NOVNC_PORT=${DEMO_NOVNC_PORT:-6083}
-DEMO_NOVNC_URL=http://localhost:${DEMO_NOVNC_PORT:-6083}/vnc.html
+DEMO_VNC_PORT=${DEMO_VNC_PORT:-5904}
+DEMO_NOVNC_PORT=${DEMO_NOVNC_PORT:-6084}
+DEMO_NOVNC_URL=http://localhost:${DEMO_NOVNC_PORT:-6084}/vnc.html
 EOF
 
 systemctl --user show "$OBS_UNIT.service" -p MainPID --value > "$ROOT/demo-artifacts/pids/obs.pid" 2>/dev/null || true

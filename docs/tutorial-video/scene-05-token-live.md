@@ -1,11 +1,6 @@
-Now we start the Token Program example in a second terminal.
+Now Token Program starts in a second terminal.
 
-The env file already selected the RPC endpoint, ClickHouse endpoint, metrics
-port, and log level, so the command stays plain. Startup first fetches the
-hardwired USDC account canary set through RPC, decodes those Token Program
-accounts, and writes generated account landing rows. Then it starts the live
-finalized block crawler for Token Program instructions and writes generated
-instruction rows.
+It uses the same database with a separate metrics port. First it writes a small
+account snapshot, then it tails finalized blocks for Token Program instructions.
 
-At this point both examples are running against the same ClickHouse instance and
-both are exposing metrics for Prometheus.
+Both example processes keep running in parallel.

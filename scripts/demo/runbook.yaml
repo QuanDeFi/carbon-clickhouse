@@ -6,37 +6,16 @@ output_dir: demo-artifacts
 
 scenes:
   - id: scene-01-stack-config
-    title: Local stack setup files
-    type: voice_only
-    script: docs/tutorial-video/scene-01-stack-config.md
-    human:
-      type: vscode
-      min_duration: 16
-      initial_pause: 1.0
-      scene_end_pause: 1.0
-      steps:
-        - file: monitoring/compose.yaml
-          line: 3
-          pause_after: 5.0
-        - file: monitoring/prometheus/prometheus.yml
-          line: 5
-          pause_after: 5.0
-        - file: scripts/demo/setup-monitoring.sh
-          line: 10
-          pause_after: 5.0
-
-  - id: scene-02-local-setup
-    title: Local services check
+    title: Local readiness checks
     type: terminal
-    script: docs/tutorial-video/scene-02-local-setup.md
-    command: scripts/demo/setup-monitoring.sh
+    script: docs/tutorial-video/scene-01-stack-config.md
     human:
       type: terminal
       terminal_name: setup-check
-      terminal_title: Carbon ClickHouse - Local Services Check
+      terminal_title: Carbon ClickHouse - Readiness Checks
       reuse_terminal: true
-      min_duration: 9
-      scene_end_pause: 0.8
+      min_duration: 21
+      scene_end_pause: 4.0
       steps:
         - command: docker compose -f monitoring/compose.yaml ps
           pause_after: 1.4
@@ -45,45 +24,32 @@ scenes:
         - command: curl -fsS http://localhost:9090/-/ready
           pause_after: 0.8
         - command: curl -fsS http://localhost:3000/api/health
+          pause_after: 0.8
+        - command: >-
+            curl -fsS "$RPC_URL"
+            -H 'content-type: application/json'
+            -d '{"jsonrpc":"2.0","id":1,"method":"getHealth"}'
           pause_after: 1.0
 
-  - id: scene-03-example-config
-    title: Core ClickHouse sink configuration
+  - id: scene-02-local-setup
+    title: Example environment files
     type: voice_only
-    script: docs/tutorial-video/scene-03-example-config.md
+    script: docs/tutorial-video/scene-02-local-setup.md
     human:
       type: vscode
-      min_duration: 40
+      min_duration: 23
       initial_pause: 1.0
-      scene_end_pause: 1.0
+      scene_end_pause: 3.2
       steps:
         - file: examples/jupiter-swap-clickhouse/.env.example
           line: 1
-          pause_after: 4.0
+          pause_after: 8.0
         - file: examples/token-program-clickhouse/.env.example
           line: 1
-          pause_after: 4.0
-        - file: crates/core/src/clickhouse/config.rs
-          line: 23
-          pause_after: 5.0
-        - file: crates/core/src/clickhouse/config.rs
-          line: 102
-          pause_after: 6.0
-        - file: crates/core/src/clickhouse/config.rs
-          line: 148
-          pause_after: 4.5
-        - file: crates/core/src/clickhouse/config.rs
-          line: 199
-          pause_after: 4.5
-        - file: crates/core/src/clickhouse/writer.rs
-          line: 615
-          pause_after: 4.0
-        - file: crates/core/src/clickhouse/admin.rs
-          line: 118
-          pause_after: 4.0
+          pause_after: 8.0
 
   - id: scene-04-jupiter-live
-    title: Start Jupiter live run
+    title: Start Jupiter example run
     type: terminal
     script: docs/tutorial-video/scene-04-jupiter-live.md
     command: cargo run -p jupiter-swap-clickhouse-carbon-example
@@ -93,12 +59,16 @@ scenes:
       terminal_title: Carbon ClickHouse - Local Services And Jupiter Live
       reuse_terminal: true
       keep_open: true
-      min_duration: 12
+      env:
+        BLOCK_CRAWLER_START_SLOT: ""
+        BLOCK_CRAWLER_END_SLOT: ""
+        CLICKHOUSE_ASYNC_INSERT: "true"
+      min_duration: 21
       scene_end_pause: 1.2
       steps:
         - command: cargo run -p jupiter-swap-clickhouse-carbon-example
           wait_for_prompt: false
-          pause_after: 7.5
+          pause_after: 16.8
 
   - id: scene-05-token-live
     title: Start Token Program live run
@@ -111,12 +81,14 @@ scenes:
       terminal_title: Carbon ClickHouse - Token Program Live
       reuse_terminal: true
       keep_open: true
-      min_duration: 12
+      env:
+        CLICKHOUSE_ASYNC_INSERT: "true"
+      min_duration: 24
       scene_end_pause: 1.2
       steps:
         - command: cargo run -p token-program-clickhouse-carbon-example
           wait_for_prompt: false
-          pause_after: 8.0
+          pause_after: 20.0
 
   - id: scene-06-observability
     title: Live observability
@@ -126,7 +98,7 @@ scenes:
     human:
       type: browser
       workflow: live-observability
-      min_duration: 44
+      min_duration: 25
 
   - id: scene-07-clickhouse-play
     title: Landing table inspection
@@ -136,4 +108,4 @@ scenes:
     human:
       type: browser
       workflow: table-inspection
-      min_duration: 36
+      min_duration: 30

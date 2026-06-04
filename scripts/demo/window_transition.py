@@ -47,7 +47,7 @@ def chrome_executable() -> str:
 
 def capture_display(path: Path) -> None:
     x, y, width, height = window_frame()
-    display = os.environ.get("DISPLAY", os.environ.get("DEMO_DISPLAY", ":95"))
+    display = os.environ.get("DISPLAY", os.environ.get("DEMO_DISPLAY", ":96"))
     path.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         [
@@ -156,6 +156,49 @@ def xdo(display: str, *args: str) -> None:
     )
 
 
+def tutorial_windows(display: str) -> list[tuple[str, str]]:
+    result = subprocess.run(
+        ["wmctrl", "-l"],
+        cwd=ROOT,
+        env={**os.environ, "DISPLAY": display},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    windows: list[tuple[str, str]] = []
+    for line in result.stdout.splitlines():
+        parts = line.split(None, 3)
+        if len(parts) < 4:
+            continue
+        raw_id, title = parts[0], parts[3]
+        normalized = title.lower()
+        if any(
+            token in normalized
+            for token in (
+                "carbon clickhouse",
+                "clickhouse",
+                "clickstack",
+                "grafana",
+                "visual studio code",
+                "chromium",
+            )
+        ):
+            try:
+                window_id = str(int(raw_id, 16))
+            except ValueError:
+                window_id = raw_id
+            windows.append((window_id, title))
+    return windows
+
+
+def hide_other_tutorial_windows(display: str, target_window_id: str, transition_window_id: str = "") -> None:
+    keep = {item for item in (target_window_id, transition_window_id) if item}
+    for window_id, _title in tutorial_windows(display):
+        if window_id in keep:
+            continue
+        xdo(display, "windowmove", window_id, "-32000", "-32000")
+
+
 def place_target_behind_blackout(display: str, transition_window_id: str) -> None:
     target_window_id = os.environ.get("DEMO_WINDOW_TRANSITION_TARGET_WINDOW_ID", "").strip()
     if not target_window_id:
@@ -166,6 +209,7 @@ def place_target_behind_blackout(display: str, transition_window_id: str) -> Non
         ("windowsize", target_window_id, str(tw), str(th)),
     ):
         xdo(display, *args)
+    hide_other_tutorial_windows(display, target_window_id, transition_window_id)
     if transition_window_id:
         xdo(display, "windowraise", transition_window_id)
         xdo(display, "windowfocus", transition_window_id)
@@ -190,7 +234,7 @@ def run_transition(label: str) -> None:
     write_blackout_html(html_path)
 
     width, height = screen_size()
-    display = os.environ.get("DISPLAY", os.environ.get("DEMO_DISPLAY", ":95"))
+    display = os.environ.get("DISPLAY", os.environ.get("DEMO_DISPLAY", ":96"))
     profile = STATE_DIR / f"profile-{int(time.time() * 1000)}"
     proc = subprocess.Popen(
         [

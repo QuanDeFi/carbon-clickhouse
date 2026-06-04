@@ -104,7 +104,7 @@ def capture_screenshot(scene_id: str) -> Path:
     screenshot_dir.mkdir(parents=True, exist_ok=True)
     output = screenshot_dir / f"{scene_id}.png"
     size = os.environ.get("DEMO_SCREEN_SIZE", "1920x1080")
-    display = os.environ.get("DISPLAY", os.environ.get("DEMO_DISPLAY", ":95"))
+    display = os.environ.get("DISPLAY", os.environ.get("DEMO_DISPLAY", ":96"))
     subprocess.run(
         [
             "ffmpeg",
@@ -137,7 +137,7 @@ def launch(url: str, scene_id: str, *, force_dark: bool = True, offscreen: bool 
         shutil.rmtree(profile)
     profile.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
-    env["DISPLAY"] = env.get("DISPLAY", env.get("DEMO_DISPLAY", ":95"))
+    env["DISPLAY"] = env.get("DISPLAY", env.get("DEMO_DISPLAY", ":96"))
     x, y, width, height = single_frame()
     # Launch off-screen when the caller will reveal the window itself, so the
     # page's first (white) paint and the still-visible terminal behind it are
@@ -220,7 +220,7 @@ def main() -> int:
     prom.add_argument("--seconds", type=float, default=28.0)
     args = parser.parse_args()
 
-    os.environ.setdefault("DEMO_DISPLAY", ":95")
+    os.environ.setdefault("DEMO_DISPLAY", ":96")
     os.environ.setdefault("DISPLAY", os.environ["DEMO_DISPLAY"])
 
     if args.mode == "slide":

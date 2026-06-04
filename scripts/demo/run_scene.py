@@ -48,7 +48,7 @@ def scene_map() -> dict[str, dict]:
 
 def ensure_display() -> None:
     env = os.environ.copy()
-    display = os.environ.get("DEMO_DISPLAY", ":95")
+    display = os.environ.get("DEMO_DISPLAY", ":96")
     expected_size = os.environ.get("DEMO_SCREEN_SIZE", "1920x1080")
     probe = subprocess.run(["xdpyinfo", "-display", display], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
     if probe.returncode == 0 and f"dimensions:    {expected_size} pixels" in probe.stdout:

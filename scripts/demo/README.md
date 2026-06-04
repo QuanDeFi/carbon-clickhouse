@@ -15,8 +15,8 @@ scripts/demo/runbook.yaml
 
 ## Architecture
 
-- Headless display: Xvfb on `${DEMO_DISPLAY:-:95}`.
-- Optional observation UI: x11vnc on `${DEMO_VNC_PORT:-5903}` and noVNC/websockify on `${DEMO_NOVNC_PORT:-6083}`.
+- Headless display: Xvfb on `${DEMO_DISPLAY:-:96}`.
+- Optional observation UI: x11vnc on `${DEMO_VNC_PORT:-5904}` and noVNC/websockify on `${DEMO_NOVNC_PORT:-6084}`.
 - VS Code scenes: real desktop VS Code on the recording display for code and
   configuration walkthroughs.
 - Terminal scenes: wide dark-theme `xterm` windows with smaller readable text and visibly typed commands.
@@ -64,8 +64,8 @@ scripts/demo/start-display.sh
 The command prints:
 
 ```text
-DISPLAY=:95
-noVNC: http://localhost:6083/vnc.html
+DISPLAY=:96
+noVNC: http://localhost:6084/vnc.html
 ```
 
 noVNC is for observation only. Recording does not depend on it.
@@ -74,7 +74,7 @@ If the selected display or ports are already used by another local VNC session,
 keep that session untouched and use explicit overrides or `--auto`:
 
 ```sh
-DEMO_DISPLAY=:96 DEMO_VNC_PORT=5904 DEMO_NOVNC_PORT=6084 scripts/demo/start-display.sh
+DEMO_DISPLAY=:97 DEMO_VNC_PORT=5905 DEMO_NOVNC_PORT=6085 scripts/demo/start-display.sh
 scripts/demo/start-display.sh --auto
 ```
 
@@ -142,14 +142,15 @@ python scripts/demo/run_scene.py --human --all --no-voice
 Use this before final voiceover. It records a directed screen performance:
 VS Code code/config walkthroughs, visible terminal typing, readable pauses,
 ClickHouse `/play` inspection, Grafana dashboards after both examples,
-ClickStack query-log inspection, video validation, screenshots, contact sheet,
+ClickStack Inserts dashboard inspection, video validation, screenshots, contact sheet,
 and current review files.
 
-The current story is live-first but config-aware: show the stack setup files in
-VS Code, verify local services, show the example ClickHouse/RPC config in VS
-Code, start Jupiter live in one terminal, start Token Program live in a second
-terminal, inspect Grafana and ClickStack while both examples are running, and
-inspect landing table data in ClickHouse `/play`.
+The current story is live-first but config-aware: verify required local
+services, show the example database/RPC config in VS Code, briefly point to the
+core sink configuration surface, start Jupiter in one terminal, start Token
+Program in a second terminal, inspect Grafana and ClickStack while the examples
+run, and inspect generated landing table data in
+ClickHouse `/play`.
 
 Terminal scenes reuse named shells where appropriate, pause briefly before
 pressing Enter, and leave read time at scene boundaries so the output can be
@@ -162,9 +163,9 @@ The terminal frame defaults to equal margins on all four screen edges and a
 larger readable dark-theme font. ClickHouse `/play` SQL is visibly typed into
 the editor, and sample queries should include enough columns to explain the
 landing-row data rather than only showing minimal counts.
-The current visual target is roughly three to three and a half minutes. If a run
-drifts toward four minutes or more, shorten scene content rather than returning
-to fixed robotic typing.
+The current visual target is roughly two and a half minutes. If a run drifts
+toward four minutes or more, shorten scene content rather than returning to
+fixed robotic typing.
 The human rehearsal defaults to 60fps. Active window switches use a short
 blackout transition; the previous Mission-Control-style transition is archived
 in `scripts/demo/window_transition_mission_control.py`.
@@ -172,9 +173,9 @@ in `scripts/demo/window_transition_mission_control.py`.
 ```sh
 source .venv-demo/bin/activate
 export RECORDER_BACKEND=ffmpeg_x11
-export DEMO_DISPLAY=:95 DISPLAY=:95
+source /home/ops/dev/vnc/recording-96/display.env
 export DEMO_SCREEN_SIZE=1920x1080
-export DEMO_VNC_PORT=5903 DEMO_NOVNC_PORT=6083 DEMO_FPS=60
+export DEMO_FPS=60
 DEMO_ALLOW_CLICKHOUSE_RESET=true python scripts/demo/run_human_rehearsal.py --no-voice
 ```
 
@@ -192,24 +193,25 @@ python scripts/demo/subtitles.py
 
 Current human-scene flow:
 
-- `scene-01`: VS Code shows `monitoring/compose.yaml`,
-  `monitoring/prometheus/prometheus.yml`, and `scripts/demo/setup-monitoring.sh`.
-- `scene-02`: terminal health checks prove ClickHouse, Prometheus, and Grafana
-  are online.
-- `scene-03`: VS Code shows both example `.env.example` files, then the core
-  ClickHouse sink config, writer, and schema setup paths that consume them.
-- `scene-04`: terminal starts the Jupiter live example.
-- `scene-05`: terminal starts the Token Program example.
+- `scene-01`: terminal health checks prove ClickHouse, Prometheus, Grafana, and
+  RPC reachability are online.
+- `scene-02`: VS Code shows both example `.env.example` files and briefly
+  points to `crates/core/src/clickhouse/config.rs` as the full sink config
+  reference.
+- `scene-04`: terminal starts the Jupiter live example with async-wait inserts.
+- `scene-05`: terminal starts the Token Program example with async-wait inserts.
 - `scene-06`: filtered Jupiter and Token Program Grafana dashboards show the
-  running Carbon pipelines, then ClickStack shows ClickHouse-side telemetry.
-- `scene-07`: ClickHouse `/play` verifies generated Jupiter and Token Program
-  landing tables and sample rows.
+  running Carbon pipelines, then ClickStack shows ClickHouse-side insert rows
+  and bytes per table.
+- `scene-07`: ClickHouse `/play` uses the table browser and representative
+  Jupiter and Token Program rows to verify generated landing tables, data
+  volume, and queryable rows.
 
 Current theme behavior:
 
 - VS Code uses a dedicated recording profile under `/home/ops/dev/vnc`.
 - ClickHouse `/play` and ClickStack are darkened through deterministic
-  recording-time CSS injection.
+  recording-time CSS injection without decorative backgrounds.
 - Grafana uses its native dark theme/dashboard URL.
 - Browser chrome and address bars are hidden/cropped from browser scenes.
 
@@ -291,10 +293,8 @@ The unmanaged `:99` display may already be occupied at `1440x1000`. For clean
 tutorial recording, use:
 
 ```sh
-export DEMO_DISPLAY=:95
+source /home/ops/dev/vnc/recording-96/display.env
 export DEMO_SCREEN_SIZE=1920x1080
-export DEMO_VNC_PORT=5903
-export DEMO_NOVNC_PORT=6083
 ```
 
 Before deterministic tutorial runs, reset tutorial ClickHouse tables:

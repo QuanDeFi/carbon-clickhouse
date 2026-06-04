@@ -1,11 +1,8 @@
-With both examples active, we validate the running pipelines through the
-observability stack.
+With both examples active, Grafana shows the Carbon-side pipeline view.
 
-Grafana is the Carbon-side view. We show the Jupiter dashboard first, then the
-Token Program dashboard, so each running pipeline has its own metric surface:
-processed updates, buffered rows, flushes, failures, retries, and other sink
-metrics. ClickStack is the ClickHouse-side view: insert/query activity, rows
-written, timing, and query-log evidence.
+We spend time on Jupiter: processed updates, queue depth, latency, buffers,
+flushes, errors, and retries. Token Program uses the same dashboard model, so we
+only confirm it briefly.
 
-This scene proves more than “the terminals are printing logs.” It shows the two
-live pipelines through structured runtime telemetry.
+ClickStack then shows the ClickHouse-side Inserts dashboard: writes arriving per
+landing table.

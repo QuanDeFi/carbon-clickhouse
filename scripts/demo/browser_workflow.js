@@ -69,10 +69,7 @@ const DARK_BROWSER_CSS = `
     color: var(--demo-text) !important;
   }
   body {
-    background:
-      radial-gradient(circle at 12% 12%, rgba(250, 255, 105, 0.10), transparent 28rem),
-      radial-gradient(circle at 88% 80%, rgba(101, 212, 255, 0.11), transparent 30rem),
-      var(--demo-bg) !important;
+    background: var(--demo-bg) !important;
   }
   main, section, article, form, table, thead, tbody, tr,
   .ant-card, .ant-modal-content, .ant-drawer-content, .ant-popover-inner,
@@ -163,8 +160,50 @@ function sh(command, args, options = {}) {
   });
 }
 
+function clickHouseTsv(query) {
+  return sh("curl", [
+    "-fsS",
+    "-u",
+    "carbon:carbon",
+    "--data-binary",
+    `${query} FORMAT TSV`,
+    "http://localhost:8123/",
+  ]).trim();
+}
+
+function clickHouseTableRows(tableName) {
+  const safeName = String(tableName).replace(/'/g, "''");
+  const value = clickHouseTsv(
+    `SELECT total_rows FROM system.tables WHERE database = 'default' AND name = '${safeName}' LIMIT 1`,
+  );
+  return value ? Number(value) : 0;
+}
+
 function isGrafanaUrl(url) {
   return String(url || "").includes("localhost:3000");
+}
+
+function isClickStackUrl(url) {
+  return String(url || "").includes("/clickstack");
+}
+
+function grafanaDashboardUrl(dashboardKey = "overview") {
+  const dashboard = GRAFANA_DASHBOARDS[dashboardKey] || GRAFANA_DASHBOARDS.overview;
+  return `http://localhost:3000/d/${dashboard.uid}/${dashboard.slug}?orgId=1&from=now-15m&to=now&refresh=1s&theme=dark`;
+}
+
+async function seedGrafanaSession(context) {
+  try {
+    await context.request.post("http://localhost:3000/login", {
+      data: {
+        user: GRAFANA_USER,
+        password: GRAFANA_PASSWORD,
+      },
+    });
+  } catch (_) {
+    // The dashboard function still checks for a login page and fails clearly if
+    // Grafana did not accept the session seed.
+  }
 }
 
 function hashSeed(text) {
@@ -431,7 +470,7 @@ function reloadGrafanaDashboards() {
 
 async function openBrowser(sceneId, initialUrl, transitionLabel = "browser") {
   fs.mkdirSync(REPORT_DIR, { recursive: true });
-  const display = process.env.DISPLAY || process.env.DEMO_DISPLAY || ":95";
+  const display = process.env.DISPLAY || process.env.DEMO_DISPLAY || ":96";
   if (process.env.DEMO_BROWSER_DEBUG === "true") {
     console.log(`browser workflow display: ${display}`);
   }
@@ -440,7 +479,7 @@ async function openBrowser(sceneId, initialUrl, transitionLabel = "browser") {
   const initialX = prepareOffscreen ? -32000 : frame.x;
   const initialY = prepareOffscreen ? -32000 : frame.y;
   const profile = path.join(ROOT, "demo-artifacts", "browser-profiles", `${sceneId}-${Date.now()}`);
-  const useCustomDarkTheme = !isGrafanaUrl(initialUrl);
+  const useCustomDarkTheme = !isGrafanaUrl(initialUrl) && !isClickStackUrl(initialUrl);
   fs.rmSync(profile, { recursive: true, force: true });
   fs.mkdirSync(path.join(profile, "Default"), { recursive: true });
   fs.writeFileSync(
@@ -461,9 +500,8 @@ async function openBrowser(sceneId, initialUrl, transitionLabel = "browser") {
       2,
     ),
   );
-  // Grafana is natively dark; Chrome's force-dark filter re-inverts it on every
-  // navigation (login -> dashboard), which reads as a dark/bright flicker. Only
-  // force-dark the apps that actually need it (ClickStack, ClickHouse Play).
+  // Grafana and ClickStack are natively dark; Chrome's force-dark filter can
+  // re-invert them during navigation. Only force-dark the ClickHouse Play UI.
   const darkForcingArgs = ["--force-dark-mode", "--enable-features=WebUIDarkMode"];
   const launchArgs = useCustomDarkTheme
     ? CHROME_ARGS
@@ -482,6 +520,28 @@ async function openBrowser(sceneId, initialUrl, transitionLabel = "browser") {
     env: { ...process.env, DISPLAY: display },
   });
   const page = context.pages()[0] || (await context.newPage());
+  if (isGrafanaUrl(initialUrl)) {
+    await seedGrafanaSession(context);
+  }
+  if (isClickStackUrl(initialUrl)) {
+    await context
+      .addInitScript(() => {
+        sessionStorage.setItem(
+          "connections",
+          JSON.stringify([
+            {
+              id: "local",
+              name: "Local ClickHouse",
+              host: "http://localhost:8123",
+              username: "carbon",
+              password: "carbon",
+              hyperdxSettingPrefix: null,
+            },
+          ]),
+        );
+      })
+      .catch(() => {});
+  }
   if (useCustomDarkTheme) {
     await context.addInitScript((css) => {
       const style = document.createElement("style");
@@ -523,7 +583,15 @@ async function openBrowser(sceneId, initialUrl, transitionLabel = "browser") {
   if (useCustomDarkTheme) {
     await applyDarkTheme(page);
   }
-  await page.waitForTimeout(isGrafanaUrl(initialUrl) ? 1800 : 500);
+  if (isGrafanaUrl(initialUrl)) {
+    await page.waitForTimeout(2500);
+    await dismissGrafanaPasswordModal(page).catch(() => {});
+  } else if (isClickStackUrl(initialUrl)) {
+    await page.waitForTimeout(2800);
+    await dismissClickStackBanner(page).catch(() => {});
+  } else {
+    await page.waitForTimeout(500);
+  }
   const windowId = latestChromiumWindow();
   if (windowId) {
     if (prepareOffscreen) {
@@ -550,7 +618,7 @@ async function openBrowser(sceneId, initialUrl, transitionLabel = "browser") {
 }
 
 async function applyDarkTheme(page) {
-  if (isGrafanaUrl(page.url())) {
+  if (isGrafanaUrl(page.url()) || isClickStackUrl(page.url())) {
     return;
   }
   await page.emulateMedia({ colorScheme: "dark" }).catch(() => {});
@@ -683,9 +751,33 @@ async function loginClickHousePlay(page) {
   }
   await page.waitForTimeout(400);
   await applyDarkTheme(page);
+  await enhanceClickHousePlayTableBrowser(page);
   const inputs = page.locator("input");
   await inputs.nth(1).fill("carbon");
   await inputs.nth(2).fill("carbon");
+}
+
+async function enhanceClickHousePlayTableBrowser(page) {
+  await page
+    .addStyleTag({
+      content: `
+        :root {
+          --table-size-bar-color: rgba(250, 255, 105, 0.34) !important;
+        }
+        .table {
+          background-size: 100% 100% !important;
+          border-radius: 2px !important;
+        }
+        .table button {
+          background: transparent !important;
+        }
+        .table.current,
+        .table:hover {
+          filter: brightness(1.18) !important;
+        }
+      `,
+    })
+    .catch(() => {});
 }
 
 async function typeSql(page, query) {
@@ -713,6 +805,8 @@ async function runPlayQuery(page, query, expected) {
   await typeSql(page, query);
   await page.waitForTimeout(500);
   await page.locator("button").filter({ hasText: /^Run$/ }).first().click();
+  hideMouse();
+  await page.waitForTimeout(1200);
   const text = await waitForPlayResult(page, expected, "ClickHouse /play query");
   if (/Exception|DB::Exception|Code:\s*\d+/.test(text)) {
     throw new Error("ClickHouse /play query failed");
@@ -726,7 +820,7 @@ async function waitForPlayResult(page, expected, label) {
   while (Date.now() < deadline) {
     lastText = await page.locator("body").innerText({ timeout: 1000 }).catch(() => "");
     const hasExpected = expected.test(lastText);
-    const hasResultSummary = /(?:\d+(?:\.\d+)?\s*ms\.\s*Read|Read\s+\d+|\b\d+\s+rows?\s+in\s+set\b|\b\d+\s+rows?\b|Rows read)/i.test(lastText);
+    const hasResultSummary = /(?:\d+(?:\.\d+)?\s*ms\.\s*Read|Read\s+\d+|\b\d+\s+rows?\s+in\s+(?:set|result)\b|\b\d+\s+rows?\b|Rows read)/i.test(lastText);
     const stillLoading = /loading|running query/i.test(lastText);
     if (hasExpected && !matchedExpectedAt) {
       matchedExpectedAt = Date.now();
@@ -742,33 +836,187 @@ async function waitForPlayResult(page, expected, label) {
   throw new Error(`${label} did not render completed result`);
 }
 
-async function clickHousePlayJupiter(page, sceneId) {
+function escapeRegExp(text) {
+  return String(text).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function playTableNameRegex(tableName) {
+  return new RegExp(`^${escapeRegExp(tableName)}\\b`);
+}
+
+async function playTableButton(page, tableName) {
+  const button = page.getByRole("button", { name: playTableNameRegex(tableName) }).first();
+  await button.scrollIntoViewIfNeeded({ timeout: 8000 });
+  return button;
+}
+
+async function scrollClickHousePlayTableList(page, sceneId) {
+  await page.waitForTimeout(350);
+  const box = await page
+    .evaluate(() => {
+      const tables = document.querySelector(".tables");
+      if (!tables) return null;
+      let node = tables.parentElement;
+      while (node && node !== document.body) {
+        if (node.scrollHeight > node.clientHeight + 40) {
+          const rect = node.getBoundingClientRect();
+          return {
+            x: rect.left,
+            y: rect.top,
+            width: rect.width,
+            height: rect.height,
+          };
+        }
+        node = node.parentElement;
+      }
+      const rect = tables.getBoundingClientRect();
+      return {
+        x: rect.left,
+        y: rect.top,
+        width: rect.width,
+        height: rect.height,
+      };
+    })
+    .catch(() => null);
+  if (box) {
+    const rng = seededRng(`${sceneId}:clickhouse-play-table-scroll`);
+    const x = box.x + Math.min(box.width - 12, Math.max(18, box.width * 0.68));
+    const y = box.y + Math.min(box.height - 18, Math.max(42, box.height * 0.42));
+    await page.mouse.move(x, y, { steps: 5 }).catch(() => {});
+    const deltas = [110, 150, 185, 135, 165, 120, 95];
+    for (let index = 0; index < deltas.length; index += 1) {
+      const delta = Math.round(deltas[index] * (0.88 + rng() * 0.28));
+      await page.mouse.wheel(0, delta).catch(() => {});
+      const basePause = index === 2 ? 620 : 260;
+      await humanPause(page, basePause + rng() * 260);
+    }
+  }
+  await page.waitForTimeout(950);
+  setTransitionCurrent("ClickHouse Play", await shot(page, sceneId, "clickhouse-play-table-browser-scroll"));
+}
+
+async function openClickHousePlayTableBrowser(page, sceneId = null, options = {}) {
   await loginClickHousePlay(page);
-  await runPlayQuery(
-    page,
-    "SELECT count() rows, uniq(signature) signatures, min(slot) min_slot, max(slot) max_slot\nFROM default.jupiter_swap_route_instruction_landing",
-    /rows|signatures|min_slot|max_slot/i,
-  );
-  updateTransitionSlot("ClickHouse Play", await shot(page, sceneId, "clickhouse-play-jupiter-counts"));
+  const visibleTable = page.getByRole("button", { name: /^(jupiter_swap_|token_program_)/i }).first();
+  if (!(await visibleTable.isVisible({ timeout: 500 }).catch(() => false))) {
+    await page.locator("#databases-toggle").click({ force: true }).catch(() => {});
+    await page.waitForTimeout(options.revealMenu ? 1400 : 450);
+    if (options.revealMenu && sceneId) {
+      setTransitionCurrent("ClickHouse Play", await shot(page, sceneId, "clickhouse-play-menu-expanded"));
+    }
+    const defaultDatabase = page.getByRole("button", { name: /^default\b/i }).first();
+    if (await defaultDatabase.isVisible({ timeout: 2500 }).catch(() => false)) {
+      await defaultDatabase.click({ force: true }).catch(() => {});
+    }
+    if (options.revealMenu) {
+      await page.waitForTimeout(1400);
+    }
+  }
+  await page.waitForTimeout(1000);
+  await requireText(page, /jupiter_swap_|token_program_/, "ClickHouse Play table browser");
+  if (options.revealMenu && sceneId) {
+    setTransitionCurrent("ClickHouse Play", await shot(page, sceneId, "clickhouse-play-table-browser-expanded"));
+    await scrollClickHousePlayTableList(page, sceneId);
+  }
+  hideMouse();
+}
+
+async function hoverPlayTable(page, sceneId, tableName, label) {
+  const button = await playTableButton(page, tableName);
+  await button.hover({ force: true });
+  await page.waitForTimeout(650);
+  await requireText(page, /MergeTree|rows|bytes|KiB|MiB|GiB/i, "ClickHouse Play table metadata");
+  setTransitionCurrent("ClickHouse Play", await shot(page, sceneId, `clickhouse-play-${label}`));
   await pause(0.8);
-  await runPlayQuery(
+}
+
+async function setPlayQuery(page, query) {
+  await page.evaluate((value) => {
+    const queryArea = document.querySelector("textarea");
+    if (!queryArea) {
+      throw new Error("ClickHouse Play query textarea not found");
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value");
+    descriptor?.set?.call(queryArea, value);
+    queryArea.dispatchEvent(new Event("input", { bubbles: true }));
+    document.getElementById("main")?.scrollTo(0, 0);
+  }, query);
+  await page.waitForFunction((value) => document.querySelector("textarea")?.value === value, query, { timeout: 5000 });
+}
+
+async function selectPlayTableDefaultQuery(page, tableName) {
+  const button = await playTableButton(page, tableName);
+  await button.evaluate((el) => {
+    const table = el.closest(".table");
+    if (!table) {
+      throw new Error("ClickHouse Play table row not found");
+    }
+    table.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+  });
+  const expected = `SELECT * FROM "default"."${tableName}" LIMIT 100`;
+  await page.waitForFunction((value) => document.querySelector("textarea")?.value === value, expected, { timeout: 5000 });
+}
+
+async function inspectPlayTable(page, sceneId, tableName, expected, label, query = null) {
+  await openClickHousePlayTableBrowser(page);
+  const button = await playTableButton(page, tableName);
+  await button.hover({ force: true }).catch(() => {});
+  if (query) {
+    await setPlayQuery(page, query);
+  } else {
+    await selectPlayTableDefaultQuery(page, tableName);
+  }
+  await page.waitForTimeout(450);
+  await page.locator("button").filter({ hasText: /^Run$/ }).first().click({ force: true }).catch(() => {});
+  hideMouse();
+  await page.waitForTimeout(1200);
+  const text = await waitForPlayResult(page, expected, `ClickHouse Play table ${tableName}`);
+  if (/Exception|DB::Exception|Code:\s*\d+/.test(text)) {
+    throw new Error(`ClickHouse /play table query failed for ${tableName}`);
+  }
+  setTransitionCurrent("ClickHouse Play", await shot(page, sceneId, `clickhouse-play-${label}`));
+  await pause(0.8);
+}
+
+async function clickHousePlayJupiter(page, sceneId) {
+  await openClickHousePlayTableBrowser(page, sceneId, { revealMenu: true });
+  updateTransitionSlot("ClickHouse Play", await shot(page, sceneId, "clickhouse-play-table-browser"));
+  await hoverPlayTable(page, sceneId, "jupiter_swap_swap_event_landing", "jupiter-event-metadata");
+  await inspectPlayTable(
     page,
-    "SELECT slot, left(signature,24) AS signature_prefix, instruction_index, stack_height, instruction_type, in_amount, quoted_out_amount, slippage_bps, platform_fee_bps, length(route_plan) AS legs, source_name, mode\nFROM default.jupiter_swap_route_instruction_landing\nLIMIT 20",
-    /slot|signature_prefix|instruction_index|stack_height|instruction_type|in_amount|quoted_out_amount|slippage_bps|platform_fee_bps|legs|source_name|mode/i,
+    sceneId,
+    "jupiter_swap_swap_event_landing",
+    /program_id|family_name|swap_event|event_type/i,
+    "jupiter-event-rows",
   );
-  setTransitionCurrent("ClickHouse Play", await shot(page, sceneId, "clickhouse-play-jupiter-sample"));
-  await pause(1.2);
+  await inspectPlayTable(
+    page,
+    sceneId,
+    "jupiter_swap_route_instruction_landing",
+    /program_id|family_name|instruction_type|quoted_out_amount|slippage_bps/i,
+    "jupiter-instruction-rows",
+    'SELECT program_id, family_name, instruction_type, slot, signature, in_amount, quoted_out_amount, slippage_bps, platform_fee_bps, source_name, mode FROM "default"."jupiter_swap_route_instruction_landing" LIMIT 100',
+  );
 }
 
 async function clickHousePlayToken(page, sceneId) {
-  await loginClickHousePlay(page);
-  await runPlayQuery(
+  await openClickHousePlayTableBrowser(page);
+  await hoverPlayTable(page, sceneId, "token_program_transfer_checked_instruction_landing", "token-instruction-metadata");
+  await inspectPlayTable(
     page,
-    "SELECT slot, left(pubkey,16) AS account_prefix, left(mint,16) AS mint_prefix, left(token_owner,16) AS owner_prefix, amount, state, delegated_amount, lamports, source_name, mode\nFROM default.token_program_token_account_landing\nLIMIT 20",
-    /slot|account_prefix|mint_prefix|owner_prefix|amount|state|delegated_amount|lamports|source_name|mode/i,
+    sceneId,
+    "token_program_transfer_checked_instruction_landing",
+    /program_id|family_name|instruction_type|amount|decimals/i,
+    "token-instruction-rows",
   );
-  setTransitionCurrent("ClickHouse Play", await shot(page, sceneId, "clickhouse-play-token-sample"));
-  await pause(1.2);
+  await inspectPlayTable(
+    page,
+    sceneId,
+    "token_program_multisig_account_landing",
+    /program_id|family_name|account_type|pubkey|is_initialized|source_name|mode/i,
+    "token-account-rows",
+    'SELECT program_id, family_name, account_type, slot, pubkey, m, n, is_initialized, source_name, mode FROM "default"."token_program_multisig_account_landing" LIMIT 100',
+  );
 }
 
 async function clickHousePlayAsyncLog(page, sceneId) {
@@ -834,34 +1082,17 @@ async function dismissGrafanaPasswordModal(page) {
 
 async function grafanaDashboard(page, sceneId, label, dashboardKey = "overview") {
   const dashboard = GRAFANA_DASHBOARDS[dashboardKey] || GRAFANA_DASHBOARDS.overview;
-  await page.goto("http://localhost:3000/login", { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(500);
-  const username = page.locator('input[placeholder="email or username"], input[name="user"]').first();
-  const password = page.locator('input[placeholder="password"], input[name="password"]').first();
-  if (process.env.DEMO_BROWSER_DEBUG === "true") {
-    console.log(
-      `grafana login inputs visible: ${await username.isVisible().catch(() => false)} ${await password
-        .isVisible()
-        .catch(() => false)}`,
-    );
+  await seedGrafanaSession(page.context());
+  if (!page.url().includes(`/d/${dashboard.uid}/`)) {
+    await page.goto(grafanaDashboardUrl(dashboardKey), { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2500);
+  } else {
+    await page.waitForTimeout(700);
   }
-  if ((await username.isVisible().catch(() => false)) && (await password.isVisible().catch(() => false))) {
-    await typeUiText(page, username, GRAFANA_USER);
-    await typeUiText(page, password, GRAFANA_PASSWORD);
-    await page.waitForTimeout(300);
-    await password.press("Enter");
-    await page.waitForTimeout(900);
-    await dismissGrafanaPasswordModal(page);
-  }
-  await page.goto(
-    `http://localhost:3000/d/${dashboard.uid}/${dashboard.slug}?orgId=1&from=now-15m&to=now&refresh=1s&theme=dark`,
-    { waitUntil: "domcontentloaded" },
-  );
-  await page.waitForTimeout(2500);
   await dismissGrafanaPasswordModal(page);
   await shot(page, sceneId, `grafana-${label}-raw`);
   const text = await requireText(page, dashboard.title, "Grafana dashboard");
-  if (/invalid username|password|login failed/i.test(text)) {
+  if (/invalid username|password|login failed|email or username/i.test(text)) {
     throw new Error("Grafana login failed");
   }
   if (/(change|update) your password/i.test(text)) {
@@ -872,7 +1103,15 @@ async function grafanaDashboard(page, sceneId, label, dashboardKey = "overview")
     throw new Error("Grafana dashboard did not render enough metric data");
   }
   setTransitionCurrent("Grafana", await shot(page, sceneId, `grafana-${label}`));
-  await pause(4.0);
+  if (dashboardKey === "jupiter") {
+    await pause(2.2);
+    await page.mouse.wheel(0, 760).catch(() => {});
+    await page.waitForTimeout(1200);
+    setTransitionCurrent("Grafana", await shot(page, sceneId, `grafana-${label}-lower-panels`));
+    await pause(1.3);
+  } else {
+    await pause(1.6);
+  }
 }
 
 async function clickHouseDashboards(page, sceneId, label) {
@@ -955,7 +1194,7 @@ async function setCodeMirror(page, index, text) {
   await page.waitForTimeout(300);
 }
 
-async function seedClickStackQueryLogSource(page) {
+async function seedClickStackConnection(page) {
   await page.evaluate(() => {
     sessionStorage.setItem(
       "connections",
@@ -970,6 +1209,12 @@ async function seedClickStackQueryLogSource(page) {
         },
       ]),
     );
+  });
+}
+
+async function seedClickStackQueryLogSource(page) {
+  await seedClickStackConnection(page);
+  await page.evaluate(() => {
     localStorage.setItem(
       "hdx-local-source",
       JSON.stringify([
@@ -989,6 +1234,134 @@ async function seedClickStackQueryLogSource(page) {
     );
     localStorage.setItem("hdx-last-selected-source-id", "local-query-log");
   });
+}
+
+async function focusClickStackInsertCharts(page) {
+  await page
+    .addStyleTag({
+      content: `
+        html, body {
+          overflow: hidden !important;
+        }
+        [data-demo-hidden-clickstack-parts="true"] {
+          display: none !important;
+          visibility: hidden !important;
+        }
+        [data-demo-hidden-clickstack-promo="true"] {
+          display: none !important;
+          visibility: hidden !important;
+        }
+      `,
+    })
+    .catch(() => {});
+  const hidePartsPanels = async () => {
+    await page
+      .evaluate(() => {
+        const hideClickStackBanner = () => {
+          const pattern = /not recommended for production use/i;
+          const leaves = Array.from(document.querySelectorAll("body *")).filter((element) => {
+            if (!(element instanceof HTMLElement)) return false;
+            const text = element.textContent || "";
+            return pattern.test(text) && !Array.from(element.children).some((child) => pattern.test(child.textContent || ""));
+          });
+          for (const leaf of leaves) {
+            let node = leaf;
+            for (let depth = 0; node instanceof HTMLElement && node.parentElement && depth < 10; depth += 1) {
+              const box = node.getBoundingClientRect();
+              if (box.top < 96 && box.width > window.innerWidth * 0.6 && box.height > 0 && box.height < 240) {
+                node.setAttribute("data-demo-hidden-clickstack-parts", "true");
+                node.style.setProperty("display", "none", "important");
+                node.style.setProperty("visibility", "hidden", "important");
+                break;
+              }
+              node = node.parentElement;
+            }
+          }
+        };
+        const hidePanelContaining = (pattern) => {
+          const leaves = Array.from(document.querySelectorAll("body *")).filter((element) => {
+            if (!(element instanceof HTMLElement)) return false;
+            const text = element.textContent || "";
+            return pattern.test(text) && !Array.from(element.children).some((child) => pattern.test(child.textContent || ""));
+          });
+          for (const leaf of leaves) {
+            let node = leaf;
+            for (let depth = 0; node instanceof HTMLElement && node.parentElement && depth < 14; depth += 1) {
+              const box = node.getBoundingClientRect();
+              const text = node.textContent || "";
+              const isMainInsertChart = /Insert (Rows|Bytes) Per Table/i.test(text);
+              const isCandidatePanel =
+                box.top > 380 &&
+                box.width > window.innerWidth * 0.30 &&
+                box.height > 36 &&
+                box.height < window.innerHeight * 0.78;
+              if (isCandidatePanel && !isMainInsertChart) {
+                node.setAttribute("data-demo-hidden-clickstack-parts", "true");
+                node.style.setProperty("display", "none", "important");
+                node.style.setProperty("visibility", "hidden", "important");
+                break;
+              }
+              node = node.parentElement;
+            }
+          }
+        };
+        const hidePromoPanel = () => {
+          const leaves = Array.from(document.querySelectorAll("body *")).filter((element) => {
+            if (!(element instanceof HTMLElement)) return false;
+            const text = element.textContent || "";
+            return /Ready to deploy on ClickHouse Cloud|Get Started for Free/i.test(text);
+          });
+          for (const leaf of leaves) {
+            let node = leaf;
+            for (let depth = 0; node instanceof HTMLElement && node.parentElement && depth < 8; depth += 1) {
+              const box = node.getBoundingClientRect();
+              if (box.left < 360 && box.top > 260 && box.width > 120 && box.width < 360 && box.height > 40 && box.height < 220) {
+                node.setAttribute("data-demo-hidden-clickstack-promo", "true");
+                node.style.setProperty("display", "none", "important");
+                node.style.setProperty("visibility", "hidden", "important");
+                break;
+              }
+              node = node.parentElement;
+            }
+          }
+        };
+        const run = () => {
+          window.scrollTo(0, 0);
+          hideClickStackBanner();
+          hidePromoPanel();
+          hidePanelContaining(/Max Active Parts per Partition/i);
+          hidePanelContaining(/Active Parts Per Partition/i);
+          hidePanelContaining(/Recommended to stay under 300/i);
+          hidePanelContaining(/^Part Count$/i);
+          window.scrollTo(0, 0);
+        };
+        run();
+        if (!window.__demoClickStackInsertFocusInstalled) {
+          window.__demoClickStackInsertFocusInstalled = true;
+          new MutationObserver(run).observe(document.documentElement, { childList: true, subtree: true });
+          window.setInterval(run, 250);
+        }
+      })
+      .catch(() => {});
+  };
+  await hidePartsPanels();
+  await page.waitForTimeout(300);
+  await hidePartsPanels();
+}
+
+async function clickStackInsertsDashboard(page, sceneId, label) {
+  const variant = { key: "rows", title: /Insert Rows Per Table/i };
+  await seedClickStackConnection(page);
+  if (!page.url().includes("/clickstack/clickhouse") || !page.url().includes("tab=inserts")) {
+    await page.goto(`http://localhost:8123/clickstack/clickhouse?tab=inserts&insertsBy=${variant.key}`, {
+      waitUntil: "domcontentloaded",
+    });
+  }
+  await page.waitForTimeout(2600);
+  await dismissClickStackBanner(page);
+  await requireText(page, variant.title, `ClickStack Inserts ${variant.key}`);
+  setTransitionCurrent("ClickStack", await shot(page, sceneId, `clickstack-inserts-${variant.key}-${label}`));
+  await pause(7.0);
 }
 
 async function clickStackQueryLog(page, sceneId, label) {
@@ -1084,7 +1457,7 @@ async function runWorkflow(sceneId, workflow) {
   reloadGrafanaDashboards();
   if (workflow === "live-observability") {
     const checks = [];
-    const grafana = await openBrowser(sceneId, "http://localhost:3000/login", "Grafana");
+    const grafana = await openBrowser(sceneId, grafanaDashboardUrl("jupiter"), "Grafana");
     try {
       await grafanaDashboard(grafana.page, sceneId, "jupiter-live", "jupiter");
       checks.push("grafana-jupiter-live");
@@ -1096,15 +1469,15 @@ async function runWorkflow(sceneId, workflow) {
     }
     let clickstack;
     try {
-      clickstack = await openBrowser(sceneId, "http://localhost:8123/clickstack", "ClickStack");
+      clickstack = await openBrowser(sceneId, "http://localhost:8123/clickstack/clickhouse?tab=inserts&insertsBy=rows", "ClickStack");
     } catch (err) {
       await closeBrowser(grafana.browser, grafana.child);
       throw err;
     }
     await closeBrowser(grafana.browser, grafana.child);
     try {
-      await clickStackQueryLog(clickstack.page, sceneId, "live-examples");
-      checks.push("clickstack-query-log-live-examples");
+      await clickStackInsertsDashboard(clickstack.page, sceneId, "live-examples");
+      checks.push("clickstack-inserts-live-examples");
     } finally {
       await closeBrowser(clickstack.browser, clickstack.child);
     }

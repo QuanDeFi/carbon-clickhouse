@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import textwrap
@@ -18,6 +19,32 @@ VIDEOS_DIR = REVIEW_DIR / "videos"
 SUBTITLE_DIR = REVIEW_DIR / "subtitles"
 FINAL_VIDEO = VIDEOS_DIR / "clickhouse-sink-tutorial-human-no-audio.mp4"
 SUBTITLED_VIDEO = VIDEOS_DIR / "clickhouse-sink-tutorial-human-no-audio-subtitled.mp4"
+MAX_SUBTITLE_LINE_CHARS = 42
+MAX_SUBTITLE_CHARS = MAX_SUBTITLE_LINE_CHARS * 2
+MAX_SUBTITLE_WORDS = 20
+MAX_CUE_SECONDS = 7.0
+MIN_CUE_SECONDS = 1.35
+MIN_INTER_CUE_GAP_SECONDS = 0.12
+MAX_INTER_CUE_GAP_SECONDS = 0.72
+DEFAULT_SUBTITLE_WPM = 145.0
+TERMINAL_SUBTITLE_SCENES = {
+    "scene-04-jupiter-live",
+    "scene-05-token-live",
+}
+SUBTITLE_LAYOUTS = {
+    "default": {
+        "line_chars": 42,
+        "max_lines": 2,
+        "max_words": 20,
+        "style": "Default",
+    },
+    "terminal_right": {
+        "line_chars": 32,
+        "max_lines": 3,
+        "max_words": 20,
+        "style": "TerminalRight",
+    },
+}
 
 
 @dataclass
@@ -27,6 +54,7 @@ class Cue:
     end: float
     text: str
     scene: str
+    layout: str
 
 
 def runbook() -> dict:
@@ -88,50 +116,224 @@ def clean_markdown(path: Path) -> str:
     return "\n\n".join(paragraphs)
 
 
-def sentence_chunks(text: str, *, max_words: int = 13, max_chars: int = 84) -> list[str]:
-    sentences = re.split(r"(?<=[.!?])\s+", text.replace("\n", " ").strip())
+def word_count(text: str) -> int:
+    return len(text.split())
+
+
+def target_subtitle_wpm() -> float:
+    raw = os.environ.get("DEMO_SUBTITLE_WPM", str(DEFAULT_SUBTITLE_WPM))
+    try:
+        value = float(raw)
+    except ValueError:
+        value = DEFAULT_SUBTITLE_WPM
+    return max(90.0, min(180.0, value))
+
+
+def scene_layout(scene: str) -> str:
+    if terminal_right_subtitles_enabled() and scene in TERMINAL_SUBTITLE_SCENES:
+        return "terminal_right"
+    return "default"
+
+
+def terminal_right_subtitles_enabled() -> bool:
+    value = os.environ.get("DEMO_SUBTITLE_TERMINAL_RIGHT", "false")
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def layout_options(layout: str) -> dict:
+    return SUBTITLE_LAYOUTS.get(layout, SUBTITLE_LAYOUTS["default"])
+
+
+def render_lines_fit(text: str, layout: str = "default") -> bool:
+    options = layout_options(layout)
+    max_line_chars = options["line_chars"]
+    max_lines = options["max_lines"]
+    words = text.split()
+    if len(text) <= max_line_chars:
+        return True
+    if max_lines == 2:
+        for split_at in range(1, len(words)):
+            first = " ".join(words[:split_at])
+            second = " ".join(words[split_at:])
+            if len(first) <= max_line_chars and len(second) <= max_line_chars:
+                return True
+    else:
+        return len(textwrap.wrap(text, width=max_line_chars)) <= max_lines
+    return False
+
+
+def caption_fits(text: str, layout: str = "default") -> bool:
+    options = layout_options(layout)
+    return (
+        len(text) <= options["line_chars"] * options["max_lines"]
+        and word_count(text) <= options["max_words"]
+        and render_lines_fit(text, layout)
+    )
+
+
+def split_words(text: str, layout: str = "default") -> list[str]:
     chunks: list[str] = []
-    for sentence in sentences:
-        words = sentence.split()
-        if not words:
-            continue
-        current: list[str] = []
-        for word in words:
-            candidate = current + [word]
-            if current and (len(candidate) > max_words or len(" ".join(candidate)) > max_chars):
-                chunks.append(" ".join(current))
-                current = [word]
-            else:
-                current = candidate
-        if current:
+    current: list[str] = []
+    for word in text.split():
+        candidate = " ".join(current + [word])
+        if current and not caption_fits(candidate, layout):
             chunks.append(" ".join(current))
+            current = [word]
+        else:
+            current.append(word)
+    if current:
+        chunks.append(" ".join(current))
     return chunks
 
 
-def wrap_caption(text: str) -> str:
-    return "\n".join(textwrap.wrap(text, width=46, max_lines=2, placeholder="..."))
+def split_long_sentence(sentence: str, layout: str = "default") -> list[str]:
+    return split_words(sentence, layout)
+
+
+def sentence_chunks(text: str, layout: str = "default") -> list[str]:
+    chunks: list[str] = []
+    for paragraph in [part.strip() for part in text.split("\n\n") if part.strip()]:
+        sentences = re.split(r"(?<=[.!?])\s+", paragraph.replace("\n", " ").strip())
+        current = ""
+        for sentence in [part.strip() for part in sentences if part.strip()]:
+            if not caption_fits(sentence, layout):
+                if current:
+                    chunks.append(current)
+                    current = ""
+                chunks.extend(split_long_sentence(sentence, layout))
+                continue
+            candidate = f"{current} {sentence}".strip()
+            if current and not caption_fits(candidate, layout):
+                chunks.append(current)
+                current = sentence
+            else:
+                current = candidate
+        if current:
+            chunks.append(current)
+    return chunks
+
+
+def balanced_caption_lines(text: str, layout: str = "default") -> list[str]:
+    options = layout_options(layout)
+    max_line_chars = options["line_chars"]
+    max_lines = options["max_lines"]
+    words = text.split()
+    if len(text) <= max_line_chars or len(words) <= 1:
+        return [text]
+
+    best: tuple[int, list[str]] | None = None
+    if max_lines == 2:
+        for split_at in range(1, len(words)):
+            first = " ".join(words[:split_at])
+            second = " ".join(words[split_at:])
+            if len(first) > max_line_chars or len(second) > max_line_chars:
+                continue
+            score = abs(len(first) - len(second))
+            if best is None or score < best[0]:
+                best = (score, [first, second])
+        if best is not None:
+            return best[1]
+
+    return textwrap.wrap(text, width=max_line_chars)[:max_lines]
+
+
+def wrap_caption(text: str, layout: str = "default") -> str:
+    return "\n".join(balanced_caption_lines(text, layout))
+
+
+def cue_durations(weights: list[int], available: float) -> list[float]:
+    if not weights:
+        return []
+    total = sum(weights)
+    durations = [available * weight / total for weight in weights]
+    floor = min(1.0, (available / len(weights)) * 0.8)
+    durations = [max(floor, value) for value in durations]
+    excess = sum(durations) - available
+    if excess > 0:
+        adjustable = sum(max(0.0, value - floor) for value in durations)
+        if adjustable > 0:
+            durations = [
+                value - excess * max(0.0, value - floor) / adjustable
+                for value in durations
+            ]
+        else:
+            scale = available / sum(durations)
+            durations = [value * scale for value in durations]
+    elif excess < 0:
+        remaining = -excess
+        durations = [
+            value + remaining * weight / total
+            for value, weight in zip(durations, weights)
+        ]
+    for _ in range(4):
+        over = sum(max(0.0, value - MAX_CUE_SECONDS) for value in durations)
+        if over <= 0:
+            break
+        durations = [min(value, MAX_CUE_SECONDS) for value in durations]
+        capacity = sum(max(0.0, MAX_CUE_SECONDS - value) for value in durations)
+        if capacity <= 0:
+            break
+        durations = [
+            value + over * max(0.0, MAX_CUE_SECONDS - value) / capacity
+            for value in durations
+        ]
+    return durations
+
+
+def natural_cue_duration(text: str) -> float:
+    words = max(1, word_count(text))
+    chars = max(1, len(text.replace("\n", " ")))
+    speech_seconds = words * 60.0 / target_subtitle_wpm()
+    reading_seconds = chars / 18.0
+    sentence_pause = len(re.findall(r"[.!?](?:\s|$)", text)) * 0.20
+    phrase_pause = len(re.findall(r"[,;:]", text)) * 0.08
+    return min(MAX_CUE_SECONDS, max(MIN_CUE_SECONDS, speech_seconds, reading_seconds) + sentence_pause + phrase_pause)
+
+
+def scene_caption_chunks(scene: str) -> tuple[str, list[str]]:
+    script = ROOT / "docs/tutorial-video" / f"{scene}.md"
+    layout = scene_layout(scene)
+    return layout, sentence_chunks(clean_markdown(script), layout)
+
+
+def natural_scene_required_seconds(chunks: list[str], scene_duration: float) -> float:
+    if not chunks:
+        return 0.0
+    lead = min(0.8, scene_duration * 0.08)
+    tail = min(0.8, scene_duration * 0.08)
+    return lead + tail + sum(natural_cue_duration(chunk) for chunk in chunks) + (len(chunks) - 1) * MIN_INTER_CUE_GAP_SECONDS
 
 
 def make_scene_cues(scene: str, scene_start: float, scene_duration: float, first_index: int) -> list[Cue]:
-    script = ROOT / "docs/tutorial-video" / f"{scene}.md"
-    chunks = sentence_chunks(clean_markdown(script))
+    layout, chunks = scene_caption_chunks(scene)
     if not chunks:
         return []
-    lead = min(0.6, scene_duration * 0.08)
-    tail = min(0.6, scene_duration * 0.08)
-    available = max(0.5, scene_duration - lead - tail)
-    weights = [max(4, len(chunk.split())) for chunk in chunks]
-    total = sum(weights)
+    lead = min(0.8, scene_duration * 0.08)
+    tail = min(0.8, scene_duration * 0.08)
+    natural_durations = [natural_cue_duration(chunk) for chunk in chunks]
+    required = lead + tail + sum(natural_durations) + (len(chunks) - 1) * MIN_INTER_CUE_GAP_SECONDS
+    if required <= scene_duration:
+        durations = natural_durations
+        leftover = scene_duration - required
+        if len(chunks) > 1:
+            gap = MIN_INTER_CUE_GAP_SECONDS + min(
+                MAX_INTER_CUE_GAP_SECONDS - MIN_INTER_CUE_GAP_SECONDS,
+                leftover / (len(chunks) - 1),
+            )
+        else:
+            gap = 0.0
+    else:
+        available = max(0.5, scene_duration - lead - tail)
+        weights = [max(8, len(chunk)) for chunk in chunks]
+        durations = cue_durations(weights, available)
+        gap = 0.0
     cursor = scene_start + lead
     cues: list[Cue] = []
-    for offset, (chunk, weight) in enumerate(zip(chunks, weights), start=0):
-        cue_duration = available * weight / total
+    for offset, (chunk, cue_duration) in enumerate(zip(chunks, durations), start=0):
         start = cursor
-        end = scene_start + scene_duration - tail if offset == len(chunks) - 1 else cursor + cue_duration
-        if end - start < 1.0:
-            end = min(scene_start + scene_duration - tail, start + 1.0)
-        cues.append(Cue(first_index + offset, start, end, wrap_caption(chunk), scene))
-        cursor = end
+        end = min(scene_start + scene_duration - tail, cursor + cue_duration)
+        cues.append(Cue(first_index + offset, start, end, wrap_caption(chunk, layout), scene, layout))
+        cursor = end + gap
     return cues
 
 
@@ -145,6 +347,18 @@ def srt_time(seconds: float) -> str:
 
 def vtt_time(seconds: float) -> str:
     return srt_time(seconds).replace(",", ".")
+
+
+def ass_time(seconds: float) -> str:
+    centis = int(round(seconds * 100))
+    hours, remainder = divmod(centis, 360_000)
+    minutes, remainder = divmod(remainder, 6_000)
+    secs, centis = divmod(remainder, 100)
+    return f"{hours}:{minutes:02}:{secs:02}.{centis:02}"
+
+
+def ass_text(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("{", r"\{").replace("}", r"\}").replace("\n", r"\N")
 
 
 def write_srt(cues: list[Cue], path: Path) -> None:
@@ -161,6 +375,29 @@ def write_vtt(cues: list[Cue], path: Path) -> None:
     path.write_text("\n".join(parts))
 
 
+def write_ass(cues: list[Cue], path: Path) -> None:
+    lines = [
+        "[Script Info]",
+        "ScriptType: v4.00+",
+        "PlayResX: 1920",
+        "PlayResY: 1080",
+        "WrapStyle: 2",
+        "ScaledBorderAndShadow: yes",
+        "",
+        "[V4+ Styles]",
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+        "Style: Default,DejaVu Sans,28,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,3,0,2,180,180,18,1",
+        "Style: TerminalRight,DejaVu Sans,27,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,3,0,6,1160,88,0,1",
+        "",
+        "[Events]",
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+    ]
+    for cue in cues:
+        style = layout_options(cue.layout)["style"]
+        lines.append(f"Dialogue: 0,{ass_time(cue.start)},{ass_time(cue.end)},{style},,0,0,0,,{ass_text(cue.text)}")
+    path.write_text("\n".join(lines) + "\n")
+
+
 def build_cues() -> tuple[list[Cue], dict]:
     cues: list[Cue] = []
     offset = 0.0
@@ -172,12 +409,20 @@ def build_cues() -> tuple[list[Cue], dict]:
         scene_duration = duration(video)
         scene_cues = make_scene_cues(scene, offset, scene_duration, len(cues) + 1)
         cues.extend(scene_cues)
+        layout, chunks = scene_caption_chunks(scene)
+        cue_words = sum(word_count(cue.text.replace("\n", " ")) for cue in scene_cues)
+        cue_seconds = sum(cue.end - cue.start for cue in scene_cues)
+        required_seconds = natural_scene_required_seconds(chunks, scene_duration)
         report["scenes"].append(
             {
                 "scene": scene,
                 "start_seconds": round(offset, 3),
                 "duration_seconds": round(scene_duration, 3),
                 "cue_count": len(scene_cues),
+                "layout": layout,
+                "natural_required_seconds": round(required_seconds, 3),
+                "natural_pacing_fits_scene": required_seconds <= scene_duration + 0.001,
+                "caption_words_per_minute": round((cue_words / cue_seconds) * 60, 1) if cue_seconds else 0,
             }
         )
         offset += scene_duration
@@ -191,23 +436,9 @@ def ffmpeg_subtitle_path(path: Path) -> str:
     return str(path.resolve()).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
 
 
-def burn_subtitles(srt: Path, output: Path) -> None:
+def burn_subtitles(ass: Path, output: Path) -> None:
     if not FINAL_VIDEO.is_file():
         raise FileNotFoundError(FINAL_VIDEO)
-    style = ",".join(
-        [
-            "FontName=DejaVu Sans",
-            "FontSize=10",
-            "PrimaryColour=&H00FFFFFF",
-            "OutlineColour=&H00000000",
-            "BackColour=&HA8000000",
-            "BorderStyle=4",
-            "Outline=1",
-            "Shadow=0",
-            "Alignment=2",
-            "MarginV=10",
-        ]
-    )
     subprocess.run(
         [
             "ffmpeg",
@@ -218,7 +449,7 @@ def burn_subtitles(srt: Path, output: Path) -> None:
             "-i",
             str(FINAL_VIDEO),
             "-vf",
-            f"subtitles='{ffmpeg_subtitle_path(srt)}':force_style='{style}'",
+            f"ass='{ffmpeg_subtitle_path(ass)}'",
             "-an",
             "-c:v",
             "libx264",
@@ -238,17 +469,43 @@ def generate(*, burn: bool) -> dict:
     cues, report = build_cues()
     srt = SUBTITLE_DIR / "clickhouse-sink-tutorial-human-no-audio.srt"
     vtt = SUBTITLE_DIR / "clickhouse-sink-tutorial-human-no-audio.vtt"
+    ass = SUBTITLE_DIR / "clickhouse-sink-tutorial-human-no-audio.ass"
     write_srt(cues, srt)
     write_vtt(cues, vtt)
+    write_ass(cues, ass)
+    durations = [cue.end - cue.start for cue in cues]
+    line_lengths = [
+        len(line)
+        for cue in cues
+        for line in cue.text.splitlines()
+    ]
     report.update(
         {
             "srt": str(srt.relative_to(ROOT)),
             "vtt": str(vtt.relative_to(ROOT)),
+            "ass": str(ass.relative_to(ROOT)),
             "source_video": str(FINAL_VIDEO.relative_to(ROOT)),
+            "subtitle_style": {
+                "placement": "centered lower subtitle",
+                "terminal_placement": "right side, vertically centered when DEMO_SUBTITLE_TERMINAL_RIGHT=true",
+                "terminal_right_enabled": terminal_right_subtitles_enabled(),
+                "target_words_per_minute": target_subtitle_wpm(),
+                "max_lines": 2,
+                "terminal_max_lines": 3,
+                "max_line_chars": MAX_SUBTITLE_LINE_CHARS,
+                "terminal_max_line_chars": SUBTITLE_LAYOUTS["terminal_right"]["line_chars"],
+                "font": "DejaVu Sans with black outline and no shadow",
+            },
+            "cue_duration_seconds": {
+                "min": round(min(durations), 3) if durations else 0,
+                "max": round(max(durations), 3) if durations else 0,
+                "average": round(sum(durations) / len(durations), 3) if durations else 0,
+            },
+            "max_rendered_line_chars": max(line_lengths) if line_lengths else 0,
         }
     )
     if burn:
-        burn_subtitles(srt, SUBTITLED_VIDEO)
+        burn_subtitles(ass, SUBTITLED_VIDEO)
         report["subtitled_video"] = str(SUBTITLED_VIDEO.relative_to(ROOT))
         report["subtitled_video_duration_seconds"] = round(duration(SUBTITLED_VIDEO), 3)
     report_path = SUBTITLE_DIR / "subtitle-report.json"

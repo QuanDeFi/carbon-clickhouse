@@ -14,8 +14,8 @@ per-scene narration lives in `docs/tutorial-video/scene-*.md`.
 
 The curriculum uses the current canary examples:
 
-- `examples/jupiter-swap-clickhouse` for instruction, CPI/event, and live
-  TokenLedger account landing rows.
+- `examples/jupiter-swap-clickhouse` for instruction and CPI/event landing
+  rows, with TokenLedger account landing rows only in the live head-follow path.
 - `examples/token-program-clickhouse` for fixed USDC account snapshots and live
   Token Program instruction landing rows.
 
@@ -44,11 +44,11 @@ tests need a production/provider RPC endpoint.
 
 After completing the curriculum, learners should be able to:
 
-- locate the local setup files for ClickHouse, Prometheus, and Grafana
-- verify that ClickHouse, Prometheus, and Grafana are online before ingestion
-- identify the runtime inputs for ClickHouse and Solana RPC configuration
+- verify that ClickHouse, Prometheus, Grafana, and an RPC endpoint are reachable
+  before ingestion
+- identify the runtime inputs for database and RPC configuration
 - find the core ClickHouse sink configuration surface in `carbon-core`
-- run the Jupiter ClickHouse example in live mode
+- run the Jupiter ClickHouse example with the configured slot range or live mode
 - run the Token Program ClickHouse fixed-USDC account snapshot plus live
   instruction example
 - identify the generated landing tables created by each example
@@ -61,35 +61,34 @@ After completing the curriculum, learners should be able to:
 ## Current Tutorial Recording Flow
 
 The tutorial recording should feel like a guided live walkthrough, not a
-smoke-test log capture. The primary path is: prove the local stack is online,
-show the relevant setup and configuration in VS Code, run both examples, observe
-the running pipelines, and verify generated rows in ClickHouse.
+smoke-test log capture. The primary path is: prove the required local services
+are reachable, show the relevant example configuration in VS Code, run both
+examples, observe the running pipelines, and verify generated rows in
+ClickHouse.
 
-The current seven-scene flow is:
+The current six-scene flow is:
 
-1. In VS Code, show the setup files that make the local stack reproducible:
-   `monitoring/compose.yaml`, `monitoring/prometheus/prometheus.yml`, and
-   `scripts/demo/setup-monitoring.sh`.
-2. In a terminal, validate that ClickHouse, Prometheus, and Grafana are already
-   online.
-3. In VS Code, show both example `.env.example` files for `DATABASE_URL`,
-   `RPC_URL`, slot mode, metrics ports, and log level, then move into the core
-   ClickHouse sink code:
-   `crates/core/src/clickhouse/config.rs`,
-   `crates/core/src/clickhouse/writer.rs`, and
-   `crates/core/src/clickhouse/admin.rs`.
-4. Start the Jupiter Swap ClickHouse example as a live head-follow run so it
-   can decode Jupiter activity and write generated landing rows while the
-   walkthrough continues.
-5. Start the Token Program ClickHouse example in a second terminal so the fixed
+1. In a terminal, validate that the required local services are already online:
+   ClickHouse, Prometheus, Grafana, and RPC reachability.
+2. In VS Code, show both example `.env.example` files for database URL,
+   RPC URL, slot range or live mode, metrics ports, log level, and the optional
+   async-wait insert toggle.
+   Mention that the full ClickHouse sink configuration reference lives in
+   `crates/core/src/clickhouse/config.rs`, but keep the visual focus on the
+   example environment files.
+3. Start the Jupiter Swap ClickHouse example so it can decode Jupiter activity
+   from the configured slot range or live path and write generated landing rows
+   while the walkthrough continues.
+4. Start the Token Program ClickHouse example in a second terminal so the fixed
    USDC account snapshot and live instruction tail run alongside Jupiter.
-6. Show the filtered Jupiter and Token Program Grafana dashboards, then
+5. Show the filtered Jupiter and Token Program Grafana dashboards, then
    ClickStack, while both examples are active. Grafana is the Carbon-side
-   pipeline view; ClickStack is the ClickHouse-side insert/query-log view.
-7. Open ClickHouse Play at `/play` and inspect generated Jupiter and Token
-   Program landing tables and sample rows. This is the final validation that the
-   ClickHouse config was accepted, the RPC input was accepted, decoding
-   happened, generated rows were written, and the rows are queryable.
+   pipeline view; ClickStack is the ClickHouse-side insert view.
+6. Open ClickHouse Play at `/play`, use the table browser to show generated
+   landing tables and table size metadata, then inspect representative Jupiter
+   and Token Program rows. This is the final validation that the ClickHouse
+   config was accepted, the RPC input was accepted, decoding happened,
+   generated rows were written, and the rows are queryable.
 
 Architecture slides, async-insert demonstrations, and production-boundary
 slides are intentionally out of the current recording path. They remain useful
@@ -99,12 +98,12 @@ ClickHouse UI note:
 
 - The current local tutorial stack should use ClickHouse `/play` for table
   inspection.
-- ClickStack should be shown after both live examples are running. Configure it
-  against `system.query_log` and use it as the ClickHouse-native observability
-  view for insert/query activity.
+- ClickStack should be shown after both live examples are running. Use the
+  embedded ClickHouse Dashboard's default Inserts tab to show insert activity
+  per landing table from the database point of view.
 - ClickHouse `/dashboards` is optional background context. The recording's
   primary observability comparison is Grafana for Carbon pipeline metrics plus
-  ClickStack for ClickHouse-side query-log activity.
+  ClickStack for ClickHouse-side insert activity.
 - Richer third-party ClickHouse web explorers can be evaluated later, but they
   add installation, credentials, and recording complexity that is unnecessary
   for the first tutorial.
@@ -122,25 +121,21 @@ Explorer navigation time with narration time.
 
 | Scene | Target visual budget | Subscene | Narration point |
 | --- | ---: | --- | --- |
-| 1. Stack setup files | 22-24s | `monitoring/compose.yaml` | Prometheus and Grafana are local services on host networking. |
-|  |  | `monitoring/prometheus/prometheus.yml` | Prometheus scrapes Jupiter on 9464 and Token Program on 9465. |
-|  |  | `scripts/demo/setup-monitoring.sh` | The setup script starts the stack and performs deterministic health checks. |
-| 2. Local services check | 14-16s | `docker compose ... ps` | The local observability stack is already online. |
+| 1. Local readiness checks | 21-23s | `docker compose ... ps` | The required local services are already online. |
 |  |  | ClickHouse `SELECT 1` | ClickHouse accepts local HTTP queries before ingestion starts. |
 |  |  | Prometheus and Grafana health checks | Metrics and dashboards are reachable before either example runs. |
-| 3. Example and sink config | 46-50s | Jupiter `.env.example` | Jupiter has the ClickHouse URL, RPC URL, slot mode, metrics port, and log level configured before the run command. |
+|  |  | RPC `getHealth` | A public RPC status call proves network reachability without showing the private provider RPC URL used by the examples. |
+| 2. Example environment files | 23-25s | Jupiter `.env.example` | Jupiter has the database URL, RPC URL, slot range, metrics port, log level, and async-wait toggle configured before the run command. |
 |  |  | Token Program `.env.example` | Token Program uses its own metrics port so both examples can run together. |
-|  |  | `ClickHouseConfig` fields | The core config surface owns endpoint, database, auth, source, mode, decoder version, and insert settings. |
-|  |  | URL parsing and builder methods | Defaults come from `DATABASE_URL`; callers override behavior through the builder surface. |
-|  |  | insert/retry/dedup settings | Insert mode, retries, and deduplication are configuration, not ad-hoc example code. |
-|  |  | writer and admin paths | The writer consumes the config for inserts; the admin path uses it to set up generated tables before rows land. |
-| 4. Jupiter live run | 12-15s | plain `cargo run` | The command is clean because env/config was shown earlier; startup connects to RPC, decodes Jupiter activity, and writes generated landing rows. |
-| 5. Token Program live run | 13-16s | plain `cargo run` | The second pipeline starts beside Jupiter, writes the fixed USDC account snapshot, and tails live Token Program instructions. |
-| 6. Observability | 44-50s | Jupiter Grafana dashboard | Jupiter is still running; Grafana shows Carbon-side processed updates and ClickHouse sink metrics for that pipeline. |
+|  |  | ClickHouse sink config reference | `crates/core/src/clickhouse/config.rs` is where users can find the full insert, batch, retry, transport, deduplication, source, mode, and decoder-version options. |
+| 3. Jupiter example run | 21-23s | `cargo run ...` | Startup connects to RPC, decodes Jupiter activity from the env-file live path, and writes generated landing rows. |
+| 4. Token Program live run | 24-26s | `cargo run ...` | The second pipeline starts beside Jupiter, writes the fixed USDC account snapshot, and tails live Token Program instructions. |
+| 5. Observability | 25-27s | Jupiter Grafana dashboard | Jupiter is still running; Grafana shows Carbon-side processed updates and ClickHouse sink metrics for that pipeline. |
 |  |  | Token Program Grafana dashboard | Token Program has its own filtered dashboard, proving both pipelines are active in parallel. |
-|  |  | ClickStack query log | ClickStack is the ClickHouse-side view of inserts and query-log activity after both examples are active. |
-| 7. ClickHouse Play validation | 36-40s | Jupiter landing table query | Generated Jupiter rows are present and queryable in ClickHouse. |
-|  |  | Token Program landing table query | Generated Token Program account/instruction rows are present and queryable. |
+|  |  | ClickStack Inserts tab | ClickStack shows ClickHouse-side insert activity per landing table. |
+| 6. ClickHouse Play validation | 30-32s | generated table browser | Landing tables are visible with row and byte metadata. |
+|  |  | representative Jupiter rows | Jupiter shows event and instruction landing rows; TokenLedger account rows appear only when the live head-follow path populates them. |
+|  |  | representative Token Program rows | Token Program shows large instruction tables and account canary rows. |
 |  |  | closing proof | The final proof combines accepted config, accepted RPC input, decoding, writes, and queryable landing rows. |
 
 Voiceover should stay one idea per subscene. Do not read code line-by-line; use
@@ -260,7 +255,7 @@ Teaching notes:
 - The example bootstraps generated Jupiter instruction landing tables.
 - It also bootstraps generated Jupiter CPI/event landing tables.
 - For the tutorial recording, use pure head-follow mode instead of a bounded
-  backfill. The live run keeps producing Carbon metrics and ClickHouse query-log
+  backfill. The live run keeps producing Carbon metrics and ClickHouse insert
   activity while the tutorial moves through Grafana, ClickStack, and `/play`.
 - Keep the Jupiter terminal open while the Token Program, observability, and
   ClickHouse Play scenes run.
@@ -441,16 +436,17 @@ Teaching notes:
 - Use `/dashboards` only as a short ClickHouse server-health aside if the video
   needs database-level charts such as query rate, CPU, merges, and selected
   bytes.
-- Use `/clickstack` for ClickHouse-side observability. The embedded ClickStack
-  UI is designed for local exploration of logs, metrics, traces, and
-  observability-style sources; in this tutorial it complements Grafana by
-  showing `system.query_log` activity while the live examples are running.
+- Use `/clickstack` for ClickHouse-side observability. In this tutorial, use
+  the embedded ClickHouse Dashboard's Inserts tab so it complements Grafana by
+  showing ClickHouse-side insert activity per landing table while the live
+  examples are running.
 - Use the browser scene for table inspection, not for secret configuration. Do
   not show provider RPC URLs or non-local credentials.
-- The viewer should see table lists, row counts, and short sample rows. Counts
-  prove ingestion happened; sample rows explain what actually landed.
-- Prefer short SQL queries that fit comfortably on screen and return readable
-  tabular output.
+- The viewer should see table lists, row and byte metadata, and short sample
+  rows. Table metadata proves ingestion happened; sample rows explain what
+  actually landed.
+- Prefer ClickHouse Play's built-in table browser and default `SELECT * ...
+  LIMIT 100` behavior before adding custom SQL.
 
 Useful Jupiter inspection queries:
 

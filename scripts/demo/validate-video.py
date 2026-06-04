@@ -9,18 +9,9 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-
-MIN_DURATIONS = {
-    "scene-01-stack-config": 14.0,
-    "scene-02-local-setup": 9.0,
-    "scene-03-example-config": 28.0,
-    "scene-04-jupiter-live": 12.0,
-    "scene-05-token-live": 12.0,
-    "scene-06-observability": 36.0,
-    "scene-07-clickhouse-play": 30.0,
-}
 
 
 @dataclass
@@ -31,6 +22,18 @@ class FrameStats:
 
 def run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True, check=True)
+
+
+def runbook() -> dict:
+    return yaml.safe_load((ROOT / "scripts/demo/runbook.yaml").read_text())
+
+
+def scene_min_durations() -> dict[str, float]:
+    values: dict[str, float] = {}
+    for scene in runbook()["scenes"]:
+        human = scene.get("human") or {}
+        values[scene["id"]] = float(human.get("min_duration", 5.0))
+    return values
 
 
 def duration(path: Path) -> float:
@@ -99,9 +102,8 @@ def frame_at(path: Path, offset: float) -> FrameStats:
     )
 
 
-def validate_video(path: Path, scene: str) -> dict:
+def validate_video(path: Path, scene: str, minimum: float) -> dict:
     dur = duration(path)
-    minimum = MIN_DURATIONS.get(scene, 5.0)
     stats = frame_at(path, max(0.2, dur * 0.50))
 
     errors = []
@@ -122,12 +124,14 @@ def validate_video(path: Path, scene: str) -> dict:
     }
 
 
-def make_contact_sheet(video_dir: Path, output: Path) -> None:
-    scenes = sorted(path for path in video_dir.glob("scene-*.mp4"))
+def make_contact_sheet(video_dir: Path, output: Path, scenes: list[str]) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
-        for index, path in enumerate(scenes, start=1):
+        for index, scene in enumerate(scenes, start=1):
+            path = video_dir / f"{scene}.mp4"
+            if not path.is_file():
+                continue
             dur = duration(path)
             frame = tmp_path / f"{index:02d}-{path.stem}.jpg"
             subprocess.run(
@@ -183,14 +187,15 @@ def main() -> int:
     report_path.parent.mkdir(parents=True, exist_ok=True)
 
     videos = []
-    for scene, minimum in MIN_DURATIONS.items():
+    minimums = scene_min_durations()
+    for scene, minimum in minimums.items():
         path = video_dir / f"{scene}.mp4"
         if not path.is_file():
             videos.append({"scene": scene, "path": str(path.relative_to(ROOT)), "status": "failed", "errors": ["missing video"]})
             continue
-        videos.append(validate_video(path, scene))
+        videos.append(validate_video(path, scene, minimum))
 
-    make_contact_sheet(video_dir, contact_sheet)
+    make_contact_sheet(video_dir, contact_sheet, list(minimums))
 
     result = {
         "videos": videos,

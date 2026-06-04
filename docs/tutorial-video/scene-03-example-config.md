@@ -1,17 +1,16 @@
-Now we connect the tutorial env values to the core ClickHouse sink configuration.
+The full ClickHouse sink runtime configuration lives in
+crates/core/src/clickhouse/config.rs.
 
-The example `.env.example` files show the runtime inputs the viewer cares
-about before any command runs: `DATABASE_URL` for ClickHouse, `RPC_URL` for
-Solana, the Jupiter slot mode, each Prometheus metrics port, and `LOG_LEVEL`.
-That lets the terminal commands stay clean later.
+That file defines what can be configured: insert mode, async insert tuning,
+batch sizing, transport behavior, retry policy, deduplication, database name,
+table name, source name, mode, and decoder version.
 
-Then we move into the core sink code instead of the example wiring. The config
-module is the reference surface: insert mode, batch sizing, transport behavior,
-retry policy, and deduplication all live here. `ClickHouseConfig` holds the
-endpoint, database, credentials, table, source name, mode, decoder version, and
-the nested settings.
+The examples only need a small surface area: database URL, RPC URL, metrics
+port, slot range where the example supports one, and the async-wait toggle.
+Showing the environment files is enough for running the tutorial; this config
+file is the reference when someone wants to see the full sink options.
 
-The URL helper turns `DATABASE_URL` into endpoint and auth fields. The builder
-methods are where a caller overrides defaults. The writer consumes the same
-config for retries, async insert query settings, and dedup tokens, while the
-admin path uses it for generated schema setup before rows land in ClickHouse.
+The important default is simple: Carbon uses synchronous inserts unless the
+example opts into async-wait inserts. In async-wait mode, ClickHouse can batch
+the small writes server-side, and Carbon still waits for confirmation that the
+data was flushed.

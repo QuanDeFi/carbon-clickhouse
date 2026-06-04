@@ -15,11 +15,11 @@ for arg in "$@"; do
   esac
 done
 
-DISPLAY_ID="${DEMO_DISPLAY:-:95}"
+DISPLAY_ID="${DEMO_DISPLAY:-:96}"
 SCREEN_SIZE="${DEMO_SCREEN_SIZE:-1920x1080}"
 DEPTH="${DEMO_SCREEN_DEPTH:-24}"
-VNC_PORT="${DEMO_VNC_PORT:-5903}"
-NOVNC_PORT="${DEMO_NOVNC_PORT:-6083}"
+VNC_PORT="${DEMO_VNC_PORT:-5904}"
+NOVNC_PORT="${DEMO_NOVNC_PORT:-6084}"
 PID_DIR="$ROOT/demo-artifacts/pids"
 LOG_DIR="$ROOT/demo-artifacts/logs"
 DISPLAY_ENV="$ROOT/demo-artifacts/display.env"
