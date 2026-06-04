@@ -1,6 +1,5 @@
-Now Jupiter starts from a plain `cargo run` command.
+Now Jupiter starts with plain `cargo run`.
 
-Its environment file already selects live mode and async-wait inserts. Startup
-creates or reconciles generated Jupiter landing tables, connects to RPC, decodes
-live Jupiter instructions and events, and keeps writing rows into ClickHouse
-while we continue.
+The env selects live mode and async-wait inserts. ClickHouse groups concurrent small writes; Carbon waits for acknowledgement.
+
+Startup reconciles generated Jupiter tables, connects to RPC, decodes live activity, and keeps writing rows.

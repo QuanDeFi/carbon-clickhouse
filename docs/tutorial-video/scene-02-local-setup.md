@@ -1,7 +1,5 @@
-Next we show the example environment files, not private values.
+Next we check where the example env values live.
 
-They define the database URL, RPC URL, metrics ports, log level, Jupiter slot
-range, and optional async-wait inserts. Leaving the Jupiter slot range empty
-makes it follow live head.
+The env files set database URL, RPC URL, metrics ports, log level, Jupiter slot range, and async-wait inserts. Empty Jupiter slots mean live mode.
 
-The full ClickHouse sink config lives in `crates/core/src/clickhouse/config.rs`.
+For code wiring, read each `main.rs`. The full sink config is in `crates/core/src/clickhouse/config.rs`.

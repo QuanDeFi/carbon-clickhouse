@@ -1,8 +1,7 @@
 With both examples active, Grafana shows the Carbon-side pipeline view.
 
-We spend time on Jupiter: processed updates, queue depth, latency, buffers,
-flushes, errors, and retries. Token Program uses the same dashboard model, so we
-only confirm it briefly.
+The key panels are processed updates, queue depth, latency, buffers, flushes, errors, and retries.
 
-ClickStack then shows the ClickHouse-side Inserts dashboard: writes arriving per
-landing table.
+Token Program follows the same dashboard layout, so we only confirm it briefly.
+
+ClickStack shows the ClickHouse-side Inserts dashboard: rows arriving per generated landing table.
