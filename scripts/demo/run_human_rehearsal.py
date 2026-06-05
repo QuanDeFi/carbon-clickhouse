@@ -17,6 +17,10 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 
 LAST_VIEW_KEY: str | None = None
+NORMALIZED_TAIL_TRIM_SECONDS = {
+    "scene-05-observability": 0.8,
+    "scene-06-clickhouse-play": 0.8,
+}
 
 
 def load_env() -> None:
@@ -203,13 +207,14 @@ def maybe_reset(log_dir: Path) -> bool:
     return True
 
 
-def start_record(scene: str) -> None:
+def start_record(scene: str) -> float:
     recordings = ROOT / "demo-artifacts/recordings"
     for suffix in (".mp4", ".mkv", ".recording.json", ".ffmpeg.log"):
         path = recordings / f"{scene}{suffix}"
         if path.exists():
             path.unlink()
     run([sys.executable, "scripts/demo/record.py", "start", "--scene", scene])
+    return time.time()
 
 
 def stop_record(scene: str) -> None:
@@ -220,7 +225,7 @@ def capture_transition_current(label: str, log: Path) -> None:
     run([sys.executable, "scripts/demo/window_transition.py", "--capture-current", label], check=False, log=log)
 
 
-def run_transition_before_scene(scene: str, label: str, log: Path, *, target_window_id: str | None = None) -> None:
+def run_transition_before_scene(scene: str, label: str, log: Path, *, target_window_id: str | None = None) -> float:
     ready_file = ROOT / "demo-artifacts/pids" / f"{scene}-transition-ready"
     ready_file.parent.mkdir(parents=True, exist_ok=True)
     if ready_file.exists():
@@ -252,13 +257,14 @@ def run_transition_before_scene(scene: str, label: str, log: Path, *, target_win
             except subprocess.TimeoutExpired:
                 proc.kill()
             raise RuntimeError(f"transition did not become ready for {scene}")
-        start_record(scene)
+        record_started_at = start_record(scene)
         return_code = proc.wait()
         if return_code != 0:
             raise subprocess.CalledProcessError(return_code, [sys.executable, "scripts/demo/window_transition.py", label])
+        return record_started_at
 
 
-def run_slide_with_delayed_record(scene: str, slide: str, seconds: float, log: Path) -> None:
+def run_slide_with_delayed_record(scene: str, slide: str, seconds: float, log: Path) -> float:
     # Prepare the slide off-screen and only start recording once it is painted
     # and on-screen, so the leftover terminal and the page's first paint are
     # never captured before the slide appears.
@@ -286,13 +292,14 @@ def run_slide_with_delayed_record(scene: str, slide: str, seconds: float, log: P
             time.sleep(0.1)
         # Start recording once the slide signalled readiness (or as a fallback
         # if it exited/timed out, so the scene is never silently dropped).
-        start_record(scene)
+        record_started_at = start_record(scene)
         return_code = proc.wait()
         if return_code != 0:
             raise subprocess.CalledProcessError(return_code, [sys.executable, "scripts/demo/browser_scene_driver.py", "slide", scene, slide])
+        return record_started_at
 
 
-def run_browser_workflow_with_delayed_record(scene: str, workflow: str, log: Path) -> None:
+def run_browser_workflow_with_delayed_record(scene: str, workflow: str, log: Path) -> float:
     ready_file = ROOT / "demo-artifacts/pids" / f"{scene}-browser-transition-ready"
     ready_file.parent.mkdir(parents=True, exist_ok=True)
     if ready_file.exists():
@@ -322,10 +329,11 @@ def run_browser_workflow_with_delayed_record(scene: str, workflow: str, log: Pat
             except subprocess.TimeoutExpired:
                 proc.kill()
             raise RuntimeError(f"browser transition did not become ready for {scene}")
-        start_record(scene)
+        record_started_at = start_record(scene)
         return_code = proc.wait()
         if return_code != 0:
             raise subprocess.CalledProcessError(return_code, ["node", "scripts/demo/browser_workflow.js", scene, workflow])
+        return record_started_at
 
 
 def vscode_window_id() -> str | None:
@@ -354,7 +362,7 @@ def terminal_window_id(scene: dict[str, Any]) -> str | None:
     return window_id if window_id else None
 
 
-def run_vscode_scene_with_delayed_record(scene: str, log: Path, *, use_transition: bool = False) -> None:
+def run_vscode_scene_with_delayed_record(scene: str, log: Path, *, use_transition: bool = False) -> float:
     ready_file = ROOT / "demo-artifacts/pids" / f"{scene}-vscode-ready"
     ready_file.parent.mkdir(parents=True, exist_ok=True)
     if ready_file.exists():
@@ -385,17 +393,31 @@ def run_vscode_scene_with_delayed_record(scene: str, log: Path, *, use_transitio
                 proc.kill()
             raise RuntimeError(f"VS Code scene did not become ready for {scene}")
         if use_transition:
-            run_transition_before_scene(
+            record_started_at = run_transition_before_scene(
                 scene,
                 "Visual Studio Code",
                 log.with_name(f"{scene}-transition.log"),
                 target_window_id=vscode_window_id(),
             )
         else:
-            start_record(scene)
+            record_started_at = start_record(scene)
         return_code = proc.wait()
         if return_code != 0:
             raise subprocess.CalledProcessError(return_code, [sys.executable, "scripts/demo/vscode_scene_driver.py", scene])
+        return record_started_at
+
+
+def hold_recording_to_min_duration(scene: dict[str, Any], record_started_at: float | None) -> None:
+    if record_started_at is None:
+        return
+    human = scene.get("human") or {}
+    minimum = float(human.get("min_duration", 0.0))
+    if minimum <= 0:
+        return
+    minimum += NORMALIZED_TAIL_TRIM_SECONDS.get(str(scene.get("id")), 0.0)
+    remaining = minimum - (time.time() - record_started_at)
+    if remaining > 0:
+        time.sleep(remaining)
 
 
 def run_playwright(spec: str, extra_env: dict[str, str], log: Path) -> None:
@@ -429,6 +451,7 @@ def run_scene(scene: dict[str, Any], review_dir: Path) -> dict[str, Any]:
         view_key = f"vscode:{scene_id}"
     elif kind == "browser":
         view_key = f"browser:{human.get('workflow') or scene_id}"
+    record_started_at: float | None = None
     try:
         if kind == "terminal":
             run(
@@ -440,15 +463,15 @@ def run_scene(scene: dict[str, Any], review_dir: Path) -> dict[str, Any]:
                 },
             )
         if not (kind in {"terminal", "slide", "vscode"} or (kind == "browser" and human.get("workflow"))):
-            start_record(scene_id)
+            record_started_at = start_record(scene_id)
         try:
             if kind == "terminal":
                 transition_label = str(human.get("terminal_title") or scene.get("title") or scene_id)
                 same_terminal = LAST_VIEW_KEY == view_key
                 if same_terminal:
-                    start_record(scene_id)
+                    record_started_at = start_record(scene_id)
                 else:
-                    run_transition_before_scene(
+                    record_started_at = run_transition_before_scene(
                         scene_id,
                         transition_label,
                         log_dir / f"{scene_id}-transition.log",
@@ -478,19 +501,19 @@ def run_scene(scene: dict[str, Any], review_dir: Path) -> dict[str, Any]:
                         stdout=(log_dir / f"{scene_id}-background-cleanup.log").open("a"),
                         stderr=subprocess.STDOUT,
                     )
-                run_slide_with_delayed_record(
+                record_started_at = run_slide_with_delayed_record(
                     scene_id,
                     str(human["slide"]),
                     float(human.get("duration", 10)),
                     log_dir / f"{scene_id}.log",
                 )
             elif kind == "vscode":
-                run_vscode_scene_with_delayed_record(scene_id, log_dir / f"{scene_id}.log", use_transition=LAST_VIEW_KEY is not None)
+                record_started_at = run_vscode_scene_with_delayed_record(scene_id, log_dir / f"{scene_id}.log", use_transition=LAST_VIEW_KEY is not None)
                 capture_transition_current(str(scene.get("title") or "Visual Studio Code"), log_dir / f"{scene_id}-transition-state.log")
             elif kind == "browser":
                 workflow = human.get("workflow")
                 if workflow:
-                    run_browser_workflow_with_delayed_record(scene_id, str(workflow), log_dir / f"{scene_id}.log")
+                    record_started_at = run_browser_workflow_with_delayed_record(scene_id, str(workflow), log_dir / f"{scene_id}.log")
                 else:
                     run(["scripts/demo/validate-observability-data.sh", str(log_dir)], log=log_dir / "observability-data.log")
                     query = (log_dir / "prometheus-query.txt").read_text().strip()
@@ -509,6 +532,8 @@ def run_scene(scene: dict[str, Any], review_dir: Path) -> dict[str, Any]:
             else:
                 raise RuntimeError(f"unsupported human scene type: {kind}")
         finally:
+            if sys.exc_info()[0] is None:
+                hold_recording_to_min_duration(scene, record_started_at)
             stop_record(scene_id)
     except Exception as exc:
         report["status"] = "failed"
@@ -527,10 +552,7 @@ def normalize_video(scene: str, review_dir: Path) -> None:
     if not source.is_file():
         raise FileNotFoundError(source)
     target = review_dir / "videos" / f"{scene}.mp4"
-    tail_trim_seconds = {
-        "scene-05-observability": 0.8,
-        "scene-06-clickhouse-play": 0.8,
-    }.get(scene, 0.0)
+    tail_trim_seconds = NORMALIZED_TAIL_TRIM_SECONDS.get(scene, 0.0)
     scenes = scene_ids()
     fade_in_scenes = {item for item in scenes if item != scenes[0]}
     fade_out_scenes = {item for item in scenes if item != scenes[-1]}

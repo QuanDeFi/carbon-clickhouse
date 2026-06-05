@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import random
+import shutil
 import signal
 import subprocess
 import sys
@@ -20,6 +21,16 @@ ROOT = Path(__file__).resolve().parents[2]
 TERMINAL_STATE = ROOT / "demo-artifacts/pids/human-terminal.json"
 TERMINAL_READY_FILE = ROOT / "demo-artifacts/pids/human-terminal-ready"
 DEFAULT_TERMINAL_TITLE = "Carbon ClickHouse Sink Tutorial"
+
+
+def configure_demo_terminal_path(env: dict[str, str]) -> None:
+    demo_bin = ROOT / "scripts/demo/demo-bin"
+    if not demo_bin.is_dir():
+        return
+    real_docker = shutil.which("docker", path=env.get("PATH"))
+    if real_docker:
+        env.setdefault("DEMO_REAL_DOCKER", real_docker)
+    env["PATH"] = f"{demo_bin}:{env.get('PATH', '')}"
 
 
 def terminal_state_file(name: str) -> Path:
@@ -497,6 +508,7 @@ def run_terminal_scene(scene_id: str, *, dry_run: bool = False, prepare_only: bo
     title = os.environ.get("DEMO_TERMINAL_TITLE", str(human.get("terminal_title") or (DEFAULT_TERMINAL_TITLE if reuse_terminal else f"{DEFAULT_TERMINAL_TITLE} - {scene_id}")))
     env = os.environ.copy()
     env.setdefault("DISPLAY", os.environ.get("DEMO_DISPLAY", ":96"))
+    configure_demo_terminal_path(env)
     for key, env_key in {
         "x": "DEMO_TERMINAL_X",
         "y": "DEMO_TERMINAL_Y",
@@ -564,7 +576,7 @@ def run_terminal_scene(scene_id: str, *, dry_run: bool = False, prepare_only: bo
             time.sleep(0.4)
         for step_index, step in enumerate(steps):
             command = str(step["command"])
-            delay = int(step.get("type_delay_ms", os.environ.get("DEMO_TYPE_BASE_DELAY_MS", os.environ.get("DEMO_TYPE_DELAY_MS", "50"))))
+            delay = int(step.get("type_delay_ms", os.environ.get("DEMO_TYPE_BASE_DELAY_MS", os.environ.get("DEMO_TYPE_DELAY_MS", "65"))))
             pre_enter_pause = step.get("pre_enter_pause")
             if pre_enter_pause is not None:
                 pre_enter_pause = float(pre_enter_pause)

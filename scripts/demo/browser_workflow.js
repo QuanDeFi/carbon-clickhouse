@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 const fs = require("fs");
 const path = require("path");
+const { pathToFileURL } = require("url");
 const { createRequire } = require("module");
 const { execFileSync } = require("child_process");
 
@@ -317,10 +318,39 @@ function demoWindows() {
 
 function latestChromiumWindow() {
   try {
-    const ids = sh("xdotool", ["search", "--onlyvisible", "--class", "chrom"])
+    const ids = sh("xdotool", ["search", "--class", "chrom"])
       .split("\n")
       .map((line) => line.trim())
       .filter((line) => /^\d+$/.test(line));
+    return ids[ids.length - 1] || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function chromiumWindowForLabel(label) {
+  const normalized = String(label || "").toLowerCase();
+  const patterns = [];
+  if (normalized.includes("clickstack")) {
+    patterns.push(/ClickHouse Dashboard/i, /ClickStack/i);
+  } else if (normalized.includes("grafana")) {
+    patterns.push(/Grafana/i, /Jupiter/i, /Token Program/i);
+  } else if (normalized.includes("play")) {
+    patterns.push(/ClickHouse Play/i, /localhost:8123/i);
+  } else if (normalized.includes("blackout")) {
+    patterns.push(/Carbon Demo Blackout/i);
+  }
+  try {
+    const ids = sh("xdotool", ["search", "--class", "chrom"])
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => /^\d+$/.test(line));
+    for (const windowId of ids.slice().reverse()) {
+      const title = sh("xdotool", ["getwindowname", windowId]).trim();
+      if (patterns.some((pattern) => pattern.test(title))) {
+        return windowId;
+      }
+    }
     return ids[ids.length - 1] || null;
   } catch (_) {
     return null;
@@ -376,6 +406,74 @@ function hideMouse() {
   } catch (_) {
     // Mouse hiding is visual polish. Do not fail the browser workflow on it.
   }
+}
+
+function writeBlackoutCoverHtml(file) {
+  const { width, height } = size();
+  fs.writeFileSync(
+    file,
+    `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Carbon Demo Blackout</title>
+<style>
+html, body {
+  margin: 0;
+  width: ${width}px;
+  height: ${height}px;
+  overflow: hidden;
+  background: #000;
+  cursor: none;
+}
+</style>
+</head>
+<body></body>
+</html>
+`,
+  );
+}
+
+async function openBlackoutCover(sceneId, label) {
+  const display = process.env.DISPLAY || process.env.DEMO_DISPLAY || ":96";
+  const { width, height } = size();
+  const profile = path.join(ROOT, "demo-artifacts", "browser-profiles", `blackout-${sceneId}-${Date.now()}`);
+  const html = path.join(PID_DIR, `${sceneId}-${Date.now()}-${label}-blackout.html`);
+  fs.rmSync(profile, { recursive: true, force: true });
+  fs.mkdirSync(profile, { recursive: true });
+  fs.mkdirSync(PID_DIR, { recursive: true });
+  writeBlackoutCoverHtml(html);
+  const context = await chromium.launchPersistentContext(profile, {
+    headless: false,
+    viewport: { width, height },
+    screen: { width, height },
+    colorScheme: "dark",
+    args: [
+      ...CHROME_ARGS,
+      "--window-position=-32000,-32000",
+      `--window-size=${width},${height}`,
+      `--app=${pathToFileURL(html).href}`,
+    ],
+    env: { ...process.env, DISPLAY: display },
+  });
+  const page = context.pages()[0] || (await context.newPage());
+  await page.waitForLoadState("domcontentloaded").catch(() => {});
+  await page.waitForTimeout(250);
+  const windowId = chromiumWindowForLabel("blackout") || latestChromiumWindow();
+  if (windowId) {
+    moveWindow(windowId, { x: 0, y: 0, width, height });
+    tryWindowCommand(["windowraise", windowId]);
+    tryWindowCommand(["windowfocus", windowId]);
+  }
+  hideMouse();
+  return { browser: context, windowId };
+}
+
+async function closeBlackoutCover(cover) {
+  if (!cover || !cover.browser) {
+    return;
+  }
+  await closeBrowser(cover.browser, null);
 }
 
 function ensureGrafanaDemoPassword() {
@@ -540,7 +638,7 @@ async function openBrowser(sceneId, initialUrl, transitionLabel = "browser") {
   } else {
     await page.waitForTimeout(500);
   }
-  const windowId = latestChromiumWindow();
+  const windowId = chromiumWindowForLabel(transitionLabel) || latestChromiumWindow();
   if (windowId) {
     if (prepareOffscreen) {
       const transitionImage = path.join(PID_DIR, `${sceneId}-${Date.now()}-browser-target.png`);
@@ -893,45 +991,65 @@ async function inspectPlayTable(page, sceneId, tableName, expected, label, query
   await pause(0.8);
 }
 
-async function clickHousePlayJupiter(page, sceneId) {
-  await openClickHousePlayTableBrowser(page, sceneId, { revealMenu: true });
-  updateTransitionSlot("ClickHouse Play", await shot(page, sceneId, "clickhouse-play-table-browser"));
-  await hoverPlayTable(page, sceneId, "jupiter_swap_swap_event_landing", "jupiter-event-metadata");
-  await inspectPlayTable(
-    page,
-    sceneId,
-    "jupiter_swap_swap_event_landing",
-    /program_id|family_name|swap_event|event_type/i,
-    "jupiter-event-rows",
-  );
-  await inspectPlayTable(
-    page,
-    sceneId,
-    "jupiter_swap_route_instruction_landing",
-    /program_id|family_name|instruction_type|quoted_out_amount|slippage_bps/i,
-    "jupiter-instruction-rows",
-    'SELECT program_id, family_name, instruction_type, slot, signature, in_amount, quoted_out_amount, slippage_bps, platform_fee_bps, source_name, mode FROM "default"."jupiter_swap_route_instruction_landing" LIMIT 100',
-  );
+async function runPlayQuery(page, sceneId, query, expected, label, holdSeconds = 0.8) {
+  await openClickHousePlayTableBrowser(page);
+  await setPlayQuery(page, query);
+  await page.waitForTimeout(450);
+  await page.locator("button").filter({ hasText: /^Run$/ }).first().click({ force: true }).catch(() => {});
+  hideMouse();
+  await page.waitForTimeout(1200);
+  const text = await waitForPlayResult(page, expected, `ClickHouse Play query ${label}`);
+  if (/Exception|DB::Exception|Code:\s*\d+/.test(text)) {
+    throw new Error(`ClickHouse /play query failed for ${label}`);
+  }
+  setTransitionCurrent("ClickHouse Play", await shot(page, sceneId, `clickhouse-play-${label}`));
+  await pause(holdSeconds);
 }
 
-async function clickHousePlayToken(page, sceneId) {
-  await openClickHousePlayTableBrowser(page);
-  await hoverPlayTable(page, sceneId, "token_program_transfer_checked_instruction_landing", "token-instruction-metadata");
+async function clickHousePlayLandingValidation(page, sceneId) {
+  await openClickHousePlayTableBrowser(page, sceneId, { revealMenu: true });
+  updateTransitionSlot("ClickHouse Play", await shot(page, sceneId, "clickhouse-play-table-browser"));
+  await runPlayQuery(
+    page,
+    sceneId,
+    `SELECT
+    table_family,
+    count() AS tables,
+    sum(total_rows) AS rows,
+    formatReadableSize(sum(total_bytes)) AS bytes
+FROM
+(
+    SELECT
+        name,
+        total_rows,
+        total_bytes,
+        multiIf(
+            endsWith(name, '_account_landing'), 'account rows',
+            endsWith(name, '_instruction_landing'), 'instruction rows',
+            endsWith(name, '_event_landing'), 'CPI event rows',
+            'other'
+        ) AS table_family
+    FROM system.tables
+    WHERE database = 'default'
+      AND endsWith(name, '_landing')
+      AND (startsWith(name, 'jupiter_swap_') OR startsWith(name, 'token_program_'))
+)
+GROUP BY table_family
+ORDER BY rows DESC`,
+    /account rows|instruction rows|CPI event rows/i,
+    "landing-table-families",
+    13.0,
+  );
+  await hoverPlayTable(page, sceneId, "token_program_transfer_checked_instruction_landing", "largest-table-metadata");
   await inspectPlayTable(
     page,
     sceneId,
     "token_program_transfer_checked_instruction_landing",
-    /program_id|family_name|instruction_type|amount|decimals/i,
-    "token-instruction-rows",
+    /program_id|family_name|instruction_type|amount|decimals|signature/i,
+    "largest-transfer-checked-rows",
+    'SELECT program_id, family_name, instruction_type, slot, signature, instruction_index, stack_height, absolute_path, amount, decimals, source_name, mode FROM "default"."token_program_transfer_checked_instruction_landing" LIMIT 100',
   );
-  await inspectPlayTable(
-    page,
-    sceneId,
-    "token_program_multisig_account_landing",
-    /program_id|family_name|account_type|pubkey|is_initialized|source_name|mode/i,
-    "token-account-rows",
-    'SELECT program_id, family_name, account_type, slot, pubkey, m, n, is_initialized, source_name, mode FROM "default"."token_program_multisig_account_landing" LIMIT 100',
-  );
+  await pause(17.0);
 }
 
 async function dismissGrafanaPasswordModal(page) {
@@ -1156,7 +1274,7 @@ async function clickStackInsertsDashboard(page, sceneId, label) {
   await dismissClickStackBanner(page);
   await requireText(page, variant.title, `ClickStack Inserts ${variant.key}`);
   setTransitionCurrent("ClickStack", await shot(page, sceneId, `clickstack-inserts-${variant.key}-${label}`));
-  await pause(7.0);
+  await pause(15.0);
 }
 
 async function runWorkflow(sceneId, workflow) {
@@ -1168,20 +1286,24 @@ async function runWorkflow(sceneId, workflow) {
     try {
       await grafanaDashboard(grafana.page, sceneId, "jupiter-live", "jupiter");
       checks.push("grafana-jupiter-live");
+      await pause(20.5);
       await grafanaDashboard(grafana.page, sceneId, "token-live", "token");
       checks.push("grafana-token-live");
+      await pause(2.0);
     } catch (err) {
       await closeBrowser(grafana.browser, grafana.child);
       throw err;
     }
+    const blackout = await openBlackoutCover(sceneId, "grafana-clickstack");
+    await closeBrowser(grafana.browser, grafana.child);
     let clickstack;
     try {
       clickstack = await openBrowser(sceneId, "http://localhost:8123/clickstack/clickhouse?tab=inserts&insertsBy=rows", "ClickStack");
     } catch (err) {
-      await closeBrowser(grafana.browser, grafana.child);
+      await closeBlackoutCover(blackout);
       throw err;
     }
-    await closeBrowser(grafana.browser, grafana.child);
+    await closeBlackoutCover(blackout);
     try {
       await clickStackInsertsDashboard(clickstack.page, sceneId, "live-examples");
       checks.push("clickstack-inserts-live-examples");
@@ -1202,10 +1324,8 @@ async function runWorkflow(sceneId, workflow) {
   const { browser, page, child } = await openBrowser(sceneId, "http://localhost:8123/play", "ClickHouse Play");
   const checks = [];
   try {
-    await clickHousePlayJupiter(page, sceneId);
-    checks.push("clickhouse-play-jupiter");
-    await clickHousePlayToken(page, sceneId);
-    checks.push("clickhouse-play-token");
+    await clickHousePlayLandingValidation(page, sceneId);
+    checks.push("clickhouse-play-largest-landing-table");
   } finally {
     await closeBrowser(browser, child);
   }

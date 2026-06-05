@@ -47,8 +47,13 @@ case "$command" in
   token-sample)
     run_query "SELECT left(pubkey,8) AS account, left(mint,8) AS mint, amount, state FROM default.token_program_token_account_landing LIMIT 3 FORMAT PrettyCompact;"
     ;;
+  landing-validation)
+    run_query "SELECT table_family, count() AS tables, sum(total_rows) AS rows, formatReadableSize(sum(total_bytes)) AS bytes FROM (SELECT name, total_rows, total_bytes, multiIf(endsWith(name, '_account_landing'), 'account rows', endsWith(name, '_instruction_landing'), 'instruction rows', endsWith(name, '_event_landing'), 'CPI event rows', 'other') AS table_family FROM system.tables WHERE database = 'default' AND endsWith(name, '_landing') AND (startsWith(name, 'jupiter_swap_') OR startsWith(name, 'token_program_'))) GROUP BY table_family ORDER BY rows DESC FORMAT PrettyCompact;"
+    run_query "SELECT name, total_rows, formatReadableSize(total_bytes) AS bytes FROM system.tables WHERE database = 'default' AND endsWith(name, '_landing') AND (startsWith(name, 'jupiter_swap_') OR startsWith(name, 'token_program_')) ORDER BY total_bytes DESC, total_rows DESC LIMIT 5 FORMAT PrettyCompact;"
+    run_query "SELECT program_id, family_name, instruction_type, slot, left(signature, 8) AS signature, instruction_index, stack_height, absolute_path, amount, decimals, source_name, mode FROM default.token_program_transfer_checked_instruction_landing LIMIT 5 FORMAT PrettyCompact;"
+    ;;
   *)
-    echo "Usage: $0 {jupiter|jupiter-tables|jupiter-counts|jupiter-route-sample|jupiter-event-sample|token|token-tables|token-counts|token-sample|health}" >&2
+    echo "Usage: $0 {jupiter|jupiter-tables|jupiter-counts|jupiter-route-sample|jupiter-event-sample|token|token-tables|token-counts|token-sample|landing-validation|health}" >&2
     exit 2
     ;;
 esac

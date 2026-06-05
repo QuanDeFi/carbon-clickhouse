@@ -251,7 +251,7 @@ def run_transition(label: str) -> None:
             "--disable-renderer-backgrounding",
             "--disable-features=CalculateNativeWinOcclusion",
             "--ozone-platform=x11",
-            "--window-position=0,0",
+            "--window-position=-32000,-32000",
             f"--window-size={width},{height}",
             f"--user-data-dir={profile}",
             f"--app={html_path.resolve().as_uri()}",

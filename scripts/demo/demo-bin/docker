@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+real_docker="${DEMO_REAL_DOCKER:-}"
+script_path="$(readlink -f "${BASH_SOURCE[0]}")"
+if [[ -n "$real_docker" ]]; then
+  resolved_real="$(readlink -f "$real_docker" 2>/dev/null || printf '%s\n' "$real_docker")"
+  if [[ "$resolved_real" == "$script_path" ]]; then
+    real_docker=""
+  fi
+fi
+
+if [[ -z "$real_docker" ]]; then
+  for candidate in /usr/bin/docker /usr/local/bin/docker; do
+    if [[ -x "$candidate" ]]; then
+      real_docker="$candidate"
+      break
+    fi
+  done
+fi
+
+if [[ -z "$real_docker" ]]; then
+  echo "docker: real Docker CLI not found" >&2
+  exit 127
+fi
+
+if [[ "$#" -eq 1 && "$1" == "ps" ]]; then
+  "$real_docker" ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}' \
+    | awk 'NR == 1 || $1 ~ /^(clickhouse|carbon-prometheus|carbon-grafana)$/'
+else
+  exec "$real_docker" "$@"
+fi

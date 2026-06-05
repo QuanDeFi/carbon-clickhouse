@@ -1,9 +1,5 @@
-Before we start the examples, we verify the local stack from the outside.
+Before we start the indexing pipeline we'll do a quick check to see if all required services are up and running.
 
-Docker Compose shows ClickHouse, Prometheus, and Grafana are up. ClickHouse
-answers `SELECT 1`, Prometheus is ready, Grafana health is green, and the
-configured RPC endpoint answers `getHealth`.
+Docker shows the ClickHouse, Prometheus, and Grafana containers are live.
 
-This is not a data test yet. It simply proves that the database, metrics,
-dashboard, and Solana network dependency are reachable before we start writing
-anything.
+All three services are responsive and the RPC node responds to our `getHealth` request as well.

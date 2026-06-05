@@ -179,9 +179,9 @@ Current human-scene flow:
 - `scene-05-observability`: filtered Jupiter and Token Program Grafana
   dashboards show the running Carbon pipelines, then ClickStack shows
   ClickHouse-side insert rows and bytes per table.
-- `scene-06-clickhouse-play`: ClickHouse `/play` uses the table browser and
-  representative Jupiter and Token Program rows to verify generated landing
-  tables, data volume, and queryable rows.
+- `scene-06-clickhouse-play`: ClickHouse `/play` uses the table browser, a
+  generated table-family summary, and the largest populated landing table to
+  verify generated tables, data volume, and queryable rows.
 
 Current theme behavior:
 

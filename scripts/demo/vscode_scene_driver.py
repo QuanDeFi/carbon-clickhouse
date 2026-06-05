@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import signal
+import shutil
 import subprocess
 import sys
 import time
@@ -56,8 +57,11 @@ def run(cmd: list[str], *, check: bool = True) -> subprocess.CompletedProcess[st
     return subprocess.run(cmd, cwd=ROOT, env=env(), text=True, capture_output=True, check=check)
 
 
-def ensure_recording_profile() -> None:
+def ensure_recording_profile(*, reset_state: bool = False) -> None:
     profile_dir = Path(os.environ.get("DEMO_VSCODE_PROFILE_DIR", str(DEFAULT_PROFILE_DIR)))
+    if reset_state:
+        for relative in ("Backups", "User/workspaceStorage", "User/History"):
+            shutil.rmtree(profile_dir / relative, ignore_errors=True)
     user_dir = profile_dir / "User"
     user_dir.mkdir(parents=True, exist_ok=True)
 
@@ -97,6 +101,7 @@ def ensure_recording_profile() -> None:
             "git.enabled": False,
             "scm.countBadge": "off",
             "scm.diffDecorations": "none",
+            "workbench.editor.confirmRevert": False,
             "workbench.editor.enablePreview": False,
             "workbench.editor.showTabs": "multiple",
             "workbench.sideBar.location": "left",
@@ -114,6 +119,7 @@ def ensure_recording_profile() -> None:
         {"key": "ctrl+alt+shift+e", "command": "workbench.action.closeAuxiliaryBar"},
         {"key": "ctrl+alt+shift+n", "command": "notifications.hideToasts"},
         {"key": "ctrl+alt+shift+l", "command": "notifications.hideList"},
+        {"key": "ctrl+alt+shift+r", "command": "workbench.action.files.revert"},
         {"key": "ctrl+alt+shift+w", "command": "workbench.action.closeAllEditors"},
         {"key": "ctrl+alt+shift+c", "command": "workbench.files.action.collapseExplorerFolders"},
         {"key": "ctrl+shift+e", "command": "workbench.view.explorer"},
@@ -184,6 +190,14 @@ def focus_explorer(window_id: str) -> None:
     hide_mouse()
 
 
+def focus_editor(window_id: str) -> None:
+    xdo("windowraise", window_id, check=False)
+    xdo("windowfocus", window_id, check=False)
+    xdo("key", "ctrl+1", check=False)
+    time.sleep(0.12)
+    hide_mouse()
+
+
 def collapse_explorer(window_id: str) -> None:
     focus_explorer(window_id)
     xdo("key", "ctrl+alt+shift+c", check=False)
@@ -242,8 +256,8 @@ def wait_for_code_window(expected_name: str | None = None) -> str:
     raise RuntimeError("VS Code window did not appear")
 
 
-def launcher_path() -> Path:
-    ensure_recording_profile()
+def launcher_path(*, reset_state: bool = False) -> Path:
+    ensure_recording_profile(reset_state=reset_state)
     configured = os.environ.get("DEMO_VSCODE_LAUNCHER")
     launcher = Path(configured) if configured else DEFAULT_LAUNCHER
     if not launcher.is_file():
@@ -255,7 +269,7 @@ def launcher_path() -> Path:
 
 
 def open_workspace() -> str:
-    command = [str(launcher_path()), "--new-window", str(ROOT)]
+    command = [str(launcher_path(reset_state=True)), "--new-window", str(ROOT)]
     result = subprocess.run(command, cwd=ROOT, env=env(), text=True, capture_output=True)
     if result.returncode != 0:
         raise RuntimeError(result.stdout + result.stderr)
@@ -313,9 +327,72 @@ def show_file(window_id: str, step: dict[str, Any]) -> str:
     relative = str(step["file"])
     line = int(step.get("line", 1))
     window_id = open_file_at_line(relative, line)
-    focus_explorer(window_id)
+    if "edit_line" in step:
+        edit_current_line(window_id, str(step["edit_line"]), step)
+    elif step.get("uncomment_and_set_true"):
+        uncomment_and_set_true_current_line(window_id, step)
+    else:
+        focus_explorer(window_id)
     print(f"shown {relative}:{line}")
     return window_id
+
+
+def edited_runbook_steps() -> list[dict[str, Any]]:
+    steps: list[dict[str, Any]] = []
+    for scene in runbook()["scenes"]:
+        human = scene.get("human") or {}
+        if human.get("type") != "vscode":
+            continue
+        for step in human.get("steps") or []:
+            if ("edit_line" in step or step.get("uncomment_and_set_true")) and "file" in step:
+                steps.append(step)
+    return steps
+
+
+def edit_current_line(window_id: str, replacement: str, step: dict[str, Any]) -> None:
+    focus_editor(window_id)
+    time.sleep(float(step.get("pause_before_edit", 0.5)))
+    xdo("key", "Home", check=False)
+    time.sleep(0.08)
+    xdo("key", "shift+End", check=False)
+    time.sleep(0.12)
+    delay_ms = str(int(step.get("type_delay_ms", 55)))
+    xdo("type", "--delay", delay_ms, replacement, check=False)
+    time.sleep(float(step.get("pause_after_edit", 0.4)))
+    hide_mouse()
+
+
+def uncomment_and_set_true_current_line(window_id: str, step: dict[str, Any]) -> None:
+    focus_editor(window_id)
+    time.sleep(float(step.get("pause_before_edit", 0.5)))
+    xdo("key", "Home", check=False)
+    time.sleep(0.08)
+    for _ in range(int(step.get("delete_prefix_chars", 2))):
+        xdo("key", "Delete", check=False)
+        time.sleep(0.1)
+    time.sleep(float(step.get("pause_after_uncomment", 0.25)))
+    xdo("key", "End", check=False)
+    time.sleep(0.08)
+    xdo("key", "ctrl+shift+Left", check=False)
+    time.sleep(0.12)
+    delay_ms = str(int(step.get("type_delay_ms", 55)))
+    xdo("type", "--delay", delay_ms, "true", check=False)
+    time.sleep(float(step.get("pause_after_edit", 0.4)))
+    hide_mouse()
+
+
+def discard_recording_edits(window_id: str) -> None:
+    xdo("windowraise", window_id, check=False)
+    xdo("windowfocus", window_id, check=False)
+    for key in ("Escape", "Escape"):
+        xdo("key", key, check=False)
+        time.sleep(0.12)
+    for step in edited_runbook_steps():
+        window_id = open_file_at_line(str(step["file"]), int(step.get("line", 1)))
+        focus_editor(window_id)
+        xdo("key", "ctrl+alt+shift+r", check=False)
+        time.sleep(0.35)
+    close_all_editors(window_id)
 
 
 def write_state(window_id: str) -> None:
@@ -333,6 +410,10 @@ def close_window() -> None:
         state = {}
     window_id = str(state.get("window_id", ""))
     if window_id:
+        try:
+            discard_recording_edits(window_id)
+        except Exception:
+            pass
         xdo("windowclose", window_id, check=False)
         time.sleep(0.5)
     terminate_recording_code()

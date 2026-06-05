@@ -14,20 +14,20 @@ scenes:
       terminal_name: setup-check
       terminal_title: Carbon ClickHouse - Readiness Checks
       reuse_terminal: true
-      min_duration: 32
+      min_duration: 30
       scene_end_pause: 4.0
       steps:
-        - command: docker compose -f monitoring/compose.yaml ps
-          pause_after: 1.4
-        - command: curl -fsS 'http://carbon:carbon@localhost:8123/?query=SELECT%201'
+        - command: docker ps
+          pause_after: 1.0
+        - command: curl -fsS localhost:8123/ping
           pause_after: 0.8
-        - command: curl -fsS http://localhost:9090/-/ready
+        - command: curl -fsS localhost:9090/-/ready
           pause_after: 0.8
-        - command: curl -fsS http://localhost:3000/api/health
+        - command: curl -fsS localhost:3000/api/health
           pause_after: 0.8
         - command: >-
             curl -fsS "$RPC_URL"
-            -H 'content-type: application/json'
+            -H 'content-type:application/json'
             -d '{"jsonrpc":"2.0","id":1,"method":"getHealth"}'
           pause_after: 1.0
 
@@ -37,16 +37,28 @@ scenes:
     script: docs/tutorial-video/scene-02-example-env.md
     human:
       type: vscode
-      min_duration: 43
+      min_duration: 54
       initial_pause: 1.0
       scene_end_pause: 3.2
       steps:
         - file: examples/jupiter-swap-clickhouse/.env.example
           line: 1
+          pause_after: 6.0
+        - file: examples/jupiter-swap-clickhouse/.env.example
+          line: 20
+          uncomment_and_set_true: true
+          pause_before_edit: 0.7
+          pause_after_edit: 0.5
           pause_after: 8.0
         - file: examples/token-program-clickhouse/.env.example
           line: 1
-          pause_after: 8.0
+          pause_after: 5.5
+        - file: examples/token-program-clickhouse/.env.example
+          line: 11
+          uncomment_and_set_true: true
+          pause_before_edit: 0.7
+          pause_after_edit: 0.5
+          pause_after: 8.5
 
   - id: scene-03-jupiter-live
     title: Start Jupiter example run
@@ -104,7 +116,7 @@ scenes:
     title: Landing table inspection
     type: browser
     script: docs/tutorial-video/scene-06-clickhouse-play.md
-    command: scripts/demo/query-clickhouse.sh jupiter && scripts/demo/query-clickhouse.sh token
+    command: scripts/demo/query-clickhouse.sh landing-validation
     human:
       type: browser
       workflow: table-inspection

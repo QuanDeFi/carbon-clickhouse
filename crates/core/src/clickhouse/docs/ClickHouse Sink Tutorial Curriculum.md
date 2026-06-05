@@ -65,12 +65,12 @@ record a new review video.
 
 | Scene | Current minimum | Visual focus | Narration point |
 | --- | ---: | --- | --- |
-| 1. Readiness checks | 32s | terminal checks | Required services and RPC reachability are online before ingestion. |
-| 2. Example env | 43s | both `.env.example` files | Users see where database, RPC, metrics, live-mode, and async-wait values live. |
+| 1. Readiness checks | 30s | terminal checks | Required services and RPC reachability are online before ingestion. |
+| 2. Example env | 54s | both `.env.example` files | Users see where database, RPC, metrics, live-mode, and async-wait values live. |
 | 3. Jupiter live | 40s | Jupiter terminal | Startup reconciles generated tables, connects to RPC, decodes live Jupiter activity, and writes rows. |
 | 4. Token live | 41s | Token terminal | Startup writes fixed USDC account snapshots, then tails finalized Token Program instructions. |
 | 5. Observability | 56s | Grafana and ClickStack | Grafana proves Carbon-side processing; ClickStack proves ClickHouse receives rows and bytes per table. |
-| 6. ClickHouse Play | 58s | table browser and rows | Table metadata and decoded rows validate the pipeline end to end. |
+| 6. ClickHouse Play | 58s | table browser, table-family model, and largest table rows | Table metadata and decoded rows validate the pipeline end to end. |
 
 ## Scene Details
 
@@ -78,10 +78,11 @@ record a new review video.
 
 Show the required services are reachable before the examples start:
 
-- Docker Compose reports ClickHouse, Prometheus, and Grafana as running.
-- ClickHouse answers `SELECT 1`.
-- Prometheus readiness succeeds.
-- Grafana health succeeds.
+- In the demo terminal, `docker ps` shows only the three tutorial containers:
+  ClickHouse, Prometheus, and Grafana.
+- ClickHouse responds through its documented `/ping` endpoint.
+- Prometheus readiness succeeds at `localhost:9090/-/ready`.
+- Grafana health succeeds at `localhost:3000/api/health`.
 - The configured RPC endpoint answers `getHealth`.
 
 This is a readiness check, not proof that tutorial data has landed.
@@ -158,25 +159,23 @@ ClickHouse Play is the final validation scene. Keep it focused on proof:
 
 - generated landing tables exist
 - row and byte metadata show which tables are populated
-- representative decoded rows are queryable
+- the generated account, instruction, and CPI/event table families are visible
+- one high-volume decoded landing table is queryable
 
-Use the current table targets:
+Use the current row-inspection target:
 
-- `jupiter_swap_swap_event_landing`
-- `jupiter_swap_route_instruction_landing`
 - `token_program_transfer_checked_instruction_landing`
-- `token_program_multisig_account_landing`
 
 Explain the data at a practical level:
 
-- Jupiter event rows show swap legs: AMMs, input/output mints, and amounts.
-- Jupiter route instruction rows show route requests, quoted output, slippage
-  guard, and source mode.
-- Token Program checked transfer rows show transfer amount and decimals.
-- Token Program multisig account rows show account authority state.
+- account tables store decoded account state
+- instruction tables store decoded program instructions
+- CPI/event tables store event-like activity emitted through inner instructions
+- Token Program checked transfer rows show transfer amount, decimals, slot,
+  signature, instruction path, source name, and mode
 
-This covers the generated event, instruction, and account table families.
-Metadata plus decoded rows is the final end-to-end proof.
+The menu and family summary explain the decoder-owned schema model. The largest
+table's metadata plus decoded rows is the final end-to-end proof.
 
 ## Removed From The Current Recording
 

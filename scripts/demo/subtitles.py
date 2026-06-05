@@ -26,7 +26,7 @@ MAX_CUE_SECONDS = 7.0
 MIN_CUE_SECONDS = 1.35
 MIN_INTER_CUE_GAP_SECONDS = 0.12
 MAX_INTER_CUE_GAP_SECONDS = 0.72
-DEFAULT_SUBTITLE_WPM = 145.0
+DEFAULT_SUBTITLE_WPM = 155.0
 TERMINAL_SUBTITLE_SCENES = {
     "scene-03-jupiter-live",
     "scene-04-token-live",
@@ -44,6 +44,59 @@ SUBTITLE_LAYOUTS = {
         "max_words": 20,
         "style": "TerminalRight",
     },
+}
+WEAK_LINE_END_WORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "by",
+    "for",
+    "from",
+    "if",
+    "in",
+    "is",
+    "of",
+    "on",
+    "or",
+    "port",
+    "so",
+    "the",
+    "to",
+    "we",
+    "with",
+}
+WEAK_LINE_START_WORDS = {
+    "a",
+    "an",
+    "are",
+    "as",
+    "at",
+    "by",
+    "for",
+    "from",
+    "in",
+    "is",
+    "of",
+    "on",
+    "or",
+    "to",
+    "with",
+}
+PHRASE_START_WORDS = {
+    "also",
+    "and",
+    "because",
+    "but",
+    "plus",
+    "since",
+    "so",
+    "then",
+    "to",
+    "which",
+    "while",
 }
 
 
@@ -186,7 +239,70 @@ def split_words(text: str, layout: str = "default") -> list[str]:
     return chunks
 
 
+def normalized_word(word: str) -> str:
+    return re.sub(r"[^A-Za-z0-9]+", "", word).lower()
+
+
+def split_candidate_penalty(left: str, right: str, total_chars: int) -> int:
+    left_words = left.split()
+    right_words = right.split()
+    if not left_words or not right_words:
+        return 10_000
+    left_last = normalized_word(left_words[-1])
+    right_first = normalized_word(right_words[0])
+    penalty = abs(len(left) - min(total_chars * 0.55, 70))
+    if left_last in WEAK_LINE_END_WORDS:
+        penalty += 90
+    if right_first in WEAK_LINE_START_WORDS:
+        penalty += 12
+    if right_first in PHRASE_START_WORDS:
+        penalty -= 25
+    if len(left) < 24:
+        penalty += 70
+    if len(right) < 24:
+        penalty += 80
+    if len(left_words) > 1 and normalized_word(left_words[-2]) in {"and", "or"}:
+        penalty += 80
+    if re.search(r"[,;:]$", left_words[-1]):
+        penalty -= 35
+    if left_last == "port" and re.match(r"^\d", right_words[0]):
+        penalty += 200
+    return int(penalty)
+
+
+def natural_split_long_sentence(sentence: str, layout: str = "default") -> list[str] | None:
+    words = sentence.split()
+    if len(words) < 4:
+        return None
+    candidates: list[tuple[int, int, str, str]] = []
+    total_chars = len(sentence)
+    for split_at in range(1, len(words)):
+        left = " ".join(words[:split_at]).strip()
+        right = " ".join(words[split_at:]).strip()
+        if not caption_fits(left, layout):
+            continue
+        left_last = words[split_at - 1]
+        right_first = normalized_word(words[split_at])
+        natural_boundary = (
+            bool(re.search(r"[,;:]$", left_last))
+            or right_first in PHRASE_START_WORDS
+            or split_candidate_penalty(left, right, total_chars) < 45
+        )
+        if not natural_boundary:
+            continue
+        candidates.append((split_candidate_penalty(left, right, total_chars), split_at, left, right))
+    if not candidates:
+        return None
+    _score, _split_at, left, right = sorted(candidates, key=lambda item: item[0])[0]
+    return [left, *split_long_sentence(right, layout)]
+
+
 def split_long_sentence(sentence: str, layout: str = "default") -> list[str]:
+    if caption_fits(sentence, layout):
+        return [sentence]
+    natural = natural_split_long_sentence(sentence, layout)
+    if natural:
+        return natural
     return split_words(sentence, layout)
 
 
@@ -228,7 +344,17 @@ def balanced_caption_lines(text: str, layout: str = "default") -> list[str]:
             second = " ".join(words[split_at:])
             if len(first) > max_line_chars or len(second) > max_line_chars:
                 continue
+            first_last = normalized_word(words[split_at - 1])
+            second_first = normalized_word(words[split_at])
             score = abs(len(first) - len(second))
+            if first_last in WEAK_LINE_END_WORDS:
+                score += 80
+            if second_first in WEAK_LINE_START_WORDS:
+                score += 12
+            if first_last == "port" and re.match(r"^\d", words[split_at]):
+                score += 200
+            if re.search(r"[,;:]$", words[split_at - 1]):
+                score -= 20
             if best is None or score < best[0]:
                 best = (score, [first, second])
         if best is not None:

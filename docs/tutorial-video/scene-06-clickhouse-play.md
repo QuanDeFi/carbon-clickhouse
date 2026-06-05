@@ -1,18 +1,13 @@
 Finally, ClickHouse Play validates the data directly.
 
-The database menu shows generated landing tables with row and byte metadata, so
-we can see which decoder-owned tables were created and which ones are
-populated.
+The database menu shows landing tables with row and byte metadata. This shows which tables were created and populated.
 
-We inspect Jupiter event rows and route instructions, then Token Program checked transfers and a multisig account snapshot.
+Before looking at the table data, we group the tables into three families. Those families are accounts, instructions, and CPI events.
 
-The Jupiter event rows show swap legs: AMMs, input and output mints, and
-amounts. The route instruction rows show the route request, quoted output,
-slippage guard, and source mode.
+Account tables store account state. Instruction tables store decoded program calls. CPI event tables store event activity emitted through inner instructions.
 
-The Token Program rows show checked transfer amounts and decimals, plus account
-authority state from the multisig snapshot.
+Then we open the largest populated landing table: Token Program checked transfers.
 
-That gives us the three generated table families in one place: event,
-instruction, and account rows. Table metadata plus decoded rows validates the
-pipeline end to end.
+Those rows show amount, decimals, slot, and signature. They also show instruction path and ingest context.
+
+That gives us the final proof: ClickHouse reports rows and bytes. Decoded data arrives in the landing tables. The pipeline works end to end.
