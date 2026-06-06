@@ -473,6 +473,18 @@ def launch_terminal(title: str, env: dict[str, str]) -> tuple[subprocess.Popen[b
             "-xrm",
             "XTerm*color8: #585b70",
             "-xrm",
+            "XTerm*color9: #f38ba8",
+            "-xrm",
+            "XTerm*color10: #a6e3a1",
+            "-xrm",
+            "XTerm*color11: #f9e2af",
+            "-xrm",
+            "XTerm*color12: #89b4fa",
+            "-xrm",
+            "XTerm*color13: #cba6f7",
+            "-xrm",
+            "XTerm*color14: #94e2d5",
+            "-xrm",
             "XTerm*color15: #a6adc8",
             "-title",
             title,
@@ -522,6 +534,11 @@ def run_terminal_scene(scene_id: str, *, dry_run: bool = False, prepare_only: bo
             env[env_key] = str(value)
             os.environ[env_key] = str(value)
     env["PS1"] = "carbon-demo$ "
+    env.setdefault("TERM", "xterm-256color")
+    env.setdefault("COLORTERM", "truecolor")
+    env.setdefault("CLICOLOR_FORCE", "1")
+    env.setdefault("CARGO_TERM_COLOR", "always")
+    env.setdefault("RUST_LOG_STYLE", "always")
     env["PROMPT_COMMAND"] = (
         "printf '%s %s\\n' \"$(date +%s%N)\" \"$?\" > "
         + "'" + str(TERMINAL_READY_FILE) + "'"

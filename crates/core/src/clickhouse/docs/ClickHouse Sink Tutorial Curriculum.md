@@ -65,12 +65,12 @@ record a new review video.
 
 | Scene | Current minimum | Visual focus | Narration point |
 | --- | ---: | --- | --- |
-| 1. Readiness checks | 30s | terminal checks | Required services and RPC reachability are online before ingestion. |
-| 2. Example env | 54s | both `.env.example` files | Users see where database, RPC, metrics, live-mode, and async-wait values live. |
-| 3. Jupiter live | 40s | Jupiter terminal | Startup reconciles generated tables, connects to RPC, decodes live Jupiter activity, and writes rows. |
-| 4. Token live | 41s | Token terminal | Startup writes fixed USDC account snapshots, then tails finalized Token Program instructions. |
-| 5. Observability | 56s | Grafana and ClickStack | Grafana proves Carbon-side processing; ClickStack proves ClickHouse receives rows and bytes per table. |
-| 6. ClickHouse Play | 58s | table browser, table-family model, and largest table rows | Table metadata and decoded rows validate the pipeline end to end. |
+| 1. Readiness checks | 23s | terminal checks | Required services and RPC reachability are online before ingestion. |
+| 2. Example env | 52s | both `.env.example` files | Users see where database, RPC, metrics, live-mode, and async-wait values live. |
+| 3. Jupiter live | 39.3s | Jupiter terminal | Startup reconciles generated tables, connects to RPC, decodes live Jupiter activity, and writes rows. |
+| 4. Token live | 29.8s | Token terminal | Startup writes fixed USDC account snapshots, then tails finalized Token Program instructions. |
+| 5. Observability | 51.9s | Grafana and ClickStack | Grafana proves Carbon-side processing; ClickStack proves ClickHouse receives rows and bytes per table. |
+| 6. ClickHouse Play | 70s | table browser, per-example table-family model, top populated tables, and largest table rows | Table metadata and decoded rows validate the pipeline end to end. |
 
 ## Scene Details
 
@@ -160,6 +160,8 @@ ClickHouse Play is the final validation scene. Keep it focused on proof:
 - generated landing tables exist
 - row and byte metadata show which tables are populated
 - the generated account, instruction, and CPI/event table families are visible
+  per decoder/example
+- the largest populated landing tables are visible by rows and bytes
 - one high-volume decoded landing table is queryable
 
 Use the current row-inspection target:
@@ -171,8 +173,8 @@ Explain the data at a practical level:
 - account tables store decoded account state
 - instruction tables store decoded program instructions
 - CPI/event tables store event-like activity emitted through inner instructions
-- Token Program checked transfer rows show transfer amount, decimals, slot,
-  signature, instruction path, source name, and mode
+- for a stablecoin such as USDC, checked transfers represent wallet-to-wallet
+  sends, user deposits into protocols, or swap settlement movements
 
 The menu and family summary explain the decoder-owned schema model. The largest
 table's metadata plus decoded rows is the final end-to-end proof.

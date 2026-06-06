@@ -17,8 +17,13 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 
 LAST_VIEW_KEY: str | None = None
+PENDING_BROWSER_CLEANUPS: dict[str, tuple[subprocess.Popen[str], Path]] = {}
 NORMALIZED_TAIL_TRIM_SECONDS = {
-    "scene-05-observability": 0.8,
+    "scene-01-readiness-checks": 1.8,
+    "scene-02-example-env": 2.0,
+    "scene-03-jupiter-live": 0.6,
+    "scene-04-token-live": 1.15,
+    "scene-05-observability": 1.85,
     "scene-06-clickhouse-play": 0.8,
 }
 
@@ -68,8 +73,8 @@ def env() -> dict[str, str]:
     data.setdefault("DEMO_TYPE_BURST_PAUSE_MS", "16,64")
     data.setdefault("DEMO_TYPE_OPERATOR_PAUSE_MS", "48,136")
     data.setdefault("DEMO_PRE_ENTER_PAUSE_MS", "220,390")
-    data.setdefault("DEMO_WINDOW_TRANSITION_SECONDS", "0.72")
-    data.setdefault("DEMO_WINDOW_TRANSITION_READY_DELAY_SECONDS", "0.16")
+    data.setdefault("DEMO_WINDOW_TRANSITION_SECONDS", "1.02")
+    data.setdefault("DEMO_WINDOW_TRANSITION_READY_DELAY_SECONDS", "0.45")
     return data
 
 
@@ -301,11 +306,16 @@ def run_slide_with_delayed_record(scene: str, slide: str, seconds: float, log: P
 
 def run_browser_workflow_with_delayed_record(scene: str, workflow: str, log: Path) -> float:
     ready_file = ROOT / "demo-artifacts/pids" / f"{scene}-browser-transition-ready"
+    done_file = ROOT / "demo-artifacts/pids" / f"{scene}-browser-done"
+    cleanup_file = ROOT / "demo-artifacts/pids" / f"{scene}-browser-cleanup"
     ready_file.parent.mkdir(parents=True, exist_ok=True)
-    if ready_file.exists():
-        ready_file.unlink()
+    for path in (ready_file, done_file, cleanup_file):
+        if path.exists():
+            path.unlink()
     merged = env()
     merged["DEMO_WINDOW_TRANSITION_READY_FILE"] = str(ready_file)
+    merged["DEMO_BROWSER_DONE_FILE"] = str(done_file)
+    merged["DEMO_BROWSER_CLEANUP_FILE"] = str(cleanup_file)
     log.parent.mkdir(parents=True, exist_ok=True)
     with log.open("a") as handle:
         handle.write(f"$ node scripts/demo/browser_workflow.js {scene} {workflow}\n")
@@ -330,10 +340,47 @@ def run_browser_workflow_with_delayed_record(scene: str, workflow: str, log: Pat
                 proc.kill()
             raise RuntimeError(f"browser transition did not become ready for {scene}")
         record_started_at = start_record(scene)
-        return_code = proc.wait()
+        done_deadline = time.time() + 180
+        while time.time() < done_deadline and proc.poll() is None:
+            if done_file.exists():
+                PENDING_BROWSER_CLEANUPS[scene] = (proc, cleanup_file)
+                return record_started_at
+            time.sleep(0.1)
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=4)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+            raise RuntimeError(f"browser workflow did not finish visual content for {scene}")
+        return_code = proc.returncode
         if return_code != 0:
             raise subprocess.CalledProcessError(return_code, ["node", "scripts/demo/browser_workflow.js", scene, workflow])
+        if not done_file.exists():
+            raise RuntimeError(f"browser workflow exited before signalling visual completion for {scene}")
         return record_started_at
+
+
+def cleanup_browser_workflow(scene: str, log: Path) -> None:
+    pending = PENDING_BROWSER_CLEANUPS.pop(scene, None)
+    if not pending:
+        return
+    proc, cleanup_file = pending
+    cleanup_file.parent.mkdir(parents=True, exist_ok=True)
+    cleanup_file.write_text(f"{time.time()}\n")
+    try:
+        return_code = proc.wait(timeout=20)
+    except subprocess.TimeoutExpired:
+        proc.terminate()
+        try:
+            return_code = proc.wait(timeout=4)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            return_code = proc.wait(timeout=4)
+    if return_code != 0:
+        with log.open("a") as handle:
+            handle.write(f"browser workflow cleanup exited with {return_code}\n")
+        raise subprocess.CalledProcessError(return_code, ["node", "scripts/demo/browser_workflow.js", scene])
 
 
 def vscode_window_id() -> str | None:
@@ -535,6 +582,8 @@ def run_scene(scene: dict[str, Any], review_dir: Path) -> dict[str, Any]:
             if sys.exc_info()[0] is None:
                 hold_recording_to_min_duration(scene, record_started_at)
             stop_record(scene_id)
+            if kind == "browser" and human.get("workflow"):
+                cleanup_browser_workflow(scene_id, log_dir / f"{scene_id}-browser-cleanup.log")
     except Exception as exc:
         report["status"] = "failed"
         report["error"] = str(exc)
@@ -722,6 +771,10 @@ def main() -> int:
         copy_screenshots(review_dir)
         post_run_summary(review_dir)
         validation = run([sys.executable, "scripts/demo/validate-video.py"], log=review_dir / "logs/video-validation.log")
+        run([sys.executable, "scripts/demo/subtitles.py"], log=review_dir / "logs/subtitles.log")
+        run([sys.executable, "scripts/demo/validate-timing.py"], log=review_dir / "logs/timing-validation.log")
+        run([sys.executable, "scripts/demo/validate-transitions.py"], log=review_dir / "logs/transition-validation.log")
+        run([sys.executable, "scripts/demo/build_timeline_review.py"], log=review_dir / "logs/timeline-review.log")
         run(["scripts/demo/export-review-bundle.sh", "--no-archive", str(review_dir)])
         append_manifest(review_dir, "## Review Archive\n\n- Archive creation: skipped for the current review workflow.")
     finally:

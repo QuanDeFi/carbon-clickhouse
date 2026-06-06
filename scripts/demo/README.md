@@ -116,7 +116,7 @@ python scripts/demo/voice.py all
 Use this before final voiceover. It records a directed screen performance:
 VS Code code/config walkthroughs, visible terminal typing, readable pauses,
 ClickHouse `/play` table-browser inspection, Grafana dashboards after both
-examples, ClickStack Inserts dashboard inspection, video validation,
+examples, ClickStack Inserts dashboard inspection, video and timing validation,
 screenshots, contact sheet, and current review files.
 
 The current story is live-first but config-aware: verify required local
@@ -137,12 +137,13 @@ The terminal frame defaults to equal margins on all four screen edges and a
 larger readable dark-theme font. ClickHouse `/play` expands the table browser,
 scrolls through generated landing tables, and opens representative tables with
 queries focused on readable landing-row data rather than minimal counts.
-The current visual target is roughly two and a half minutes. If a run drifts
-toward four minutes or more, shorten scene content rather than returning to
-fixed robotic typing.
+The current visual target is roughly four and a half minutes. If a run drifts
+beyond the narration-driven scene timing, shorten scene content rather than
+returning to fixed robotic typing.
 The human rehearsal defaults to 60fps. Active window switches use a short
-blackout transition; the previous Mission-Control-style transition is archived
-in `scripts/demo/window_transition_mission_control.py`.
+blackout transition with previous/target screenshots when available; the
+previous Mission-Control-style transition is archived in
+`scripts/demo/window_transition_mission_control.py`.
 
 ```sh
 source .venv-demo/bin/activate
@@ -153,12 +154,15 @@ export DEMO_FPS=60
 DEMO_ALLOW_CLICKHOUSE_RESET=true python scripts/demo/run_human_rehearsal.py --no-voice
 ```
 
-Outputs land under `demo-artifacts/review-human/`.
+Outputs land under `demo-artifacts/review-human/`, including the no-audio
+review video, subtitle sidecars, the burned-in subtitled review video, and the
+browser-viewable subtitle alignment timeline.
 
 The recorder disables mouse capture, so the cursor should not appear in the
 review videos.
 
-Subtitles are generated separately from the visual rehearsal:
+If you already have a current no-audio review video and only need to regenerate
+subtitle sidecars plus the burned-in subtitle render, run:
 
 ```sh
 source .venv-demo/bin/activate
@@ -179,16 +183,24 @@ Current human-scene flow:
 - `scene-05-observability`: filtered Jupiter and Token Program Grafana
   dashboards show the running Carbon pipelines, then ClickStack shows
   ClickHouse-side insert rows and bytes per table.
-- `scene-06-clickhouse-play`: ClickHouse `/play` uses the table browser, a
-  generated table-family summary, and the largest populated landing table to
-  verify generated tables, data volume, and queryable rows.
+- `scene-06-clickhouse-play`: ClickHouse `/play` uses the table browser,
+  per-example table-family grouping, top populated landing tables, and the
+  largest populated landing table to verify generated tables, data volume, and
+  queryable rows.
+
+Review the subtitle and screen-state alignment in:
+
+```sh
+demo-artifacts/review-human/subtitle-alignment-timeline.html
+```
 
 Current theme behavior:
 
 - VS Code uses a dedicated recording profile under `/home/ops/dev/vnc`.
 - ClickHouse `/play` and ClickStack are darkened through deterministic
   recording-time CSS injection without decorative backgrounds.
-- Grafana uses its native dark theme/dashboard URL.
+- Grafana uses its native dark theme/dashboard URL and is zoomed to 80% so the
+  lower dashboard panels fit in the recording frame.
 - Browser chrome and address bars are hidden/cropped from browser scenes.
 
 ## Stop Display

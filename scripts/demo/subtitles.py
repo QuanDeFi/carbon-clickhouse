@@ -27,6 +27,8 @@ MIN_CUE_SECONDS = 1.35
 MIN_INTER_CUE_GAP_SECONDS = 0.12
 MAX_INTER_CUE_GAP_SECONDS = 0.72
 DEFAULT_SUBTITLE_WPM = 155.0
+SCENE_SUBTITLE_LEAD_SECONDS = 0.8
+SCENE_SUBTITLE_TAIL_SECONDS = 0.24
 TERMINAL_SUBTITLE_SCENES = {
     "scene-03-jupiter-live",
     "scene-04-token-live",
@@ -425,8 +427,8 @@ def scene_caption_chunks(scene: str) -> tuple[str, list[str]]:
 def natural_scene_required_seconds(chunks: list[str], scene_duration: float) -> float:
     if not chunks:
         return 0.0
-    lead = min(0.8, scene_duration * 0.08)
-    tail = min(0.8, scene_duration * 0.08)
+    lead = min(SCENE_SUBTITLE_LEAD_SECONDS, scene_duration * 0.08)
+    tail = min(SCENE_SUBTITLE_TAIL_SECONDS, scene_duration * 0.08)
     return lead + tail + sum(natural_cue_duration(chunk) for chunk in chunks) + (len(chunks) - 1) * MIN_INTER_CUE_GAP_SECONDS
 
 
@@ -434,8 +436,8 @@ def make_scene_cues(scene: str, scene_start: float, scene_duration: float, first
     layout, chunks = scene_caption_chunks(scene)
     if not chunks:
         return []
-    lead = min(0.8, scene_duration * 0.08)
-    tail = min(0.8, scene_duration * 0.08)
+    lead = min(SCENE_SUBTITLE_LEAD_SECONDS, scene_duration * 0.08)
+    tail = min(SCENE_SUBTITLE_TAIL_SECONDS, scene_duration * 0.08)
     natural_durations = [natural_cue_duration(chunk) for chunk in chunks]
     required = lead + tail + sum(natural_durations) + (len(chunks) - 1) * MIN_INTER_CUE_GAP_SECONDS
     if required <= scene_duration:

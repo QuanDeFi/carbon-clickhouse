@@ -169,6 +169,23 @@ def window_geometry(window_id: str) -> tuple[int, int, int, int] | None:
     return None
 
 
+def window_title(window_id: str) -> str:
+    return xdo("getwindowname", window_id, check=False).stdout.strip()
+
+
+def activate_unique_editor_tab(window_id: str, filename: str) -> None:
+    if filename not in {"main.rs", "config.rs"}:
+        return
+    focus_editor(window_id)
+    for _ in range(8):
+        if filename in window_title(window_id):
+            hide_mouse()
+            return
+        xdo("key", "ctrl+Page_Down", check=False)
+        time.sleep(0.18)
+    hide_mouse()
+
+
 def move_window(window_id: str) -> None:
     x, y, width, height = screen_frame()
     subprocess.run(["wmctrl", "-ir", window_id, "-e", f"0,{x},{y},{width},{height}"], cwd=ROOT, env=env(), check=False)
@@ -297,6 +314,7 @@ def open_file_at_line(relative: str, line: int) -> str:
     window_id = wait_for_code_window(path.name)
     move_window(window_id)
     write_state(window_id)
+    activate_unique_editor_tab(window_id, path.name)
     hide_mouse()
     return window_id
 
@@ -331,6 +349,9 @@ def show_file(window_id: str, step: dict[str, Any]) -> str:
         edit_current_line(window_id, str(step["edit_line"]), step)
     elif step.get("uncomment_and_set_true"):
         uncomment_and_set_true_current_line(window_id, step)
+    elif Path(relative).name in {"main.rs", "config.rs"}:
+        activate_unique_editor_tab(window_id, Path(relative).name)
+        focus_editor(window_id)
     else:
         focus_explorer(window_id)
     print(f"shown {relative}:{line}")

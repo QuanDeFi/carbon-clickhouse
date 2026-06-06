@@ -172,6 +172,9 @@ fn init_logger() {
     if let Ok(log_level) = env::var("LOG_LEVEL") {
         logger.parse_filters(&log_level);
     }
+    if let Ok(write_style) = env::var("RUST_LOG_STYLE") {
+        logger.parse_write_style(&write_style);
+    }
     logger.init();
 }
 

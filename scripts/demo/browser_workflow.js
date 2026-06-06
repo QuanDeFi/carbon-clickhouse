@@ -23,6 +23,7 @@ const CHROME_ARGS = [
   "--disable-infobars",
   "--disable-backgrounding-occluded-windows",
   "--disable-renderer-backgrounding",
+  "--default-background-color=000000",
   "--test-type",
   "--force-dark-mode",
   "--enable-features=WebUIDarkMode",
@@ -34,6 +35,10 @@ const CHROME_ARGS = [
 ];
 const GRAFANA_USER = process.env.GRAFANA_DEMO_USER || "admin";
 const GRAFANA_PASSWORD = process.env.GRAFANA_DEMO_PASSWORD || "carbon";
+const CLICKHOUSE_HTTP_USER = process.env.CLICKHOUSE_DEMO_USER || "carbon";
+const CLICKHOUSE_HTTP_PASSWORD = process.env.CLICKHOUSE_DEMO_PASSWORD || "carbon";
+let workflowTimelineStartedAt = 0;
+let workflowTimelineEvents = [];
 const GRAFANA_DASHBOARDS = {
   overview: {
     uid: "carbon-clickhouse-overview",
@@ -552,11 +557,18 @@ async function openBrowser(sceneId, initialUrl, transitionLabel = "browser") {
   const launchArgs = useCustomDarkTheme
     ? CHROME_ARGS
     : CHROME_ARGS.filter((arg) => !darkForcingArgs.includes(arg));
+  const needsClickHouseHttpAuth = isClickStackUrl(initialUrl) || initialUrl.includes("/play");
   const context = await chromium.launchPersistentContext(profile, {
     headless: false,
     viewport: { width: frame.width, height: frame.height },
     screen: size(),
     colorScheme: "dark",
+    httpCredentials: needsClickHouseHttpAuth
+      ? {
+          username: CLICKHOUSE_HTTP_USER,
+          password: CLICKHOUSE_HTTP_PASSWORD,
+        }
+      : undefined,
     args: [
       ...launchArgs,
       `--window-position=${initialX},${initialY}`,
@@ -572,6 +584,29 @@ async function openBrowser(sceneId, initialUrl, transitionLabel = "browser") {
   if (isClickStackUrl(initialUrl)) {
     await context
       .addInitScript(() => {
+        const installDarkBootstrap = () => {
+          document.documentElement.style.setProperty("background", "#05070a", "important");
+          document.documentElement.style.setProperty("color-scheme", "dark", "important");
+          if (document.body) {
+            document.body.style.setProperty("background", "#05070a", "important");
+          }
+          if (!document.getElementById("demo-clickstack-dark-bootstrap")) {
+            const style = document.createElement("style");
+            style.id = "demo-clickstack-dark-bootstrap";
+            style.textContent = `
+              html, body, #root {
+                background: #05070a !important;
+                color-scheme: dark !important;
+              }
+            `;
+            document.documentElement.appendChild(style);
+          }
+        };
+        installDarkBootstrap();
+        new MutationObserver(installDarkBootstrap).observe(document.documentElement, {
+          childList: true,
+          subtree: true,
+        });
         sessionStorage.setItem(
           "connections",
           JSON.stringify([
@@ -633,13 +668,15 @@ async function openBrowser(sceneId, initialUrl, transitionLabel = "browser") {
     await page.waitForTimeout(2500);
     await dismissGrafanaPasswordModal(page).catch(() => {});
   } else if (isClickStackUrl(initialUrl)) {
-    await page.waitForTimeout(2800);
+    await page.waitForTimeout(1000);
+    await completeClickStackConnection(page).catch(() => {});
     await dismissClickStackBanner(page).catch(() => {});
   } else {
     await page.waitForTimeout(500);
   }
   const windowId = chromiumWindowForLabel(transitionLabel) || latestChromiumWindow();
   if (windowId) {
+    await applyGrafanaZoom(page, windowId).catch(() => {});
     if (prepareOffscreen) {
       const transitionImage = path.join(PID_DIR, `${sceneId}-${Date.now()}-browser-target.png`);
       fs.mkdirSync(PID_DIR, { recursive: true });
@@ -783,6 +820,60 @@ async function pause(seconds) {
   hideMouse();
 }
 
+function signalBrowserDone() {
+  const doneFile = process.env.DEMO_BROWSER_DONE_FILE;
+  if (!doneFile) {
+    return;
+  }
+  fs.mkdirSync(path.dirname(doneFile), { recursive: true });
+  fs.writeFileSync(doneFile, `${Date.now()}\n`);
+}
+
+async function waitForCleanupSignal() {
+  const cleanupFile = process.env.DEMO_BROWSER_CLEANUP_FILE;
+  if (!cleanupFile) {
+    return;
+  }
+  const deadline = Date.now() + 120_000;
+  while (Date.now() < deadline) {
+    if (fs.existsSync(cleanupFile)) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("browser workflow cleanup signal timed out");
+}
+
+function resetWorkflowTimeline() {
+  workflowTimelineStartedAt = Date.now();
+  workflowTimelineEvents = [];
+}
+
+function markWorkflowEvent(label, extra = {}) {
+  if (!workflowTimelineStartedAt) {
+    return;
+  }
+  workflowTimelineEvents.push({
+    at_seconds: Number(((Date.now() - workflowTimelineStartedAt) / 1000).toFixed(3)),
+    label,
+    ...extra,
+  });
+}
+
+function workflowElapsedSeconds() {
+  if (!workflowTimelineStartedAt) {
+    return 0;
+  }
+  return (Date.now() - workflowTimelineStartedAt) / 1000;
+}
+
+async function waitForWorkflowSecond(targetSeconds) {
+  const remaining = targetSeconds - workflowElapsedSeconds();
+  if (remaining > 0) {
+    await pause(remaining);
+  }
+}
+
 async function requireText(page, regex, label) {
   const text = await page.locator("body").innerText({ timeout: 10_000 });
   if (!regex.test(text)) {
@@ -916,6 +1007,7 @@ async function openClickHousePlayTableBrowser(page, sceneId = null, options = {}
     await page.waitForTimeout(options.revealMenu ? 1400 : 450);
     if (options.revealMenu && sceneId) {
       setTransitionCurrent("ClickHouse Play", await shot(page, sceneId, "clickhouse-play-menu-expanded"));
+      markWorkflowEvent("clickhouse-play:database-menu-visible");
     }
     const defaultDatabase = page.getByRole("button", { name: /^default\b/i }).first();
     if (await defaultDatabase.isVisible({ timeout: 2500 }).catch(() => false)) {
@@ -929,7 +1021,9 @@ async function openClickHousePlayTableBrowser(page, sceneId = null, options = {}
   await requireText(page, /jupiter_swap_|token_program_/, "ClickHouse Play table browser");
   if (options.revealMenu && sceneId) {
     setTransitionCurrent("ClickHouse Play", await shot(page, sceneId, "clickhouse-play-table-browser-expanded"));
+    markWorkflowEvent("clickhouse-play:table-browser-visible");
     await scrollClickHousePlayTableList(page, sceneId);
+    markWorkflowEvent("clickhouse-play:table-list-scrolled");
   }
   hideMouse();
 }
@@ -940,6 +1034,7 @@ async function hoverPlayTable(page, sceneId, tableName, label) {
   await page.waitForTimeout(650);
   await requireText(page, /MergeTree|rows|bytes|KiB|MiB|GiB/i, "ClickHouse Play table metadata");
   setTransitionCurrent("ClickHouse Play", await shot(page, sceneId, `clickhouse-play-${label}`));
+  markWorkflowEvent(`clickhouse-play:${label}:visible`);
   await pause(0.8);
 }
 
@@ -988,7 +1083,172 @@ async function inspectPlayTable(page, sceneId, tableName, expected, label, query
     throw new Error(`ClickHouse /play table query failed for ${tableName}`);
   }
   setTransitionCurrent("ClickHouse Play", await shot(page, sceneId, `clickhouse-play-${label}`));
+  markWorkflowEvent(`clickhouse-play:${label}:visible`);
   await pause(0.8);
+}
+
+async function resultHorizontalScrollBox(page) {
+  return page
+    .evaluate(() => {
+      const elements = [];
+      const collect = (root) => {
+        for (const element of Array.from(root.querySelectorAll("*"))) {
+          elements.push(element);
+          if (element.shadowRoot) {
+            collect(element.shadowRoot);
+          }
+        }
+      };
+      collect(document);
+      const candidates = [];
+      for (const element of elements) {
+        const rect = element.getBoundingClientRect();
+        if (rect.width < 360 || rect.height < 120) continue;
+        if (rect.top < 260 || rect.bottom > window.innerHeight + 80) continue;
+        if (element.scrollWidth <= element.clientWidth + 80) continue;
+        const text = element.innerText || element.textContent || "";
+        const resultAncestor = element.closest?.("#query-result, query-result");
+        const geometryLikelyResult =
+          rect.left > 350 && rect.top > 260 && element.scrollWidth - element.clientWidth > 250;
+        const resultLike =
+          resultAncestor ||
+          element.id === "query-result" ||
+          element.tagName === "QUERY-RESULT" ||
+          geometryLikelyResult ||
+          /program_id|family_name|instruction_type|amount|decimals|signature|instr/i.test(text);
+        if (!resultLike) continue;
+        let score = element.scrollWidth - element.clientWidth;
+        if (resultAncestor) score += 1000;
+        if (element.id === "query-result" || element.tagName === "QUERY-RESULT") score += 600;
+        if (/program_id|family_name|instruction_type|amount|decimals|signature/i.test(text)) score += 350;
+        if (rect.top > 300 && rect.top < window.innerHeight - 220) score += 200;
+        candidates.push({
+          x: rect.left,
+          y: rect.top,
+          width: rect.width,
+          height: rect.height,
+          score,
+        });
+      }
+      candidates.sort((a, b) => b.score - a.score);
+      return candidates[0] || null;
+    })
+    .catch(() => null);
+}
+
+async function scrollResultHorizontallyBy(page, scrollDelta) {
+  return page.evaluate((delta) => {
+    const elements = [];
+    const collect = (root) => {
+      for (const element of Array.from(root.querySelectorAll("*"))) {
+        elements.push(element);
+        if (element.shadowRoot) {
+          collect(element.shadowRoot);
+        }
+      }
+    };
+    collect(document);
+    const candidates = [];
+    for (const element of elements) {
+      const rect = element.getBoundingClientRect();
+      if (rect.width < 360 || rect.height < 120) continue;
+      if (rect.top < 260 || rect.bottom > window.innerHeight + 80) continue;
+      if (element.scrollWidth <= element.clientWidth + 80) continue;
+      const text = element.innerText || element.textContent || "";
+      const resultAncestor = element.closest?.("#query-result, query-result");
+      const geometryLikelyResult =
+        rect.left > 350 && rect.top > 260 && element.scrollWidth - element.clientWidth > 250;
+      const resultLike =
+        resultAncestor ||
+        element.id === "query-result" ||
+        element.tagName === "QUERY-RESULT" ||
+        geometryLikelyResult ||
+        /program_id|family_name|instruction_type|amount|decimals|signature|instr/i.test(text);
+      if (!resultLike) continue;
+      let score = element.scrollWidth - element.clientWidth;
+      if (resultAncestor) score += 1000;
+      if (element.id === "query-result" || element.tagName === "QUERY-RESULT") score += 600;
+      if (/program_id|family_name|instruction_type|amount|decimals|signature/i.test(text)) score += 350;
+      if (rect.top > 300 && rect.top < window.innerHeight - 220) score += 200;
+      candidates.push({ element, score });
+    }
+    candidates.sort((a, b) => b.score - a.score);
+    let changed = 0;
+    let maxScrollLeft = 0;
+    for (const { element } of candidates.slice(0, 8)) {
+      const before = element.scrollLeft;
+      const limit = Math.max(0, element.scrollWidth - element.clientWidth);
+      const next = Math.min(limit, before + delta);
+      element.scrollLeft = next;
+      element.scrollTo?.({ left: next, behavior: "auto" });
+      if (element.scrollLeft !== before) {
+        changed += 1;
+        maxScrollLeft = Math.max(maxScrollLeft, element.scrollLeft);
+      }
+    }
+    return { changed, maxScrollLeft };
+  }, scrollDelta);
+}
+
+async function dragResultHorizontalScrollbar(page) {
+  const resultBox = await page
+    .locator("query-result, #query-result")
+    .first()
+    .boundingBox({ timeout: 1500 })
+    .catch(() => null);
+  const viewport = page.viewportSize() || { width: 1920, height: 1080 };
+  if (!resultBox) {
+    return false;
+  }
+  const y = Math.max(20, Math.min(viewport.height - 10, resultBox.y + resultBox.height - 10));
+  const startX = Math.max(20, Math.min(viewport.width - 40, resultBox.x + resultBox.width * 0.23));
+  const firstX = Math.max(20, Math.min(viewport.width - 40, resultBox.x + resultBox.width * 0.38));
+  const midX = Math.max(20, Math.min(viewport.width - 40, resultBox.x + resultBox.width * 0.53));
+  const lateX = Math.max(20, Math.min(viewport.width - 40, resultBox.x + resultBox.width * 0.70));
+  const endX = Math.max(20, Math.min(viewport.width - 28, resultBox.x + resultBox.width - 72));
+  await page.mouse.move(startX, y, { steps: 8 }).catch(() => {});
+  await page.mouse.down().catch(() => {});
+  await page.mouse.move(firstX, y, { steps: 18 }).catch(() => {});
+  await humanPause(page, 1110);
+  await page.mouse.move(midX, y, { steps: 20 }).catch(() => {});
+  await humanPause(page, 1330);
+  await page.mouse.move(lateX, y, { steps: 22 }).catch(() => {});
+  await humanPause(page, 1290);
+  await page.mouse.move(endX, y, { steps: 24 }).catch(() => {});
+  await humanPause(page, 1130);
+  await page.mouse.up().catch(() => {});
+  await humanPause(page, 720);
+  return true;
+}
+
+async function scrollPlayResultHorizontally(page, sceneId, label) {
+  await page.waitForTimeout(500);
+  const box = await resultHorizontalScrollBox(page);
+  const rng = seededRng(`${sceneId}:clickhouse-play-horizontal-scroll:${label}`);
+  markWorkflowEvent("clickhouse-play:horizontal-scroll-start");
+  let changed = 0;
+  if (box) {
+    const x = box.x + Math.min(box.width - 24, Math.max(36, box.width * 0.76));
+    const y = box.y + Math.min(box.height - 22, Math.max(42, box.height * 0.56));
+    await page.mouse.move(x, y, { steps: 7 }).catch(() => {});
+    const deltas = [120, 155, 135, 210, 165, 95, 180, 225, 145, 110, 190, 130];
+    for (let index = 0; index < deltas.length; index += 1) {
+      const delta = Math.round(deltas[index] * (0.86 + rng() * 0.26));
+      const result = await scrollResultHorizontallyBy(page, delta).catch(() => ({ changed: 0, maxScrollLeft: 0 }));
+      changed += Number(result.changed || 0);
+      const basePause = index === 3 || index === 8 ? 740 : 430;
+      await humanPause(page, basePause + rng() * 300);
+    }
+  }
+  if (changed === 0) {
+    const dragged = await dragResultHorizontalScrollbar(page);
+    if (!dragged) {
+      throw new Error("ClickHouse Play result horizontal scroller not found");
+    }
+  }
+  setTransitionCurrent("ClickHouse Play", await shot(page, sceneId, `clickhouse-play-${label}-horizontal-scroll`));
+  markWorkflowEvent("clickhouse-play:horizontal-scroll-complete");
+  await pause(1.2);
 }
 
 async function runPlayQuery(page, sceneId, query, expected, label, holdSeconds = 0.8) {
@@ -1003,6 +1263,7 @@ async function runPlayQuery(page, sceneId, query, expected, label, holdSeconds =
     throw new Error(`ClickHouse /play query failed for ${label}`);
   }
   setTransitionCurrent("ClickHouse Play", await shot(page, sceneId, `clickhouse-play-${label}`));
+  markWorkflowEvent(`clickhouse-play:${label}:visible`);
   await pause(holdSeconds);
 }
 
@@ -1012,33 +1273,81 @@ async function clickHousePlayLandingValidation(page, sceneId) {
   await runPlayQuery(
     page,
     sceneId,
-    `SELECT
+    `WITH
+    ['Jupiter Swap', 'Token Program'] AS decoders,
+    ['account rows', 'instruction rows', 'CPI event rows'] AS families
+SELECT
+    decoder,
     table_family,
-    count() AS tables,
-    sum(total_rows) AS rows,
-    formatReadableSize(sum(total_bytes)) AS bytes
-FROM
+    ifNull(tables, 0) AS tables,
+    ifNull(rows, 0) AS rows,
+    formatReadableSize(ifNull(bytes_raw, 0)) AS bytes
+FROM (SELECT arrayJoin(decoders) AS decoder) AS d
+CROSS JOIN (SELECT arrayJoin(families) AS table_family) AS f
+LEFT JOIN
 (
     SELECT
-        name,
-        total_rows,
-        total_bytes,
-        multiIf(
-            endsWith(name, '_account_landing'), 'account rows',
-            endsWith(name, '_instruction_landing'), 'instruction rows',
-            endsWith(name, '_event_landing'), 'CPI event rows',
-            'other'
-        ) AS table_family
-    FROM system.tables
-    WHERE database = 'default'
-      AND endsWith(name, '_landing')
-      AND (startsWith(name, 'jupiter_swap_') OR startsWith(name, 'token_program_'))
-)
-GROUP BY table_family
-ORDER BY rows DESC`,
-    /account rows|instruction rows|CPI event rows/i,
-    "landing-table-families",
-    13.0,
+        decoder,
+        table_family,
+        count() AS tables,
+        sum(total_rows) AS rows,
+        sum(total_bytes) AS bytes_raw
+    FROM
+    (
+        SELECT
+            name,
+            total_rows,
+            total_bytes,
+            multiIf(
+                startsWith(name, 'jupiter_swap_'), 'Jupiter Swap',
+                startsWith(name, 'token_program_'), 'Token Program',
+                'other'
+            ) AS decoder,
+            multiIf(
+                endsWith(name, '_account_landing'), 'account rows',
+                endsWith(name, '_instruction_landing'), 'instruction rows',
+                endsWith(name, '_event_landing'), 'CPI event rows',
+                'other'
+            ) AS table_family
+        FROM system.tables
+        WHERE database = 'default'
+          AND endsWith(name, '_landing')
+          AND (
+              endsWith(name, '_account_landing')
+              OR endsWith(name, '_instruction_landing')
+              OR endsWith(name, '_event_landing')
+          )
+          AND (startsWith(name, 'jupiter_swap_') OR startsWith(name, 'token_program_'))
+    )
+    GROUP BY decoder, table_family
+) AS actual USING (decoder, table_family)
+ORDER BY decoder, indexOf(families, table_family)`,
+    /Jupiter Swap|Token Program|account rows|instruction rows|CPI event rows/i,
+    "landing-table-families-by-decoder",
+    8.0,
+  );
+  await waitForWorkflowSecond(30.4);
+  await runPlayQuery(
+    page,
+    sceneId,
+    `SELECT
+    multiIf(
+        startsWith(name, 'jupiter_swap_'), 'Jupiter Swap',
+        startsWith(name, 'token_program_'), 'Token Program',
+        'other'
+    ) AS decoder,
+    name,
+    total_rows AS rows,
+    formatReadableSize(total_bytes) AS bytes
+FROM system.tables
+WHERE database = 'default'
+  AND endsWith(name, '_landing')
+  AND total_rows > 0
+  AND (startsWith(name, 'jupiter_swap_') OR startsWith(name, 'token_program_'))
+ORDER BY rows DESC, total_bytes DESC`,
+    /token_program_transfer_checked_instruction_landing|rows|bytes/i,
+    "largest-populated-landing-tables",
+    4.8,
   );
   await hoverPlayTable(page, sceneId, "token_program_transfer_checked_instruction_landing", "largest-table-metadata");
   await inspectPlayTable(
@@ -1047,9 +1356,10 @@ ORDER BY rows DESC`,
     "token_program_transfer_checked_instruction_landing",
     /program_id|family_name|instruction_type|amount|decimals|signature/i,
     "largest-transfer-checked-rows",
-    'SELECT program_id, family_name, instruction_type, slot, signature, instruction_index, stack_height, absolute_path, amount, decimals, source_name, mode FROM "default"."token_program_transfer_checked_instruction_landing" LIMIT 100',
   );
-  await pause(17.0);
+  await waitForWorkflowSecond(51.0);
+  await scrollPlayResultHorizontally(page, sceneId, "largest-transfer-checked-rows");
+  await pause(0.8);
 }
 
 async function dismissGrafanaPasswordModal(page) {
@@ -1097,6 +1407,26 @@ async function dismissGrafanaPasswordModal(page) {
   await page.waitForTimeout(500);
 }
 
+async function applyGrafanaZoom(page, windowId = null) {
+  if (!isGrafanaUrl(page.url())) {
+    return;
+  }
+  if (page.__demoGrafanaChromeZoomApplied) {
+    return;
+  }
+  const targetWindowId = windowId || chromiumWindowForLabel("Grafana") || latestChromiumWindow();
+  if (!targetWindowId) {
+    return;
+  }
+  page.__demoGrafanaChromeZoomApplied = true;
+  tryWindowCommand(["windowfocus", targetWindowId]);
+  tryWindowCommand(["key", "ctrl+0"]);
+  tryWindowCommand(["key", "ctrl+minus"]);
+  tryWindowCommand(["key", "ctrl+minus"]);
+  await page.waitForTimeout(800);
+  markWorkflowEvent("grafana:zoom-80");
+}
+
 async function grafanaDashboard(page, sceneId, label, dashboardKey = "overview") {
   const dashboard = GRAFANA_DASHBOARDS[dashboardKey] || GRAFANA_DASHBOARDS.overview;
   await seedGrafanaSession(page.context());
@@ -1107,6 +1437,7 @@ async function grafanaDashboard(page, sceneId, label, dashboardKey = "overview")
     await page.waitForTimeout(700);
   }
   await dismissGrafanaPasswordModal(page);
+  await applyGrafanaZoom(page);
   await shot(page, sceneId, `grafana-${label}-raw`);
   const text = await requireText(page, dashboard.title, "Grafana dashboard");
   if (/invalid username|password|login failed|email or username/i.test(text)) {
@@ -1120,14 +1451,16 @@ async function grafanaDashboard(page, sceneId, label, dashboardKey = "overview")
     throw new Error("Grafana dashboard did not render enough metric data");
   }
   setTransitionCurrent("Grafana", await shot(page, sceneId, `grafana-${label}`));
+  markWorkflowEvent(`grafana:${dashboardKey}:visible`, { dashboard_label: label });
   if (dashboardKey === "jupiter") {
     await pause(2.2);
     await page.mouse.wheel(0, 760).catch(() => {});
     await page.waitForTimeout(1200);
     setTransitionCurrent("Grafana", await shot(page, sceneId, `grafana-${label}-lower-panels`));
+    markWorkflowEvent(`grafana:${dashboardKey}:lower-panels-visible`, { dashboard_label: label });
     await pause(1.3);
   } else {
-    await pause(1.6);
+    await pause(0.15);
   }
 }
 
@@ -1147,6 +1480,31 @@ async function seedClickStackConnection(page) {
       ]),
     );
   });
+}
+
+async function completeClickStackConnection(page) {
+  const welcome = page.getByText(/Welcome to ClickStack/i).first();
+  if (!(await welcome.isVisible({ timeout: 700 }).catch(() => false))) {
+    return;
+  }
+  await page.locator('input[placeholder="My Clickhouse Server"]').fill("Local ClickHouse").catch(() => {});
+  await page.locator('input[placeholder="http://localhost:8123"]').fill("http://localhost:8123").catch(() => {});
+  await page.locator('input[placeholder="Username (default: default)"]').fill(CLICKHOUSE_HTTP_USER).catch(() => {});
+  await page.locator('input[placeholder="Password (default: blank)"]').fill(CLICKHOUSE_HTTP_PASSWORD).catch(() => {});
+  await page.getByRole("button", { name: /Test Connection/i }).click({ force: true, timeout: 1500 }).catch(() => {});
+  await page.waitForTimeout(700);
+  await page
+    .addStyleTag({
+      content: `
+        .mantine-Modal-overlay,
+        .mantine-Modal-inner {
+          display: none !important;
+          visibility: hidden !important;
+          pointer-events: none !important;
+        }
+      `,
+    })
+    .catch(() => {});
 }
 
 async function focusClickStackInsertCharts(page) {
@@ -1269,12 +1627,16 @@ async function clickStackInsertsDashboard(page, sceneId, label) {
     await page.goto(`http://localhost:8123/clickstack/clickhouse?tab=inserts&insertsBy=${variant.key}`, {
       waitUntil: "domcontentloaded",
     });
+    await page.waitForTimeout(2000);
+  } else {
+    await page.waitForTimeout(800);
   }
-  await page.waitForTimeout(2600);
+  await completeClickStackConnection(page).catch(() => {});
   await dismissClickStackBanner(page);
   await requireText(page, variant.title, `ClickStack Inserts ${variant.key}`);
   setTransitionCurrent("ClickStack", await shot(page, sceneId, `clickstack-inserts-${variant.key}-${label}`));
-  await pause(15.0);
+  markWorkflowEvent("clickstack:inserts-visible", { dashboard_label: label });
+  await pause(12.5);
 }
 
 async function runWorkflow(sceneId, workflow) {
@@ -1283,37 +1645,41 @@ async function runWorkflow(sceneId, workflow) {
   if (workflow === "live-observability") {
     const checks = [];
     const grafana = await openBrowser(sceneId, grafanaDashboardUrl("jupiter"), "Grafana");
+    resetWorkflowTimeline();
+    markWorkflowEvent("grafana:jupiter-window-visible");
     try {
       await grafanaDashboard(grafana.page, sceneId, "jupiter-live", "jupiter");
       checks.push("grafana-jupiter-live");
-      await pause(20.5);
+      await pause(24.4);
       await grafanaDashboard(grafana.page, sceneId, "token-live", "token");
       checks.push("grafana-token-live");
-      await pause(2.0);
+      await pause(0.05);
     } catch (err) {
       await closeBrowser(grafana.browser, grafana.child);
       throw err;
     }
-    const blackout = await openBlackoutCover(sceneId, "grafana-clickstack");
-    await closeBrowser(grafana.browser, grafana.child);
     let clickstack;
     try {
+      markWorkflowEvent("clickstack:prepare-offscreen-start");
       clickstack = await openBrowser(sceneId, "http://localhost:8123/clickstack/clickhouse?tab=inserts&insertsBy=rows", "ClickStack");
+      markWorkflowEvent("clickstack:window-visible");
     } catch (err) {
-      await closeBlackoutCover(blackout);
+      await closeBrowser(grafana.browser, grafana.child);
       throw err;
     }
-    await closeBlackoutCover(blackout);
+    await closeBrowser(grafana.browser, grafana.child);
     try {
       await clickStackInsertsDashboard(clickstack.page, sceneId, "live-examples");
       checks.push("clickstack-inserts-live-examples");
+      signalBrowserDone();
+      await waitForCleanupSignal();
     } finally {
       await closeBrowser(clickstack.browser, clickstack.child);
     }
     fs.mkdirSync(REPORT_DIR, { recursive: true });
     fs.writeFileSync(
       path.join(REPORT_DIR, `${sceneId}-browser-workflow.json`),
-      JSON.stringify({ scene: sceneId, workflow, checks }, null, 2),
+      JSON.stringify({ scene: sceneId, workflow, checks, timeline: workflowTimelineEvents }, null, 2),
     );
     return;
   }
@@ -1322,10 +1688,14 @@ async function runWorkflow(sceneId, workflow) {
     throw new Error(`unknown workflow: ${workflow}`);
   }
   const { browser, page, child } = await openBrowser(sceneId, "http://localhost:8123/play", "ClickHouse Play");
+  resetWorkflowTimeline();
+  markWorkflowEvent("clickhouse-play:window-visible");
   const checks = [];
   try {
     await clickHousePlayLandingValidation(page, sceneId);
     checks.push("clickhouse-play-largest-landing-table");
+    signalBrowserDone();
+    await waitForCleanupSignal();
   } finally {
     await closeBrowser(browser, child);
   }
@@ -1333,7 +1703,7 @@ async function runWorkflow(sceneId, workflow) {
   fs.mkdirSync(REPORT_DIR, { recursive: true });
   fs.writeFileSync(
     path.join(REPORT_DIR, `${sceneId}-browser-workflow.json`),
-    JSON.stringify({ scene: sceneId, workflow, checks }, null, 2),
+    JSON.stringify({ scene: sceneId, workflow, checks, timeline: workflowTimelineEvents }, null, 2),
   );
 }
 
