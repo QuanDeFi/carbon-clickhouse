@@ -1190,6 +1190,111 @@ async function scrollResultHorizontallyBy(page, scrollDelta) {
   }, scrollDelta);
 }
 
+function easeInOutCubic(t) {
+  return t < 0.5
+    ? 4 * t * t * t
+    : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+async function scrollResultHorizontallyToRatio(page, ratio, rng = () => 0.5) {
+  const durationJitterMs = (rng() - 0.5) * 400;
+  return page.evaluate(
+    async ({ targetRatio, durationJitter }) => {
+      const easeInOutCubicInPage = (t) =>
+        t < 0.5
+          ? 4 * t * t * t
+          : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      const elements = [];
+      const collect = (root) => {
+        for (const element of Array.from(root.querySelectorAll("*"))) {
+          elements.push(element);
+          if (element.shadowRoot) {
+            collect(element.shadowRoot);
+          }
+        }
+      };
+      collect(document);
+      const candidates = [];
+      const addCandidate = (element, score) => {
+        if (!element || element.scrollWidth <= element.clientWidth + 80) return;
+        candidates.push({ element, score });
+      };
+      addCandidate(document.scrollingElement || document.documentElement, 4500);
+      for (const element of elements) {
+        const rect = element.getBoundingClientRect();
+        if (rect.width < 320 || rect.height < 40) continue;
+        if (element.scrollWidth <= element.clientWidth + 80) continue;
+        const text = element.innerText || element.textContent || "";
+        const resultAncestor = element.closest?.("#query-result, query-result");
+        const textLikelyResult = /program_id|family_name|instruction_type|amount|decimals|signature|instr/i.test(text);
+        const geometryLikelyResult =
+          rect.left > 300 && rect.top > 220 && element.scrollWidth - element.clientWidth > 250;
+        const resultLike =
+          resultAncestor ||
+          element.id === "query-result" ||
+          element.tagName === "QUERY-RESULT" ||
+          geometryLikelyResult ||
+          textLikelyResult;
+        if (!resultLike) continue;
+        let score = element.scrollWidth - element.clientWidth;
+        if (resultAncestor) score += 1000;
+        if (element.id === "query-result" || element.tagName === "QUERY-RESULT") score += 600;
+        if (textLikelyResult) score += 350;
+        if (rect.top > 300 && rect.top < window.innerHeight - 220) score += 200;
+        addCandidate(element, score);
+      }
+      candidates.sort((a, b) => b.score - a.score);
+      let selected = null;
+      for (const candidate of candidates.slice(0, 8)) {
+        const { element } = candidate;
+        const maxScrollLeft = Math.max(0, element.scrollWidth - element.clientWidth);
+        if (maxScrollLeft <= 0) continue;
+        const original = element.scrollLeft;
+        const probe = original < maxScrollLeft ? original + 1 : original - 1;
+        element.scrollLeft = probe;
+        const moved = element.scrollLeft !== original;
+        element.scrollLeft = original;
+        element.scrollTo?.({ left: original, behavior: "auto" });
+        if (moved) {
+          selected = candidate;
+          break;
+        }
+      }
+      if (!selected) {
+        return { changed: 0, scrollLeft: 0, maxScrollLeft: 0 };
+      }
+
+      const { element } = selected;
+      const maxScrollLeft = Math.max(0, element.scrollWidth - element.clientWidth);
+      const startLeft = element.scrollLeft;
+      const boundedRatio = Math.max(0, Math.min(1, Number(targetRatio) || 0));
+      const targetLeft = Math.round(maxScrollLeft * boundedRatio);
+      const distance = Math.abs(targetLeft - startLeft);
+      if (maxScrollLeft <= 0 || distance < 1) {
+        return { changed: 0, scrollLeft: element.scrollLeft, maxScrollLeft };
+      }
+
+      const durationMs = Math.max(750, Math.min(1000, 700 + Math.min(300, distance * 0.08) + durationJitter * 0.75));
+      const frames = Math.max(12, Math.min(20, Math.round(durationMs / 58)));
+      for (let frame = 1; frame <= frames; frame += 1) {
+        const eased = easeInOutCubicInPage(frame / frames);
+        const next = Math.round(startLeft + (targetLeft - startLeft) * eased);
+        element.scrollLeft = next;
+        element.scrollTo?.({ left: next, behavior: "auto" });
+        await new Promise((resolve) => setTimeout(resolve, durationMs / frames));
+      }
+      element.scrollLeft = targetLeft;
+      element.scrollTo?.({ left: targetLeft, behavior: "auto" });
+      return {
+        changed: element.scrollLeft !== startLeft ? 1 : 0,
+        scrollLeft: element.scrollLeft,
+        maxScrollLeft,
+      };
+    },
+    { targetRatio: ratio, durationJitter: durationJitterMs },
+  );
+}
+
 async function dragResultHorizontalScrollbar(page) {
   const resultBox = await page
     .locator("query-result, #query-result")
@@ -1222,8 +1327,15 @@ async function dragResultHorizontalScrollbar(page) {
 }
 
 async function scrollPlayResultHorizontally(page, sceneId, label) {
-  await page.waitForTimeout(500);
-  const box = await resultHorizontalScrollBox(page);
+  await page.waitForTimeout(700);
+  let box = await resultHorizontalScrollBox(page);
+  if (!box) {
+    box = await page
+      .locator("query-result, #query-result")
+      .first()
+      .boundingBox({ timeout: 1500 })
+      .catch(() => null);
+  }
   const rng = seededRng(`${sceneId}:clickhouse-play-horizontal-scroll:${label}`);
   markWorkflowEvent("clickhouse-play:horizontal-scroll-start");
   let changed = 0;
@@ -1231,13 +1343,20 @@ async function scrollPlayResultHorizontally(page, sceneId, label) {
     const x = box.x + Math.min(box.width - 24, Math.max(36, box.width * 0.76));
     const y = box.y + Math.min(box.height - 22, Math.max(42, box.height * 0.56));
     await page.mouse.move(x, y, { steps: 7 }).catch(() => {});
-    const deltas = [120, 155, 135, 210, 165, 95, 180, 225, 145, 110, 190, 130];
-    for (let index = 0; index < deltas.length; index += 1) {
-      const delta = Math.round(deltas[index] * (0.86 + rng() * 0.26));
-      const result = await scrollResultHorizontallyBy(page, delta).catch(() => ({ changed: 0, maxScrollLeft: 0 }));
+    await humanPause(page, 900 + rng() * 400);
+
+    const targets = [
+      { ratio: 0.18, hold: 1600 },
+      { ratio: 0.36, hold: 1900 },
+      { ratio: 0.56, hold: 2100 },
+      { ratio: 0.76, hold: 1800 },
+      { ratio: 0.90, hold: 2400 },
+    ];
+
+    for (const target of targets) {
+      const result = await scrollResultHorizontallyToRatio(page, target.ratio, rng).catch(() => ({ changed: 0 }));
       changed += Number(result.changed || 0);
-      const basePause = index === 3 || index === 8 ? 740 : 430;
-      await humanPause(page, basePause + rng() * 300);
+      await humanPause(page, target.hold + (rng() - 0.5) * 700);
     }
   }
   if (changed === 0) {
@@ -1248,7 +1367,7 @@ async function scrollPlayResultHorizontally(page, sceneId, label) {
   }
   setTransitionCurrent("ClickHouse Play", await shot(page, sceneId, `clickhouse-play-${label}-horizontal-scroll`));
   markWorkflowEvent("clickhouse-play:horizontal-scroll-complete");
-  await pause(1.2);
+  await pause(1.8);
 }
 
 async function runPlayQuery(page, sceneId, query, expected, label, holdSeconds = 0.8) {

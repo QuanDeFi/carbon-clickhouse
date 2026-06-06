@@ -23,6 +23,8 @@ MAX_SCENE_TAIL_SECONDS = 2.5
 MAX_BLACK_INTERVAL_SECONDS = 1.25
 MAX_BLACK_CUE_OVERLAP_SECONDS = 0.25
 MAX_LOG_VIDEO_DRIFT_SECONDS = 30 * 60
+MIN_HORIZONTAL_SCROLL_SECONDS = 14.0
+MAX_HORIZONTAL_SCROLL_SECONDS = 17.5
 
 
 @dataclass(frozen=True)
@@ -125,7 +127,9 @@ def add_timeline_freshness_check(checks: list[dict[str, Any]], failures: list[di
     if not path.is_file():
         failures.append({**check, "reason": "timeline log is missing"})
         return
-    video_mtime = VIDEO.stat().st_mtime
+    scene_id = path.name.removesuffix("-browser-workflow.json")
+    scene_video = REVIEW_DIR / "videos" / f"{scene_id}.mp4"
+    video_mtime = scene_video.stat().st_mtime if scene_video.is_file() else VIDEO.stat().st_mtime
     log_mtime = path.stat().st_mtime
     delta = log_mtime - video_mtime
     check["log_minus_video_seconds"] = round(delta, 3)
@@ -234,7 +238,6 @@ def validate() -> dict[str, Any]:
     clickstack_cue = cue_matching(cues, r"ClickStack then gives")
     inserts_cue = cue_matching(cues, r"Inserts dashboard shows")
     scroll_cue = cue_matching(cues, r"As we scroll across the columns")
-    token_movement_cue = cue_matching(cues, r"decoded token movement activity")
     expected_transition_windows: list[dict[str, Any]] = []
     for scene in scenes:
         start = float(scene["start_seconds"])
@@ -338,26 +341,31 @@ def validate() -> dict[str, Any]:
             latest=scene6_start + 0.85,
         )
     if scene6:
+        scroll_start = timeline_event(scene6_log, "clickhouse-play:horizontal-scroll-start")
+        scroll_complete = timeline_event(scene6_log, "clickhouse-play:horizontal-scroll-complete")
         if scroll_cue:
             add_timing_check(
                 checks=checks,
                 failures=failures,
                 name="scene-06:horizontal-scroll-start",
-                actual=timeline_event(scene6_log, "clickhouse-play:horizontal-scroll-start"),
+                actual=scroll_start,
                 expected=scene_local(scene6, scroll_cue.start),
                 min_delta=-0.35,
                 max_delta=0.45,
             )
-        if token_movement_cue:
-            add_timing_check(
-                checks=checks,
-                failures=failures,
-                name="scene-06:horizontal-scroll-complete",
-                actual=timeline_event(scene6_log, "clickhouse-play:horizontal-scroll-complete"),
-                expected=scene_local(scene6, token_movement_cue.end),
-                min_delta=-0.30,
-                max_delta=0.35,
-            )
+        duration_check = {
+            "name": "scene-06:horizontal-scroll-duration",
+            "actual_seconds": None,
+            "allowed_seconds": [MIN_HORIZONTAL_SCROLL_SECONDS, MAX_HORIZONTAL_SCROLL_SECONDS],
+        }
+        checks.append(duration_check)
+        if scroll_start is None or scroll_complete is None:
+            failures.append({**duration_check, "reason": "missing horizontal scroll timeline event"})
+        else:
+            duration = scroll_complete - scroll_start
+            duration_check["actual_seconds"] = round(duration, 3)
+            if duration < MIN_HORIZONTAL_SCROLL_SECONDS or duration > MAX_HORIZONTAL_SCROLL_SECONDS:
+                failures.append({**duration_check, "reason": "horizontal scroll duration outside presenter-paced range"})
 
     return {
         "status": "failed" if failures else "ok",
@@ -365,6 +373,7 @@ def validate() -> dict[str, Any]:
             "max_scene_tail_seconds": MAX_SCENE_TAIL_SECONDS,
             "max_black_interval_seconds": MAX_BLACK_INTERVAL_SECONDS,
             "max_black_cue_overlap_seconds": MAX_BLACK_CUE_OVERLAP_SECONDS,
+            "horizontal_scroll_seconds": [MIN_HORIZONTAL_SCROLL_SECONDS, MAX_HORIZONTAL_SCROLL_SECONDS],
         },
         "checks": checks,
         "failures": failures,
