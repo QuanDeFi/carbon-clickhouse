@@ -55,6 +55,9 @@ PY
 if [[ "$CREATE_ARCHIVE" == "true" ]]; then
   mkdir -p "$ARCHIVE_DIR"
   archive="$ARCHIVE_DIR/clickhouse-tutorial-human-review-bundle-${REVIEW_TS}.tar.gz"
+  extra_paths=()
+  [[ -d "$REVIEW_DIR/audio" ]] && extra_paths+=("$REVIEW_DIR/audio")
+  [[ -d "$REVIEW_DIR/audio-analysis" ]] && extra_paths+=("$REVIEW_DIR/audio-analysis")
   tar -czf "$archive" \
     "$REVIEW_DIR/manifest.md" \
     "$REVIEW_DIR/scene-scripts.md" \
@@ -65,6 +68,7 @@ if [[ "$CREATE_ARCHIVE" == "true" ]]; then
     "$REVIEW_DIR/subtitles" \
     "$REVIEW_DIR/screenshots" \
     "$REVIEW_DIR/logs" \
+    "${extra_paths[@]}" \
     scripts/demo/README.md \
     scripts/demo/runbook.yaml \
     docs/tutorial-video \

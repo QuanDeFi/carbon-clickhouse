@@ -149,26 +149,56 @@ def load_voice_module() -> Any:
     return module
 
 
-def spoken_lines(scene: str) -> list[str]:
+def transcript_entries(scene: str) -> list[dict[str, Any]]:
     voice = load_voice_module()
     transcript = voice.gemini_tutorial_transcript(voice.scene_text(scene))
-    lines: list[str] = []
+    entries: list[dict[str, Any]] = []
+    prompt_tags: list[str] = []
     for raw in transcript.splitlines():
         line = raw.strip()
-        if not line or line == "[short pause]":
+        if not line:
             continue
-        lines.append(re.sub(r"^\[[^\]]+\]\s*", "", line))
-    return lines
+        match = re.match(r"^\[([^\]]+)\]\s*(.*)$", line)
+        if match:
+            tag = match.group(1).strip()
+            text = match.group(2).strip()
+        else:
+            tag = ""
+            text = line
+        if tag and tag not in prompt_tags:
+            prompt_tags.append(tag)
+        entries.append({"prompt_tag": tag, "text": text, "prompt_line": line})
+    return entries
 
 
-def assign_text(groups: list[dict[str, Any]], lines: list[str]) -> list[dict[str, Any]]:
+def spoken_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [entry for entry in entries if entry.get("text")]
+
+
+def assign_text(groups: list[dict[str, Any]], entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     utterances: list[dict[str, Any]] = []
     for index, group in enumerate(groups):
-        text = lines[index] if index < len(lines) else ""
-        utterances.append({**group, "index": index + 1, "text": text, "text_source": "scene transcript"})
-    if len(lines) > len(groups) and utterances:
-        remainder = " ".join(lines[len(groups) :])
+        entry = entries[index] if index < len(entries) else {}
+        tag = str(entry.get("prompt_tag", ""))
+        utterances.append(
+            {
+                **group,
+                "index": index + 1,
+                "prompt_tag": tag,
+                "prompt_tags": [tag] if tag else [],
+                "prompt_line": entry.get("prompt_line", ""),
+                "text": entry.get("text", ""),
+                "text_source": "scene transcript",
+            }
+        )
+    if len(entries) > len(groups) and utterances:
+        tail = entries[len(groups) :]
+        remainder = " ".join(str(entry.get("text", "")) for entry in tail if entry.get("text"))
+        tail_tags = [str(entry.get("prompt_tag", "")) for entry in tail if entry.get("prompt_tag")]
+        prompt_tags = list(dict.fromkeys([*utterances[-1].get("prompt_tags", []), *tail_tags]))
         utterances[-1]["text"] = f'{utterances[-1]["text"]} {remainder}'.strip()
+        utterances[-1]["prompt_tags"] = prompt_tags
+        utterances[-1]["prompt_tag"] = ", ".join(prompt_tags)
         utterances[-1]["text_source"] = "scene transcript, combined tail"
     return utterances
 
@@ -179,7 +209,8 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
     silences = detected_silences(audio, noise_db=args.noise_db, min_silence=args.min_silence)
     intervals = speech_intervals(silences, duration=duration, min_speech=args.min_speech)
     groups = group_speech_intervals(intervals, utterance_gap=args.utterance_gap)
-    utterances = assign_text(groups, spoken_lines(args.scene))
+    entries = transcript_entries(args.scene)
+    utterances = assign_text(groups, spoken_entries(entries))
 
     for utterance in utterances:
         utterance["timeline_start_seconds"] = float(args.timeline_offset) + float(utterance["start_seconds"])
@@ -195,6 +226,8 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         "timeline_offset_seconds": float(args.timeline_offset),
         "duration_seconds": duration,
         "method": "ffmpeg silencedetect plus forced alignment to the known generated scene transcript; this is not ASR",
+        "prompt_tags": list(dict.fromkeys(str(entry["prompt_tag"]) for entry in entries if entry.get("prompt_tag"))),
+        "prompt_transcript": [entry["prompt_line"] for entry in entries],
         "parameters": {
             "noise_db": args.noise_db,
             "min_silence": args.min_silence,

@@ -1,0 +1,46 @@
+{
+  "scene-05-observability": [
+    {
+      "text_contains": "Token Program dashboard follows",
+      "target_event": "grafana:token:visible",
+      "lead_seconds": -0.3
+    },
+    {
+      "text_contains": "ClickStack then gives",
+      "target_event": "clickstack:window-visible",
+      "lead_seconds": -0.2
+    },
+    {
+      "text_contains": "Inserts dashboard shows",
+      "target_event": "clickstack:inserts-visible",
+      "lead_seconds": -0.4
+    }
+  ],
+  "scene-06-clickhouse-play": [
+    {
+      "text_contains": "database menu shows landing tables",
+      "target_event": "clickhouse-play:database-menu-visible",
+      "lead_seconds": -0.2
+    },
+    {
+      "text_contains": "group each example's tables",
+      "target_event": "clickhouse-play:landing-table-families-by-decoder:visible",
+      "lead_seconds": -0.2
+    },
+    {
+      "text_contains": "largest populated landing tables",
+      "target_event": "clickhouse-play:largest-populated-landing-tables:visible",
+      "lead_seconds": -0.2
+    },
+    {
+      "text_contains": "open the largest one",
+      "target_event": "clickhouse-play:largest-transfer-checked-rows:visible",
+      "lead_seconds": -0.3
+    },
+    {
+      "text_contains": "As we scroll across the columns",
+      "target_event": "clickhouse-play:horizontal-scroll-start",
+      "lead_seconds": -0.2
+    }
+  ]
+}

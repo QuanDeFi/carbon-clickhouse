@@ -20,6 +20,7 @@ SUBTITLE_DIR = REVIEW_DIR / "subtitles"
 LOG_DIR = REVIEW_DIR / "logs"
 ASSET_DIR = REVIEW_DIR / "timeline-assets"
 AUDIO_ANALYSIS_DIR = REVIEW_DIR / "audio-analysis"
+VOICEOVER_REPORT = REVIEW_DIR / "audio/voiceover-placement-report.json"
 OUTPUT = REVIEW_DIR / "subtitle-alignment-timeline.html"
 VIDEO = VIDEO_DIR / "clickhouse-sink-tutorial-human-no-audio-subtitled.mp4"
 RAW_VIDEO = VIDEO_DIR / "clickhouse-sink-tutorial-human-no-audio.mp4"
@@ -98,6 +99,20 @@ def esc(value: Any) -> str:
     return html.escape(str(value), quote=True)
 
 
+def prompt_tags(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item)]
+    if value:
+        return [part.strip() for part in str(value).split(",") if part.strip()]
+    return []
+
+
+def tag_badges(tags: list[str]) -> str:
+    if not tags:
+        return '<span class="muted">-</span>'
+    return '<span class="tag-list">' + "".join(f'<span class="tag-badge">[{esc(tag)}]</span>' for tag in tags) + "</span>"
+
+
 def timing_checks(validation: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {check["name"]: check for check in validation.get("checks", []) if "name" in check}
 
@@ -137,6 +152,15 @@ def audio_analyses() -> list[dict[str, Any]]:
         analysis["path"] = path
         analyses.append(analysis)
     return analyses
+
+
+def voiceover_report() -> dict[str, Any]:
+    if not VOICEOVER_REPORT.is_file():
+        return {}
+    try:
+        return load_json(VOICEOVER_REPORT)
+    except Exception:
+        return {}
 
 
 def command_typing_seconds(command: str, step: dict[str, Any]) -> float:
@@ -622,6 +646,8 @@ def build_html() -> str:
     events = browser_events(scenes)
     actions = runbook_actions(scenes, events)
     audio_reports = audio_analyses()
+    voiceover = voiceover_report()
+    voiceover_placements = voiceover.get("placements", [])
     cue_reviews = cue_review_map(cues, checks)
     total = float(report["total_duration_seconds"])
     strips = transition_strips(checks)
@@ -749,6 +775,7 @@ def build_html() -> str:
     for analysis in audio_reports:
         provider = analysis.get("provider", "audio")
         scene = analysis.get("scene", "")
+        analysis_tags = prompt_tags(analysis.get("prompt_tags", []))
         audio_path = ROOT / str(analysis.get("audio", ""))
         analysis_path = analysis.get("path")
         if audio_path.is_file():
@@ -761,6 +788,7 @@ def build_html() -> str:
                     <a href="{rel(audio_path)}">audio</a>
                     {f'<a href="{rel(analysis_path)}">analysis JSON</a>' if isinstance(analysis_path, Path) else ''}
                   </div>
+                  <div class="prompt-tags">{tag_badges(analysis_tags)}</div>
                   <p class="muted">{esc(analysis.get("method", ""))}</p>
                 </article>
                 """
@@ -774,13 +802,16 @@ def build_html() -> str:
             top = timeline_center + 318 + lane * 48
             stem = max(18, top - timeline_center)
             text = str(utterance.get("text", ""))
-            title = f'{provider} {scene}: {text}'
+            tags = prompt_tags(utterance.get("prompt_tags") or utterance.get("prompt_tag"))
+            tag_label = " ".join(f"[{tag}]" for tag in tags)
+            timeline_label = f"{tag_label} {text}".strip()
+            title = f'{provider} {scene}: {timeline_label}'
             audio_spans.append(
                 f'<button class="audio-span" data-seek="{start:.3f}" style="left:{pct(start, total)};width:{pct(duration, total)}" title="{esc(title)}"></button>'
             )
             audio_pins.append(
                 f'<button class="timeline-pin audio-pin" data-seek="{start:.3f}" style="left:{pct(start, total)};top:{top}px;--stem:{stem}px" title="{esc(title)}">'
-                f'<span class="pin-label">{esc(text)}</span></button>'
+                f'<span class="pin-label">{esc(timeline_label)}</span></button>'
             )
             audio_rows.append(
                 f"""
@@ -790,11 +821,41 @@ def build_html() -> str:
                   <td>{fmt_time(start)}</td>
                   <td>{fmt_time(duration)}</td>
                   <td>{fmt_time(float(utterance["start_seconds"]))}</td>
+                  <td>{tag_badges(tags)}</td>
                   <td>{esc(text)}</td>
                   <td>{esc(utterance.get("text_source", ""))}</td>
                 </tr>
                 """
             )
+
+    voiceover_spans = []
+    voiceover_rows = []
+    for index, placement in enumerate(voiceover_placements, start=1):
+        start = float(placement["target_timeline_start_seconds"])
+        duration = max(0.1, float(placement.get("clip_duration_seconds", 0.0)))
+        tags = prompt_tags(placement.get("prompt_tags") or placement.get("prompt_tag"))
+        tag_label = " ".join(f"[{tag}]" for tag in tags)
+        text = str(placement.get("text", ""))
+        title = f'{placement.get("scene", "")} #{placement.get("utterance_index", index)}: {tag_label} {text}'.strip()
+        target_detail = placement.get("target_event") or placement.get("target_action") or placement.get("target_source", "")
+        voiceover_spans.append(
+            f'<button class="voiceover-span" data-seek="{start:.3f}" style="left:{pct(start, total)};width:{pct(duration, total)}" title="{esc(title)}"></button>'
+        )
+        voiceover_rows.append(
+            f"""
+            <tr data-seek="{start:.3f}">
+              <td>{esc(placement.get("scene", ""))}</td>
+              <td>{esc(placement.get("utterance_index", index))}</td>
+              <td>{fmt_time(start)}</td>
+              <td>{fmt_time(duration)}</td>
+              <td>{fmt_time(float(placement.get("source_cut_start_seconds", 0.0)))} - {fmt_time(float(placement.get("source_cut_end_seconds", 0.0)))}</td>
+              <td>{esc(placement.get("target_source", ""))}</td>
+              <td>{esc(target_detail)}</td>
+              <td>{tag_badges(tags)}</td>
+              <td>{esc(text)}</td>
+            </tr>
+            """
+        )
 
     blackout_spans = []
     for check in checks.values():
@@ -860,6 +921,7 @@ def build_html() -> str:
   --green: #63e6be;
   --orange: #ffb266;
   --audio: #75e4ff;
+  --voice: #d49bff;
   --red: #ff7a90;
 }}
 * {{ box-sizing: border-box; }}
@@ -900,7 +962,7 @@ video {{ width: 100%; background: #000; border: 1px solid var(--line); border-ra
 .track-title.upper {{ top: 10px; }}
 .track-title.lower {{ top: 612px; }}
 .track-title.audio {{ top: 802px; color: var(--audio); }}
-.scene-band, .subtitle-span, .action-span, .audio-span, .time-tick, .timeline-pin, .blackout-span {{
+.scene-band, .subtitle-span, .action-span, .audio-span, .voiceover-span, .time-tick, .timeline-pin, .blackout-span {{
   position: absolute;
   border: 0;
   padding: 0;
@@ -914,6 +976,7 @@ video {{ width: 100%; background: #000; border: 1px solid var(--line); border-ra
 .subtitle-span {{ top: 295px; height: 5px; background: rgba(250, 255, 105, .74); border-radius: 2px; min-width: 2px; z-index: 4; }}
 .action-span {{ top: 320px; height: 7px; background: rgba(255, 178, 102, .72); border-radius: 2px; min-width: 4px; z-index: 4; }}
 .audio-span {{ top: 334px; height: 6px; background: rgba(117, 228, 255, .82); border-radius: 2px; min-width: 3px; z-index: 5; }}
+.voiceover-span {{ top: 344px; height: 8px; background: rgba(212, 155, 255, .78); border-radius: 2px; min-width: 4px; z-index: 5; }}
 .blackout-span {{ top: 278px; height: 22px; min-width: 10px; background: #000; border: 1px solid #777; color: #c7cdd3; border-radius: 3px; z-index: 6; }}
 .blackout-span span {{ display: block; padding: 2px 5px; font-size: 10px; white-space: nowrap; }}
 .timeline-pin {{ width: 270px; background: transparent; text-align: left; z-index: 7; transform: translateX(-1px); }}
@@ -942,6 +1005,9 @@ tr.key td {{ background: rgba(250, 255, 105, .045); }}
 .file-list.compact {{ margin-top: 6px; gap: 6px; }}
 .audio-cards {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }}
 .audio-card audio {{ width: 100%; }}
+.prompt-tags {{ margin: 8px 0 6px; }}
+.tag-list {{ display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }}
+.tag-badge {{ display: inline-flex; align-items: center; min-height: 20px; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(117, 228, 255, .42); background: rgba(117, 228, 255, .1); color: var(--audio); font-size: 11px; font-weight: 650; white-space: nowrap; }}
 @media (max-width: 980px) {{
   .top-grid, .strips, .audio-cards {{ grid-template-columns: 1fr; }}
 }}
@@ -975,6 +1041,7 @@ tr.key td {{ background: rgba(250, 255, 105, .045); }}
         <div class="fact"><b>Subtitle Cues</b><span>{len(cues)}</span></div>
         <div class="fact"><b>Runbook Actions</b><span>{len(actions)}</span></div>
         <div class="fact"><b>Audio Utterances</b><span>{audio_index}</span></div>
+        <div class="fact"><b>Voiceover Placements</b><span>{len(voiceover_placements)}</span></div>
         <div class="fact"><b>Failures</b><span>{len(failures)}</span></div>
       </div>
       <p class="muted">Click any cue, action, scene band, table row, or frame strip timestamp to seek the video.</p>
@@ -994,6 +1061,7 @@ tr.key td {{ background: rgba(250, 255, 105, .045); }}
       {''.join(blackout_spans)}
       {''.join(action_spans)}
       {''.join(audio_spans)}
+      {''.join(voiceover_spans)}
       {''.join(subtitle_pins)}
       {''.join(action_pins)}
       {''.join(audio_pins)}
@@ -1027,8 +1095,22 @@ tr.key td {{ background: rgba(250, 255, 105, .045); }}
     <p class="muted">Speech timings are detected from the WAV with FFmpeg silencedetect and mapped to the known generated transcript. This is forced alignment, not independent ASR.</p>
     <div class="audio-cards">{''.join(audio_cards)}</div>
     <table>
-      <thead><tr><th>Provider</th><th>Scene</th><th>Timeline Start</th><th>Duration</th><th>Audio Local Start</th><th>Detected/Aligned Speech</th><th>Text Source</th></tr></thead>
+      <thead><tr><th>Provider</th><th>Scene</th><th>Timeline Start</th><th>Duration</th><th>Audio Local Start</th><th>Prompt Tag</th><th>Detected/Aligned Speech</th><th>Text Source</th></tr></thead>
       <tbody>{''.join(audio_rows)}</tbody>
+    </table>
+  </div>
+
+  <h2>Voiceover Placement</h2>
+  <div class="panel">
+    <p class="muted">Purple timeline spans show where analyzed narration clips are placed on the final video timeline. Placement cuts use silence/speech boundaries from the source scene audio.</p>
+    <div class="file-list compact">
+      {f'<a href="{rel(VOICEOVER_REPORT)}">placement report</a>' if VOICEOVER_REPORT.is_file() else ''}
+      {f'<a href="{rel(REVIEW_DIR / "audio/voiceover-timeline.wav")}">voiceover WAV</a>' if (REVIEW_DIR / "audio/voiceover-timeline.wav").is_file() else ''}
+      {f'<a href="{rel(REVIEW_DIR / "videos/clickhouse-sink-tutorial-human-voiceover.mp4")}">voiceover video</a>' if (REVIEW_DIR / "videos/clickhouse-sink-tutorial-human-voiceover.mp4").is_file() else ''}
+    </div>
+    <table>
+      <thead><tr><th>Scene</th><th>#</th><th>Target Start</th><th>Duration</th><th>Source Cut</th><th>Target Source</th><th>Target Detail</th><th>Prompt Tag</th><th>Text</th></tr></thead>
+      <tbody>{''.join(voiceover_rows)}</tbody>
     </table>
   </div>
 

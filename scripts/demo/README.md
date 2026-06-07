@@ -118,6 +118,28 @@ source .venv-demo/bin/activate
 python scripts/demo/voice.py all
 ```
 
+## Place Voiceover
+
+Gemini and other TTS providers generate coherent scene-level audio. The final
+tutorial sync is handled separately: `place_voiceover.py` cuts the scene audio
+at detected silence/speech boundaries, places each utterance on the review-video
+timeline using browser workflow events, runbook action timings, subtitle cues,
+and `scripts/demo/voiceover-placement-overrides.json`, then muxes the final
+voiceover video.
+
+```sh
+source .venv-demo/bin/activate
+TTS_PROVIDER=gemini python scripts/demo/voice.py all
+python scripts/demo/place_voiceover.py
+python scripts/demo/build_timeline_review.py
+```
+
+Outputs:
+
+- `demo-artifacts/review-human/audio/voiceover-timeline.wav`
+- `demo-artifacts/review-human/audio/voiceover-placement-report.json`
+- `demo-artifacts/review-human/videos/clickhouse-sink-tutorial-human-voiceover.mp4`
+
 ## Human-Style No-Audio Review
 
 Use this before final voiceover. It records a directed screen performance:
