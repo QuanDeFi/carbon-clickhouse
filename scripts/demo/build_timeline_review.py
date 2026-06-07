@@ -24,6 +24,7 @@ VOICEOVER_REPORT = REVIEW_DIR / "audio/voiceover-placement-report.json"
 OUTPUT = REVIEW_DIR / "subtitle-alignment-timeline.html"
 VIDEO = VIDEO_DIR / "clickhouse-sink-tutorial-human-no-audio-subtitled.mp4"
 RAW_VIDEO = VIDEO_DIR / "clickhouse-sink-tutorial-human-no-audio.mp4"
+VOICEOVER_VIDEO = VIDEO_DIR / "clickhouse-sink-tutorial-human-voiceover.mp4"
 VTT = SUBTITLE_DIR / "clickhouse-sink-tutorial-human-no-audio.vtt"
 SRT = SUBTITLE_DIR / "clickhouse-sink-tutorial-human-no-audio.srt"
 SUBTITLE_REPORT = SUBTITLE_DIR / "subtitle-report.json"
@@ -161,6 +162,25 @@ def voiceover_report() -> dict[str, Any]:
         return load_json(VOICEOVER_REPORT)
     except Exception:
         return {}
+
+
+def voiceover_status(report: dict[str, Any]) -> str:
+    if not report:
+        return "not run"
+    if report.get("status") == "ok" and not report.get("errors"):
+        return "ok"
+    return "failed"
+
+
+def available_video_sources() -> list[dict[str, Any]]:
+    sources: list[dict[str, Any]] = []
+    if VOICEOVER_VIDEO.is_file():
+        sources.append({"label": "Voiceover review", "path": VOICEOVER_VIDEO, "kind": "voiceover"})
+    if VIDEO.is_file():
+        sources.append({"label": "No-audio subtitled review", "path": VIDEO, "kind": "subtitled"})
+    if RAW_VIDEO.is_file():
+        sources.append({"label": "No-audio raw review", "path": RAW_VIDEO, "kind": "raw"})
+    return sources
 
 
 def command_typing_seconds(command: str, step: dict[str, Any]) -> float:
@@ -647,11 +667,34 @@ def build_html() -> str:
     actions = runbook_actions(scenes, events)
     audio_reports = audio_analyses()
     voiceover = voiceover_report()
+    voiceover_state = voiceover_status(voiceover)
     voiceover_placements = voiceover.get("placements", [])
     cue_reviews = cue_review_map(cues, checks)
     total = float(report["total_duration_seconds"])
     strips = transition_strips(checks)
-    failures = validation.get("failures", [])
+    failures = list(validation.get("failures", []))
+    voiceover_errors = voiceover.get("errors", []) if voiceover else []
+    if voiceover_state == "failed":
+        failures.extend(
+            {
+                "name": f"voiceover-placement:{index}",
+                "reason": error.get("type", "voiceover placement failed"),
+                **error,
+            }
+            for index, error in enumerate(voiceover_errors, start=1)
+        )
+        if not voiceover_errors:
+            failures.append({"name": "voiceover-placement:status", "reason": "voiceover placement report is not ok"})
+    video_sources = available_video_sources()
+    if not video_sources:
+        raise FileNotFoundError(VIDEO)
+    default_video = video_sources[0]["path"]
+    video_source_buttons = []
+    for index, source in enumerate(video_sources):
+        active = " active" if index == 0 else ""
+        video_source_buttons.append(
+            f'<button class="source-button{active}" data-video-src="{rel(source["path"])}" type="button">{esc(source["label"])}</button>'
+        )
 
     scene_rows = []
     for scene in scenes:
@@ -1000,6 +1043,9 @@ tr.key td {{ background: rgba(250, 255, 105, .045); }}
 .strips {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }}
 .strip-card img {{ display:block; width: 100%; border: 1px solid var(--line); border-radius: 5px; }}
 .linklike {{ color: var(--cyan); background: transparent; border: 0; padding: 0; cursor: pointer; font: inherit; margin-bottom: 8px; }}
+.source-buttons {{ display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }}
+.source-button {{ background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 6px 9px; cursor: pointer; font: inherit; }}
+.source-button.active {{ border-color: rgba(212, 155, 255, .75); color: var(--voice); background: rgba(212, 155, 255, .12); }}
 .file-list {{ display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }}
 .file-list a {{ background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 5px 8px; text-decoration: none; }}
 .file-list.compact {{ margin-top: 6px; gap: 6px; }}
@@ -1022,11 +1068,12 @@ tr.key td {{ background: rgba(250, 255, 105, .045); }}
   <section class="top-grid">
     <div>
       <video id="review-video" controls preload="metadata">
-        <source src="{rel(VIDEO if VIDEO.is_file() else RAW_VIDEO)}" type="video/mp4">
+        <source id="review-video-source" src="{rel(default_video)}" type="video/mp4">
         <track src="{rel(VTT)}" kind="subtitles" srclang="en" label="English" default>
       </video>
+      <div class="source-buttons">{''.join(video_source_buttons)}</div>
       <div class="file-list">
-        <a href="{rel(VIDEO if VIDEO.is_file() else RAW_VIDEO)}">video</a>
+        {''.join(f'<a href="{rel(source["path"])}">{esc(source["label"])}</a>' for source in video_sources)}
         <a href="{rel(SRT)}">SRT</a>
         <a href="{rel(VTT)}">VTT</a>
         <a href="{rel(TIMING_VALIDATION)}">timing JSON</a>
@@ -1042,6 +1089,7 @@ tr.key td {{ background: rgba(250, 255, 105, .045); }}
         <div class="fact"><b>Runbook Actions</b><span>{len(actions)}</span></div>
         <div class="fact"><b>Audio Utterances</b><span>{audio_index}</span></div>
         <div class="fact"><b>Voiceover Placements</b><span>{len(voiceover_placements)}</span></div>
+        <div class="fact"><b>Voiceover Status</b><span>{status_badge(voiceover_state) if voiceover_state != "not run" else esc(voiceover_state)}</span></div>
         <div class="fact"><b>Failures</b><span>{len(failures)}</span></div>
       </div>
       <p class="muted">Click any cue, action, scene band, table row, or frame strip timestamp to seek the video.</p>
@@ -1132,11 +1180,26 @@ tr.key td {{ background: rgba(250, 255, 105, .045); }}
 </main>
 <script>
 const video = document.getElementById('review-video');
+const videoSource = document.getElementById('review-video-source');
 function seek(seconds) {{
   video.currentTime = Number(seconds);
   video.play().catch(() => {{}});
   video.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
 }}
+document.querySelectorAll('.source-button').forEach((button) => {{
+  button.addEventListener('click', () => {{
+    const current = video.currentTime || 0;
+    const wasPaused = video.paused;
+    document.querySelectorAll('.source-button').forEach((item) => item.classList.remove('active'));
+    button.classList.add('active');
+    videoSource.src = button.dataset.videoSrc;
+    video.load();
+    video.addEventListener('loadedmetadata', () => {{
+      video.currentTime = Math.min(current, Math.max(0, video.duration - 0.1));
+      if (!wasPaused) video.play().catch(() => {{}});
+    }}, {{ once: true }});
+  }});
+}});
 document.querySelectorAll('[data-seek]').forEach((element) => {{
   element.addEventListener('click', () => seek(element.dataset.seek));
 }});

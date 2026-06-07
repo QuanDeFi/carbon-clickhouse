@@ -126,6 +126,8 @@ at detected silence/speech boundaries, places each utterance on the review-video
 timeline using browser workflow events, runbook action timings, subtitle cues,
 and `scripts/demo/voiceover-placement-overrides.json`, then muxes the final
 voiceover video.
+Overrides and action timings are primary; subtitle cues are used as fallback
+and comparison metadata.
 
 ```sh
 source .venv-demo/bin/activate

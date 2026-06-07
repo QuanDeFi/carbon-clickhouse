@@ -212,6 +212,37 @@ def action_at(actions: list[dict[str, Any]], seconds: float) -> dict[str, Any] |
     return min(actions, key=lambda action: abs(float(action["time"]) - seconds))
 
 
+def action_score(text: str, action: dict[str, Any]) -> float:
+    query = tokenize(text)
+    candidate = tokenize(f"{action.get('action', '')} {action.get('detail', '')} {action.get('kind', '')}")
+    if not query or not candidate:
+        return 0.0
+    overlap = len(set(query) & set(candidate))
+    return overlap / max(1, min(len(set(query)), len(set(candidate))))
+
+
+def best_action(text: str, actions: list[dict[str, Any]], fallback_index: int) -> dict[str, Any] | None:
+    if not actions:
+        return None
+    scored = [(action_score(text, action), action) for action in actions]
+    scored.sort(key=lambda item: item[0], reverse=True)
+    if scored and scored[0][0] >= 0.22:
+        return scored[0][1]
+    return actions[min(fallback_index, len(actions) - 1)]
+
+
+def action_target(action: dict[str, Any]) -> dict[str, Any]:
+    kind = str(action.get("kind", ""))
+    return {
+        "target_source": "browser-action" if kind == "Browser" else "runbook-action",
+        "target_action": action.get("action"),
+        "target_action_start_seconds": float(action["time"]),
+        "target_action_end_seconds": float(action["end"]),
+        "target_action_source": action.get("source"),
+        "target_timeline_start_seconds": float(action["time"]),
+    }
+
+
 def events_for_scene(events: list[dict[str, Any]], scene_id: str) -> dict[str, dict[str, Any]]:
     return {str(event["label"]): event for event in events if event["scene"] == scene_id}
 
@@ -275,38 +306,28 @@ def choose_target(
             details["locked_to_event"] = bool(details.get("target_event"))
 
     cue = best_cue(text, scene_id, context.cues, utterance_index - 1)
+    if target is None:
+        action = best_action(text, scene_actions, utterance_index - 1)
+        if action:
+            details = action_target(action)
+            target = float(details["target_timeline_start_seconds"])
+
+    if cue:
+        details.update(
+            {
+                "subtitle_cue_index": cue.index,
+                "subtitle_cue_start_seconds": cue.start,
+                "subtitle_cue_text": cue.text,
+                "subtitle_delta_seconds": float(details.get("target_timeline_start_seconds", target or cue.start)) - cue.start,
+            }
+        )
+
     if target is None and cue:
-        action = action_at(scene_actions, cue.start)
         target = cue.start
         details = {
+            **details,
             "target_source": "subtitle-cue",
-            "subtitle_cue_index": cue.index,
-            "subtitle_cue_start_seconds": cue.start,
-            "subtitle_cue_text": cue.text,
-        }
-        if action and float(action["time"]) <= cue.start <= float(action["end"]):
-            details.update(
-                {
-                    "target_source": "browser-action" if action.get("kind") == "Browser" else "runbook-action",
-                    "target_action": action.get("action"),
-                    "target_action_start_seconds": float(action["time"]),
-                    "target_action_end_seconds": float(action["end"]),
-                    "target_action_source": action.get("source"),
-                    "subtitle_cue_index": cue.index,
-                    "subtitle_cue_start_seconds": cue.start,
-                    "subtitle_cue_text": cue.text,
-                }
-            )
-
-    if target is None and scene_actions:
-        action = scene_actions[min(utterance_index - 1, len(scene_actions) - 1)]
-        target = float(action["time"])
-        details = {
-            "target_source": "browser-action" if action.get("kind") == "Browser" else "runbook-action",
-            "target_action": action.get("action"),
-            "target_action_start_seconds": float(action["time"]),
-            "target_action_end_seconds": float(action["end"]),
-            "target_action_source": action.get("source"),
+            "target_timeline_start_seconds": cue.start,
         }
 
     if target is None:
