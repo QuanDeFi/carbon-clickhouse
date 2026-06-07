@@ -23,7 +23,7 @@ scripts/demo/runbook.yaml
 - Human-style browser scenes: Chromium app windows launched visibly on Xvfb, with browser chrome hidden and dark rendering where possible.
 - Default recorder: FFmpeg `x11grab`.
 - Optional recorder: OBS through obs-websocket.
-- Voiceover: ElevenLabs.
+- Voiceover: configurable TTS provider; ElevenLabs is the default.
 - Assembly: FFmpeg.
 
 FFmpeg x11grab is the default because this RPC node is headless and OBS is not
@@ -74,31 +74,38 @@ If the selected display or ports are already used by another local VNC session,
 keep that session untouched and use explicit overrides or `--auto`:
 
 ```sh
-DEMO_DISPLAY=:97 DEMO_VNC_PORT=5905 DEMO_NOVNC_PORT=6085 scripts/demo/start-display.sh
+DEMO_DISPLAY=:<display> DEMO_VNC_PORT=<vnc-port> DEMO_NOVNC_PORT=<novnc-port> scripts/demo/start-display.sh
 scripts/demo/start-display.sh --auto
 ```
 
 ## Preflight
 
 ```sh
-scripts/demo/preflight.sh --no-elevenlabs
+scripts/demo/preflight.sh --no-tts
 ```
 
 Use `--no-obs` when using the default FFmpeg backend:
 
 ```sh
-scripts/demo/preflight.sh --no-elevenlabs --no-obs
+scripts/demo/preflight.sh --no-tts --no-obs
 ```
 
 ## Generate Voice
 
-Free ElevenLabs accounts cannot use every library voice. The demo helper can
-query voices available to the account and select a default/free-usable voice
-without printing the voice ID:
+`voice.py` supports `TTS_PROVIDER=elevenlabs`, `TTS_PROVIDER=gemini`, and
+`TTS_PROVIDER=alibaba`. ElevenLabs remains the default. For Gemini, set a
+Google AI Studio/Gemini API key and the optional model/voice fields. For
+Alibaba Cloud, set a Model Studio DashScope API key and the optional
+CosyVoice model/voice fields.
+
+Free ElevenLabs accounts cannot use every library voice. When using
+`TTS_PROVIDER=elevenlabs`, the demo helper can query voices available to the
+account and select a default/free-usable voice without printing the voice ID:
 
 ```sh
 source .venv-demo/bin/activate
 python scripts/demo/voice.py status
+python scripts/demo/voice.py check
 python scripts/demo/voice.py voices
 python scripts/demo/voice.py select-free --write-env
 python scripts/demo/voice.py smoke
@@ -148,7 +155,7 @@ previous Mission-Control-style transition is archived in
 ```sh
 source .venv-demo/bin/activate
 export RECORDER_BACKEND=ffmpeg_x11
-source /home/ops/dev/vnc/recording-96/display.env
+source "$DEMO_RECORDING_DISPLAY_ENV"
 export DEMO_SCREEN_SIZE=1920x1080
 export DEMO_FPS=60
 DEMO_ALLOW_CLICKHOUSE_RESET=true python scripts/demo/run_human_rehearsal.py --no-voice
@@ -196,7 +203,7 @@ demo-artifacts/review-human/subtitle-alignment-timeline.html
 
 Current theme behavior:
 
-- VS Code uses a dedicated recording profile under `/home/ops/dev/vnc`.
+- VS Code uses a dedicated recording profile outside the repository.
 - ClickHouse `/play` and ClickStack are darkened through deterministic
   recording-time CSS injection without decorative backgrounds.
 - Grafana uses its native dark theme/dashboard URL and is zoomed to 80% so the
@@ -274,14 +281,11 @@ The reset targets only `jupiter_swap_%landing` and
 
 ## Current Environment Notes
 
-The audited machine is headless. FFmpeg x11grab is the default recorder. OBS is
-optional backup.
-
-The unmanaged `:99` display may already be occupied at `1440x1000`. For clean
-tutorial recording, use:
+For clean tutorial recording, use a dedicated recording display and source its
+display env file before launching the rehearsal:
 
 ```sh
-source /home/ops/dev/vnc/recording-96/display.env
+source "$DEMO_RECORDING_DISPLAY_ENV"
 export DEMO_SCREEN_SIZE=1920x1080
 ```
 
@@ -291,11 +295,13 @@ Before deterministic tutorial runs, reset tutorial ClickHouse tables:
 DEMO_ALLOW_CLICKHOUSE_RESET=true scripts/demo/reset-clickhouse.sh
 ```
 
-ElevenLabs requires an API key in `.env.demo.local`. A voice ID can be set
+Voice generation is selected with `TTS_PROVIDER` in `.env.demo.local`.
+ElevenLabs is the default and requires an API key. A voice ID can be set
 manually, or `voice.py` can discover a default/free-usable voice and write it
 without printing the ID:
 
 ```env
+TTS_PROVIDER=elevenlabs
 ELEVENLABS_API_KEY=<elevenlabs-api-key>
 ELEVENLABS_VOICE_ID=<voice-id>
 ELEVENLABS_MODEL_ID=eleven_multilingual_v2
@@ -304,11 +310,56 @@ ELEVENLABS_DISABLE_AUTO_VOICE_FALLBACK=false
 ELEVENLABS_AUTO_WRITE_VOICE_ID=false
 ```
 
+Gemini TTS uses the Google AI Studio/Gemini API key and writes WAV audio. Use a
+Gemini TTS-capable model here; text-generation aliases such as
+`gemini-flash-latest` are not valid for voiceover generation. Gemini returns
+raw audio with MIME metadata, and the helper wraps it as WAV using the returned
+sample rate and bit depth.
+
+```env
+TTS_PROVIDER=gemini
+GEMINI_API_KEY=<gemini-api-key>
+GEMINI_TTS_MODEL=gemini-3.1-flash-tts-preview
+GEMINI_TTS_VOICE=Iapetus
+GEMINI_TTS_SAMPLE_RATE=24000
+GEMINI_TTS_TEMPERATURE=1
+GEMINI_TTS_PROMPT_STYLE=software-tutorial
+GEMINI_TTS_PROMPT_PREFIX_FILE=
+```
+
+`software-tutorial` prompt style wraps each scene under a `# TRANSCRIPT`
+section with a small tag set for instruction, explanation, confirmation, and
+short pauses. Use `GEMINI_TTS_PROMPT_PREFIX_FILE` when you want to override the
+built-in audio profile and director note.
+
+Alibaba Cloud TTS uses Model Studio DashScope with CosyVoice. The non-streaming
+SDK call accepts up to 20,000 characters, so the helper chunks longer scene
+scripts and concatenates the returned audio:
+
+```env
+TTS_PROVIDER=alibaba
+DASHSCOPE_API_KEY=<dashscope-api-key>
+DASHSCOPE_BASE_WEBSOCKET_API_URL=wss://dashscope-intl.aliyuncs.com/api-ws/v1/inference
+ALIBABA_DASHSCOPE_MODEL=cosyvoice-v3-plus
+ALIBABA_DASHSCOPE_VOICE=longanyang
+ALIBABA_DASHSCOPE_AUDIO_FORMAT=
+ALIBABA_DASHSCOPE_MAX_CHARS=20000
+```
+
+Leave `ALIBABA_DASHSCOPE_AUDIO_FORMAT` empty for DashScope's default MP3
+output, or set it to a DashScope `AudioFormat` enum name such as
+`MP3_22050HZ_MONO_256KBPS` or `WAV_24000HZ_MONO_16BIT`.
+
 ```sh
 source .venv-demo/bin/activate
-python scripts/demo/voice.py select-free --write-env
+python scripts/demo/voice.py status
+python scripts/demo/voice.py check
 python scripts/demo/voice.py smoke
 ```
+
+For ElevenLabs only, run `python scripts/demo/voice.py select-free --write-env`
+before the smoke test if you want the helper to choose and store a free-usable
+voice ID.
 
 OBS backup recording is valid only after:
 

@@ -28,12 +28,14 @@ not rely on autonomous UI or terminal behavior during final recording.
 - Browser UI: Playwright.
 - Default recording backend: FFmpeg x11grab.
 - Optional recording backend: OBS via obs-websocket.
-- Voiceover: ElevenLabs `eleven_multilingual_v2`.
+- Voiceover: configurable TTS provider; ElevenLabs `eleven_multilingual_v2` is
+  the default.
 - Final assembly: FFmpeg.
 
 ## Safety
 
-- Never print RPC URLs, API keys, OBS websocket passwords, or ElevenLabs secrets.
+- Never print RPC URLs, API keys, OBS websocket passwords, or TTS provider
+  secrets.
 - Do not commit `.env.demo.local`.
 - Do not touch `crates/core/src/clickhouse/docs/Branch Diff to v1.md` unless
   explicitly asked.

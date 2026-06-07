@@ -7,13 +7,14 @@ source "$ROOT/scripts/demo/common.sh"
 load_demo_env
 
 CHECK_OBS=true
-CHECK_ELEVENLABS=true
+CHECK_TTS=true
 CHECK_BROWSER=true
 FULL_RECORDING=false
 for arg in "$@"; do
   case "$arg" in
     --no-obs) CHECK_OBS=false ;;
-    --no-elevenlabs) CHECK_ELEVENLABS=false ;;
+    --no-elevenlabs) CHECK_TTS=false ;;
+    --no-tts) CHECK_TTS=false ;;
     --terminal-only) CHECK_BROWSER=false ;;
     --full-recording) FULL_RECORDING=true ;;
     *) log_error "Unknown preflight flag: $arg"; exit 2 ;;
@@ -21,7 +22,7 @@ for arg in "$@"; do
 done
 
 if [[ "$FULL_RECORDING" == true ]]; then
-  CHECK_ELEVENLABS=true
+  CHECK_TTS=true
 fi
 
 failures=0
@@ -107,7 +108,8 @@ for cmd in cargo rustc docker curl jq ffmpeg xterm Xvfb x11vnc websockify python
 done
 docker compose version >/dev/null 2>&1 && ok "docker compose present" || fail "docker compose unavailable"
 
-curl -fsS 'http://carbon:carbon@localhost:8123/?query=SELECT%201' >/dev/null && ok "ClickHouse SELECT 1" || fail "ClickHouse unavailable"
+CLICKHOUSE_HEALTH_URL="${DATABASE_URL:-http://localhost:8123}"
+curl -fsS "${CLICKHOUSE_HEALTH_URL%/}/?query=SELECT%201" >/dev/null && ok "ClickHouse SELECT 1" || fail "ClickHouse unavailable"
 curl -fsS 'http://localhost:9090/-/ready' >/dev/null && ok "Prometheus ready" || fail "Prometheus unavailable"
 curl -fsS 'http://localhost:3000/api/health' >/dev/null && ok "Grafana health" || fail "Grafana unavailable"
 
@@ -199,17 +201,14 @@ else
   fi
 fi
 
-if [[ "$CHECK_ELEVENLABS" == true ]]; then
-  require_env ELEVENLABS_API_KEY || failures=$((failures + 1))
-  if require_env ELEVENLABS_VOICE_ID; then
-    :
-  elif [[ "${ELEVENLABS_DISABLE_AUTO_VOICE_FALLBACK:-false}" =~ ^(1|true|yes|on)$ ]]; then
-    failures=$((failures + 1))
+if [[ "$CHECK_TTS" == true ]]; then
+  if "$ROOT/.venv-demo/bin/python" "$ROOT/scripts/demo/voice.py" check >/dev/null; then
+    ok "TTS provider configured (${TTS_PROVIDER:-elevenlabs})"
   else
-    warn "ELEVENLABS_VOICE_ID missing; voice.py will try a default/free-usable voice"
+    fail "TTS provider config failed (${TTS_PROVIDER:-elevenlabs})"
   fi
 else
-  warn "Skipping ElevenLabs checks"
+  warn "Skipping TTS checks"
 fi
 
 if port_listener 9464 >/dev/null; then
@@ -251,13 +250,14 @@ if [[ "$FULL_RECORDING" == true ]]; then
   if [[ "${RECORDER_BACKEND:-ffmpeg_x11}" == "ffmpeg_x11" && ! -S "/tmp/.X11-unix/X$(display_number "$DISPLAY_ID")" ]]; then
     fail "--full-recording requires an active display for ffmpeg_x11"
   fi
-  smoke_file="$ROOT/demo-artifacts/audio/elevenlabs-smoke.mp3"
-  if [[ -s "$smoke_file" && $(find "$smoke_file" -mmin -1440 -print) ]]; then
-    ok "recent ElevenLabs smoke audio present"
+  if find "$ROOT/demo-artifacts/audio" -maxdepth 1 -mmin -1440 -size +0 \
+    \( -name 'tts-smoke.mp3' -o -name 'tts-smoke.wav' -o -name 'elevenlabs-smoke.mp3' \) \
+    -print -quit 2>/dev/null | grep -q .; then
+    ok "recent TTS smoke audio present"
   elif "$ROOT/.venv-demo/bin/python" "$ROOT/scripts/demo/voice.py" smoke >/dev/null; then
-    ok "ElevenLabs smoke succeeded"
+    ok "TTS smoke succeeded"
   else
-    fail "ElevenLabs smoke failed"
+    fail "TTS smoke failed"
   fi
   if [[ -s "$ROOT/demo-artifacts/logs/clickhouse-reset.log" || "${DEMO_CLICKHOUSE_RESET_ACK:-}" == "true" ]]; then
     ok "ClickHouse reset acknowledged"

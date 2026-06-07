@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import html
 import json
+import os
 import re
 import subprocess
 from dataclasses import dataclass
@@ -18,6 +19,7 @@ VIDEO_DIR = REVIEW_DIR / "videos"
 SUBTITLE_DIR = REVIEW_DIR / "subtitles"
 LOG_DIR = REVIEW_DIR / "logs"
 ASSET_DIR = REVIEW_DIR / "timeline-assets"
+AUDIO_ANALYSIS_DIR = REVIEW_DIR / "audio-analysis"
 OUTPUT = REVIEW_DIR / "subtitle-alignment-timeline.html"
 VIDEO = VIDEO_DIR / "clickhouse-sink-tutorial-human-no-audio-subtitled.mp4"
 RAW_VIDEO = VIDEO_DIR / "clickhouse-sink-tutorial-human-no-audio.mp4"
@@ -89,7 +91,7 @@ def scene_for_time(scenes: list[dict[str, Any]], seconds: float) -> dict[str, An
 
 
 def rel(path: Path) -> str:
-    return html.escape(path.relative_to(REVIEW_DIR).as_posix(), quote=True)
+    return html.escape(Path(os.path.relpath(path, REVIEW_DIR)).as_posix(), quote=True)
 
 
 def esc(value: Any) -> str:
@@ -121,6 +123,20 @@ def browser_events(scenes: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 }
             )
     return sorted(events, key=lambda item: item["time"])
+
+
+def audio_analyses() -> list[dict[str, Any]]:
+    analyses: list[dict[str, Any]] = []
+    if not AUDIO_ANALYSIS_DIR.is_dir():
+        return analyses
+    for path in sorted(AUDIO_ANALYSIS_DIR.glob("*.json")):
+        try:
+            analysis = load_json(path)
+        except Exception:
+            continue
+        analysis["path"] = path
+        analyses.append(analysis)
+    return analyses
 
 
 def command_typing_seconds(command: str, step: dict[str, Any]) -> float:
@@ -605,6 +621,7 @@ def build_html() -> str:
     checks = timing_checks(validation)
     events = browser_events(scenes)
     actions = runbook_actions(scenes, events)
+    audio_reports = audio_analyses()
     cue_reviews = cue_review_map(cues, checks)
     total = float(report["total_duration_seconds"])
     strips = transition_strips(checks)
@@ -724,6 +741,61 @@ def build_html() -> str:
             f'<span class="pin-label">{esc(action["action"])}</span></button>'
         )
 
+    audio_spans = []
+    audio_pins = []
+    audio_rows = []
+    audio_cards = []
+    audio_index = 0
+    for analysis in audio_reports:
+        provider = analysis.get("provider", "audio")
+        scene = analysis.get("scene", "")
+        audio_path = ROOT / str(analysis.get("audio", ""))
+        analysis_path = analysis.get("path")
+        if audio_path.is_file():
+            audio_cards.append(
+                f"""
+                <article class="audio-card">
+                  <h3>{esc(provider)} {esc(scene)}</h3>
+                  <audio controls preload="metadata" src="{rel(audio_path)}"></audio>
+                  <div class="file-list compact">
+                    <a href="{rel(audio_path)}">audio</a>
+                    {f'<a href="{rel(analysis_path)}">analysis JSON</a>' if isinstance(analysis_path, Path) else ''}
+                  </div>
+                  <p class="muted">{esc(analysis.get("method", ""))}</p>
+                </article>
+                """
+            )
+        for utterance in analysis.get("utterances", []):
+            audio_index += 1
+            start = float(utterance["timeline_start_seconds"])
+            end = float(utterance["timeline_end_seconds"])
+            duration = max(0.2, end - start)
+            lane = (audio_index - 1) % 4
+            top = timeline_center + 318 + lane * 48
+            stem = max(18, top - timeline_center)
+            text = str(utterance.get("text", ""))
+            title = f'{provider} {scene}: {text}'
+            audio_spans.append(
+                f'<button class="audio-span" data-seek="{start:.3f}" style="left:{pct(start, total)};width:{pct(duration, total)}" title="{esc(title)}"></button>'
+            )
+            audio_pins.append(
+                f'<button class="timeline-pin audio-pin" data-seek="{start:.3f}" style="left:{pct(start, total)};top:{top}px;--stem:{stem}px" title="{esc(title)}">'
+                f'<span class="pin-label">{esc(text)}</span></button>'
+            )
+            audio_rows.append(
+                f"""
+                <tr data-seek="{start:.3f}">
+                  <td>{esc(provider)}</td>
+                  <td>{esc(scene)}</td>
+                  <td>{fmt_time(start)}</td>
+                  <td>{fmt_time(duration)}</td>
+                  <td>{fmt_time(float(utterance["start_seconds"]))}</td>
+                  <td>{esc(text)}</td>
+                  <td>{esc(utterance.get("text_source", ""))}</td>
+                </tr>
+                """
+            )
+
     blackout_spans = []
     for check in checks.values():
         if not str(check.get("name", "")).startswith("black-interval-"):
@@ -786,6 +858,8 @@ def build_html() -> str:
   --accent: #faff69;
   --cyan: #65d4ff;
   --green: #63e6be;
+  --orange: #ffb266;
+  --audio: #75e4ff;
   --red: #ff7a90;
 }}
 * {{ box-sizing: border-box; }}
@@ -819,13 +893,14 @@ video {{ width: 100%; background: #000; border: 1px solid var(--line); border-ra
 .badge.ok {{ background: rgba(99, 230, 190, .14); color: var(--green); border: 1px solid rgba(99, 230, 190, .4); }}
 .badge.bad, .badge.check {{ background: rgba(255, 122, 144, .14); color: var(--red); border: 1px solid rgba(255, 122, 144, .45); }}
 .muted {{ color: var(--muted); font-size: 12px; }}
-.timeline {{ position: relative; height: 642px; border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; overflow-y: hidden; background: #0b1015; }}
+.timeline {{ position: relative; height: 836px; border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; overflow-y: hidden; background: #0b1015; }}
 .timeline-inner {{ position: relative; min-width: 5400px; height: 100%; }}
 .center-line {{ position: absolute; left: 0; right: 0; top: 310px; height: 1px; background: #5b6872; z-index: 2; }}
 .track-title {{ position: absolute; left: 12px; z-index: 8; color: var(--muted); font-size: 12px; font-weight: 650; letter-spacing: .02em; }}
 .track-title.upper {{ top: 10px; }}
 .track-title.lower {{ top: 612px; }}
-.scene-band, .subtitle-span, .action-span, .time-tick, .timeline-pin, .blackout-span {{
+.track-title.audio {{ top: 802px; color: var(--audio); }}
+.scene-band, .subtitle-span, .action-span, .audio-span, .time-tick, .timeline-pin, .blackout-span {{
   position: absolute;
   border: 0;
   padding: 0;
@@ -838,17 +913,21 @@ video {{ width: 100%; background: #000; border: 1px solid var(--line); border-ra
 .time-tick span {{ position: absolute; top: 18px; left: -18px; color: var(--muted); font-size: 10px; white-space: nowrap; }}
 .subtitle-span {{ top: 295px; height: 5px; background: rgba(250, 255, 105, .74); border-radius: 2px; min-width: 2px; z-index: 4; }}
 .action-span {{ top: 320px; height: 7px; background: rgba(255, 178, 102, .72); border-radius: 2px; min-width: 4px; z-index: 4; }}
+.audio-span {{ top: 334px; height: 6px; background: rgba(117, 228, 255, .82); border-radius: 2px; min-width: 3px; z-index: 5; }}
 .blackout-span {{ top: 278px; height: 22px; min-width: 10px; background: #000; border: 1px solid #777; color: #c7cdd3; border-radius: 3px; z-index: 6; }}
 .blackout-span span {{ display: block; padding: 2px 5px; font-size: 10px; white-space: nowrap; }}
 .timeline-pin {{ width: 270px; background: transparent; text-align: left; z-index: 7; transform: translateX(-1px); }}
 .timeline-pin::before, .timeline-pin::after {{ content: ""; position: absolute; left: 0; width: 1px; pointer-events: none; }}
 .subtitle-pin {{ color: var(--accent); }}
 .subtitle-pin::after {{ top: 30px; height: var(--stem); background: var(--accent); }}
-.action-pin {{ color: #ffb266; }}
-.action-pin::before {{ top: calc(-1 * var(--stem)); height: var(--stem); background: #ffb266; }}
+.action-pin {{ color: var(--orange); }}
+.action-pin::before {{ top: calc(-1 * var(--stem)); height: var(--stem); background: var(--orange); }}
+.audio-pin {{ color: var(--audio); }}
+.audio-pin::before {{ top: calc(-1 * var(--stem)); height: var(--stem); background: var(--audio); }}
 .pin-label {{ display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 250px; min-height: 26px; padding: 4px 6px; border-radius: 4px; background: rgba(8, 11, 15, .86); border: 1px solid rgba(255, 255, 255, .12); font-size: 11px; line-height: 1.2; }}
 .subtitle-pin .pin-label {{ border-color: rgba(250, 255, 105, .34); }}
 .action-pin .pin-label {{ border-color: rgba(255, 178, 102, .34); }}
+.audio-pin .pin-label {{ border-color: rgba(117, 228, 255, .46); }}
 table {{ width: 100%; border-collapse: collapse; }}
 th, td {{ border-bottom: 1px solid var(--line); padding: 8px 9px; text-align: left; vertical-align: top; }}
 th {{ color: var(--muted); font-size: 12px; font-weight: 600; background: #0d131a; position: sticky; top: 62px; z-index: 4; }}
@@ -860,8 +939,11 @@ tr.key td {{ background: rgba(250, 255, 105, .045); }}
 .linklike {{ color: var(--cyan); background: transparent; border: 0; padding: 0; cursor: pointer; font: inherit; margin-bottom: 8px; }}
 .file-list {{ display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }}
 .file-list a {{ background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 5px 8px; text-decoration: none; }}
+.file-list.compact {{ margin-top: 6px; gap: 6px; }}
+.audio-cards {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }}
+.audio-card audio {{ width: 100%; }}
 @media (max-width: 980px) {{
-  .top-grid, .strips {{ grid-template-columns: 1fr; }}
+  .top-grid, .strips, .audio-cards {{ grid-template-columns: 1fr; }}
 }}
 </style>
 </head>
@@ -892,6 +974,7 @@ tr.key td {{ background: rgba(250, 255, 105, .045); }}
         <div class="fact"><b>Total Duration</b><span>{fmt_time(total)}</span></div>
         <div class="fact"><b>Subtitle Cues</b><span>{len(cues)}</span></div>
         <div class="fact"><b>Runbook Actions</b><span>{len(actions)}</span></div>
+        <div class="fact"><b>Audio Utterances</b><span>{audio_index}</span></div>
         <div class="fact"><b>Failures</b><span>{len(failures)}</span></div>
       </div>
       <p class="muted">Click any cue, action, scene band, table row, or frame strip timestamp to seek the video.</p>
@@ -903,14 +986,17 @@ tr.key td {{ background: rgba(250, 255, 105, .045); }}
     <div class="timeline-inner">
       <div class="track-title upper">Subtitles and blackouts</div>
       <div class="track-title lower">Actions</div>
+      <div class="track-title audio">Audio analysis</div>
       <div class="center-line"></div>
       {''.join(scene_bands)}
       {''.join(time_ticks)}
       {''.join(subtitle_spans)}
       {''.join(blackout_spans)}
       {''.join(action_spans)}
+      {''.join(audio_spans)}
       {''.join(subtitle_pins)}
       {''.join(action_pins)}
+      {''.join(audio_pins)}
     </div>
   </section>
 
@@ -933,6 +1019,16 @@ tr.key td {{ background: rgba(250, 255, 105, .045); }}
     <table>
       <thead><tr><th>Start</th><th>Duration</th><th>Scene</th><th>Kind</th><th>Action</th><th>Detail</th><th>Source</th></tr></thead>
       <tbody>{''.join(action_rows)}</tbody>
+    </table>
+  </div>
+
+  <h2>Audio Analysis</h2>
+  <div class="panel">
+    <p class="muted">Speech timings are detected from the WAV with FFmpeg silencedetect and mapped to the known generated transcript. This is forced alignment, not independent ASR.</p>
+    <div class="audio-cards">{''.join(audio_cards)}</div>
+    <table>
+      <thead><tr><th>Provider</th><th>Scene</th><th>Timeline Start</th><th>Duration</th><th>Audio Local Start</th><th>Detected/Aligned Speech</th><th>Text Source</th></tr></thead>
+      <tbody>{''.join(audio_rows)}</tbody>
     </table>
   </div>
 

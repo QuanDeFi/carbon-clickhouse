@@ -55,16 +55,24 @@ def recording_for(scene: str, recordings: Path) -> Path | None:
     return None
 
 
+def audio_for(scene: str, audio_dir: Path) -> Path | None:
+    for suffix in (".mp3", ".wav"):
+        path = audio_dir / f"{scene}{suffix}"
+        if path.is_file():
+            return path
+    return None
+
+
 def assemble_scene(scene: str) -> int:
     recordings = ROOT / os.environ.get("DEMO_RECORDING_DIR", "demo-artifacts/recordings")
     audio_dir = ROOT / os.environ.get("DEMO_AUDIO_DIR", "demo-artifacts/audio")
     final_dir = ROOT / "demo-artifacts/final-scenes"
     final_dir.mkdir(parents=True, exist_ok=True)
     recording = recording_for(scene, recordings)
-    audio = audio_dir / f"{scene}.mp3"
+    audio = audio_for(scene, audio_dir)
     output = final_dir / f"{scene}.mp4"
 
-    if audio.is_file() and recording is None:
+    if audio is not None and recording is None:
         cmd = [
             "ffmpeg",
             "-y",
@@ -87,7 +95,7 @@ def assemble_scene(scene: str) -> int:
             "-shortest",
             str(output),
         ]
-    elif audio.is_file() and recording is not None:
+    elif audio is not None and recording is not None:
         if duration(audio) > duration(recording) + 0.5:
             print(
                 f"audio for {scene} is longer than video; refusing to truncate narration",

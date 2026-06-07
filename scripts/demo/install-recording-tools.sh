@@ -50,7 +50,7 @@ fi
 log "Creating Python venv at .venv-demo"
 python3 -m venv .venv-demo
 .venv-demo/bin/python -m pip install --upgrade pip
-.venv-demo/bin/pip install pyyaml requests python-dotenv obsws-python websocket-client rich
+.venv-demo/bin/pip install pyyaml requests python-dotenv obsws-python websocket-client rich 'dashscope>=1.25.2'
 
 log "Installing demo-local Playwright dependencies"
 npm --prefix scripts/demo/playwright install

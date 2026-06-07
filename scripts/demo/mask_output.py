@@ -7,12 +7,19 @@ import sys
 from pathlib import Path
 
 
-LOCAL_CLICKHOUSE_URL = "http://carbon:carbon@localhost:8123"
+LOCAL_CLICKHOUSE_URL = "http://localhost:8123"
 SECRET_KEYS = {
     "SOLANA_RPC_URL",
     "RPC_URL",
     "ELEVENLABS_API_KEY",
     "ELEVENLABS_VOICE_ID",
+    "GEMINI_API_KEY",
+    "GOOGLE_API_KEY",
+    "DASHSCOPE_API_KEY",
+    "ALIBABA_DASHSCOPE_API_KEY",
+    "ALIBABA_NLS_TOKEN",
+    "ALIBABA_CLOUD_ACCESS_KEY_ID",
+    "ALIBABA_CLOUD_ACCESS_KEY_SECRET",
     "OBS_WEBSOCKET_PASSWORD",
 }
 
@@ -65,7 +72,12 @@ def mask(text: str) -> str:
         text,
         flags=re.IGNORECASE,
     )
+    text = re.sub(r"https?://[^\s'\"<>/@:]+:[^\s'\"<>/@]+@", "http://<redacted>@", text)
     text = re.sub(r"sk_[A-Za-z0-9]{16,}", "<redacted-api-key>", text)
+    text = re.sub(r"sk-[A-Za-z0-9._-]{16,}", "<redacted-api-key>", text)
+    text = re.sub(r"AIza[A-Za-z0-9_-]{20,}", "<redacted-api-key>", text)
+    text = re.sub(r"AQ\.[A-Za-z0-9_-]{20,}", "<redacted-api-key>", text)
+    text = re.sub(r"LTAI[A-Za-z0-9]{12,}", "<redacted-access-key-id>", text)
     return text
 
 
