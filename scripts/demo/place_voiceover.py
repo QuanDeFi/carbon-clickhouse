@@ -267,6 +267,7 @@ def event_target(
         label = str(override["target_event"])
         event = events_by_label.get(label)
         details["target_event"] = label
+        details["allow_fallback"] = bool(override.get("allow_fallback", False))
         if not event:
             details["missing_target_event"] = label
             return None, details
@@ -306,10 +307,11 @@ def choose_target(
             details["locked_to_event"] = bool(details.get("target_event"))
 
     cue = best_cue(text, scene_id, context.cues, utterance_index - 1)
-    if target is None:
+    fallback_allowed = not (details.get("missing_target_event") and not details.get("allow_fallback"))
+    if target is None and fallback_allowed:
         action = best_action(text, scene_actions, utterance_index - 1)
         if action:
-            details = action_target(action)
+            details = {**details, **action_target(action)}
             target = float(details["target_timeline_start_seconds"])
 
     if cue:
@@ -322,7 +324,7 @@ def choose_target(
             }
         )
 
-    if target is None and cue:
+    if target is None and cue and fallback_allowed:
         target = cue.start
         details = {
             **details,
@@ -332,7 +334,10 @@ def choose_target(
 
     if target is None:
         target = float(scene["start_seconds"])
-        details = {"target_source": "scene-start"}
+        details = {
+            **details,
+            "target_source": "missing-target-event" if details.get("missing_target_event") else "scene-start",
+        }
 
     unclamped_target = target
     target = max(float(scene["start_seconds"]), target)
@@ -421,6 +426,15 @@ def validate_placements(placements: list[dict[str, Any]], context: PlacementCont
     for placement in placements:
         if float(placement["clip_duration_seconds"]) <= 0:
             errors.append({"type": "empty-clip", "scene": placement["scene"], "utterance_index": placement["utterance_index"]})
+        if placement.get("missing_target_event") and not placement.get("allow_fallback"):
+            errors.append(
+                {
+                    "type": "missing-target-event",
+                    "scene": placement["scene"],
+                    "utterance_index": placement["utterance_index"],
+                    "target_event": placement.get("missing_target_event"),
+                }
+            )
         if float(placement["target_timeline_end_seconds"]) > context.video_duration + args.duration_tolerance:
             errors.append(
                 {

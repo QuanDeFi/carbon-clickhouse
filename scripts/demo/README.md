@@ -142,6 +142,49 @@ Outputs:
 - `demo-artifacts/review-human/audio/voiceover-placement-report.json`
 - `demo-artifacts/review-human/videos/clickhouse-sink-tutorial-human-voiceover.mp4`
 
+## Export Snippet Clips for Transcription Review
+
+When source-audio segmentation needs human validation, export each detected
+utterance snippet as a standalone WAV before calling any external transcription
+service:
+
+```sh
+source .venv-demo/bin/activate
+python scripts/demo/export_audio_snippets.py
+python scripts/demo/build_timeline_review.py
+```
+
+Outputs:
+
+- `demo-artifacts/review-human/audio-snippets/snippet-manifest.json`
+- `demo-artifacts/review-human/audio-snippets/<scene>/<scene>--uNN.wav`
+
+The manifest is service-agnostic and gives each clip a stable `snippet_id`.
+After an external service returns transcripts, write them to:
+
+```text
+demo-artifacts/review-human/audio-snippets/snippet-transcriptions.json
+```
+
+Expected result shape:
+
+```json
+{
+  "provider": "external-service-name",
+  "items": [
+    {
+      "snippet_id": "scene-05-observability--u01",
+      "text": "transcribed snippet text",
+      "confidence": 0.98
+    }
+  ]
+}
+```
+
+Then rebuild `subtitle-alignment-timeline.html`; the Scene Snippet Inspector
+will show the exported clip link and the external transcript beside the current
+forced-aligned text.
+
 ## Human-Style No-Audio Review
 
 Use this before final voiceover. It records a directed screen performance:

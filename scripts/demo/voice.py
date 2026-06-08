@@ -656,23 +656,16 @@ def gemini_prompt_text(text: str, prompt_prefix: str) -> str:
     return f"{prompt_prefix.rstrip()}\n\n{text}"
 
 
-def generate_gemini_audio(name: str, text: str) -> int:
-    api_key = gemini_api_key()
-    if not api_key:
-        print("Missing Gemini env: GEMINI_API_KEY or GOOGLE_API_KEY", file=sys.stderr)
-        return 1
+def gemini_untagged_prompt_text(text: str, prompt_prefix: str) -> str:
+    spoken = re.sub(r"`([^`]+)`", r"\1", text).strip()
+    if not prompt_prefix:
+        return spoken
+    prefix = re.sub(r"(?im)^# TRANSCRIPT\s*$", "", prompt_prefix).rstrip()
+    return f"{prefix}\n\n{spoken}"
 
-    model = os.environ.get("GEMINI_TTS_MODEL", DEFAULT_GEMINI_MODEL)
-    voice = os.environ.get("GEMINI_TTS_VOICE", DEFAULT_GEMINI_VOICE)
-    temperature = float(env_value("GEMINI_TTS_TEMPERATURE", "1"))
-    try:
-        prompt_prefix = gemini_prompt_prefix()
-    except Exception as exc:
-        print(f"Gemini prompt prefix failed: {exc}", file=sys.stderr)
-        return 1
-    prompt_text = gemini_prompt_text(text, prompt_prefix)
-    url = GEMINI_TTS_URL_TEMPLATE.format(model=model)
-    response = requests.post(
+
+def post_gemini_tts(url: str, api_key: str, prompt_text: str, temperature: float, voice: str) -> requests.Response:
+    return requests.post(
         url,
         headers={
             "x-goog-api-key": api_key,
@@ -694,6 +687,33 @@ def generate_gemini_audio(name: str, text: str) -> int:
         },
         timeout=180,
     )
+
+
+def generate_gemini_audio(name: str, text: str) -> int:
+    api_key = gemini_api_key()
+    if not api_key:
+        print("Missing Gemini env: GEMINI_API_KEY or GOOGLE_API_KEY", file=sys.stderr)
+        return 1
+
+    model = os.environ.get("GEMINI_TTS_MODEL", DEFAULT_GEMINI_MODEL)
+    voice = os.environ.get("GEMINI_TTS_VOICE", DEFAULT_GEMINI_VOICE)
+    temperature = float(env_value("GEMINI_TTS_TEMPERATURE", "1"))
+    try:
+        prompt_prefix = gemini_prompt_prefix()
+    except Exception as exc:
+        print(f"Gemini prompt prefix failed: {exc}", file=sys.stderr)
+        return 1
+    prompt_text = gemini_prompt_text(text, prompt_prefix)
+    url = GEMINI_TTS_URL_TEMPLATE.format(model=model)
+    response = post_gemini_tts(url, api_key, prompt_text, temperature, voice)
+    prompt_mode = "tagged-transcript" if "# TRANSCRIPT" in prompt_prefix.upper() else "plain"
+    if response.status_code == 400 and prompt_mode == "tagged-transcript":
+        fallback_text = gemini_untagged_prompt_text(text, prompt_prefix)
+        fallback = post_gemini_tts(url, api_key, fallback_text, temperature, voice)
+        if fallback.status_code < 400:
+            print(f"Gemini tagged prompt rejected for {name}; retried with untagged transcript.", file=sys.stderr)
+            response = fallback
+            prompt_mode = "untagged-transcript-fallback"
     if response.status_code >= 400:
         print(f"Gemini TTS request failed with status {response.status_code}: {request_error(response)}", file=sys.stderr)
         return 1
@@ -720,6 +740,7 @@ def generate_gemini_audio(name: str, text: str) -> int:
             "sample_width": wav_options["sample_width"],
             "temperature": temperature,
             "prompt_prefix": bool(prompt_prefix),
+            "prompt_mode": prompt_mode,
             "wrapped_raw_audio": wrapped_raw_audio,
         },
     )

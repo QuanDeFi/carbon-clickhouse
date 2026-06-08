@@ -20,6 +20,9 @@ SUBTITLE_DIR = REVIEW_DIR / "subtitles"
 LOG_DIR = REVIEW_DIR / "logs"
 ASSET_DIR = REVIEW_DIR / "timeline-assets"
 AUDIO_ANALYSIS_DIR = REVIEW_DIR / "audio-analysis"
+SNIPPET_DIR = REVIEW_DIR / "audio-snippets"
+SNIPPET_MANIFEST = SNIPPET_DIR / "snippet-manifest.json"
+SNIPPET_TRANSCRIPTIONS = SNIPPET_DIR / "snippet-transcriptions.json"
 VOICEOVER_REPORT = REVIEW_DIR / "audio/voiceover-placement-report.json"
 OUTPUT = REVIEW_DIR / "subtitle-alignment-timeline.html"
 VIDEO = VIDEO_DIR / "clickhouse-sink-tutorial-human-no-audio-subtitled.mp4"
@@ -65,6 +68,28 @@ def pct(value: float, total: float) -> str:
     if total <= 0:
         return "0%"
     return f"{max(0.0, min(100.0, value / total * 100.0)):.4f}%"
+
+
+def local_pct(value: float, total: float) -> str:
+    if total <= 0:
+        return "0%"
+    return f"{max(0.0, min(100.0, value / total * 100.0)):.4f}%"
+
+
+def local_time_ticks(duration: float) -> list[float]:
+    if duration <= 0:
+        return [0.0]
+    steps = [1, 2, 5, 10, 15, 20, 30, 60, 120]
+    target_step = duration / 6
+    step = next((candidate for candidate in steps if candidate >= target_step), steps[-1])
+    ticks = []
+    value = 0.0
+    while value <= duration:
+        ticks.append(value)
+        value += step
+    if duration - ticks[-1] > step * 0.4:
+        ticks.append(duration)
+    return ticks
 
 
 def parse_srt(path: Path, scenes: list[dict[str, Any]]) -> list[Cue]:
@@ -141,18 +166,73 @@ def browser_events(scenes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(events, key=lambda item: item["time"])
 
 
-def audio_analyses() -> list[dict[str, Any]]:
+def analysis_audio_path(analysis: dict[str, Any]) -> Path:
+    audio = Path(str(analysis.get("audio", "")))
+    return audio if audio.is_absolute() else ROOT / audio
+
+
+def audio_analyses(active_scenes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     analyses: list[dict[str, Any]] = []
     if not AUDIO_ANALYSIS_DIR.is_dir():
         return analyses
+    scene_order = {str(scene["scene"]): index for index, scene in enumerate(active_scenes)}
     for path in sorted(AUDIO_ANALYSIS_DIR.glob("*.json")):
         try:
             analysis = load_json(path)
         except Exception:
             continue
+        scene = str(analysis.get("scene", ""))
+        if scene not in scene_order:
+            continue
+        if analysis_audio_path(analysis).stem != scene:
+            continue
         analysis["path"] = path
         analyses.append(analysis)
-    return analyses
+    return sorted(analyses, key=lambda item: scene_order[str(item.get("scene", ""))])
+
+
+def snippet_id(scene: str, index: int) -> str:
+    return f"{scene}--u{index:02d}"
+
+
+def snippet_manifest() -> dict[str, Any]:
+    if not SNIPPET_MANIFEST.is_file():
+        return {}
+    try:
+        return load_json(SNIPPET_MANIFEST)
+    except Exception:
+        return {}
+
+
+def snippet_manifest_by_id(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    result: dict[str, dict[str, Any]] = {}
+    for item in manifest.get("snippets", []):
+        sid = str(item.get("snippet_id", ""))
+        if sid:
+            result[sid] = item
+    return result
+
+
+def snippet_transcriptions() -> dict[str, dict[str, Any]]:
+    if not SNIPPET_TRANSCRIPTIONS.is_file():
+        return {}
+    try:
+        data = load_json(SNIPPET_TRANSCRIPTIONS)
+    except Exception:
+        return {}
+    items = data.get("snippets") or data.get("transcriptions") or data.get("items") or []
+    result: dict[str, dict[str, Any]] = {}
+    for item in items:
+        sid = str(item.get("snippet_id") or item.get("id") or "")
+        if sid:
+            result[sid] = item
+    return result
+
+
+def transcription_text(item: dict[str, Any] | None) -> str:
+    if not item:
+        return ""
+    return str(item.get("transcript") or item.get("text") or item.get("transcription") or "")
 
 
 def voiceover_report() -> dict[str, Any]:
@@ -665,7 +745,10 @@ def build_html() -> str:
     checks = timing_checks(validation)
     events = browser_events(scenes)
     actions = runbook_actions(scenes, events)
-    audio_reports = audio_analyses()
+    audio_reports = audio_analyses(scenes)
+    snippets = snippet_manifest()
+    snippets_by_id = snippet_manifest_by_id(snippets)
+    transcriptions_by_id = snippet_transcriptions()
     voiceover = voiceover_report()
     voiceover_state = voiceover_status(voiceover)
     voiceover_placements = voiceover.get("placements", [])
@@ -759,7 +842,11 @@ def build_html() -> str:
             """
         )
 
-    timeline_center = 310
+    timeline_center = 360
+    subtitle_bar_y = timeline_center - 30
+    action_bar_y = timeline_center + 22
+    audio_bar_y = timeline_center + 44
+    voiceover_bar_y = timeline_center + 66
     scene_bands = []
     for index, scene in enumerate(scenes):
         start = float(scene["start_seconds"])
@@ -779,48 +866,62 @@ def build_html() -> str:
         tick += 15
 
     subtitle_spans = []
+    subtitle_stems = []
     subtitle_pins = []
     for cue in cues:
         lane = (cue.index - 1) % 7
-        top = 40 + lane * 34
-        stem = max(24, timeline_center - top - 30)
+        top = 70 + lane * 35
+        stem_top = top + 30
+        stem_height = max(0, subtitle_bar_y - stem_top)
         title = f"{cue.index}: {cue.text}"
         subtitle_spans.append(
-            f'<button class="subtitle-span" data-seek="{cue.start:.3f}" style="left:{pct(cue.start, total)};width:{pct(cue.end - cue.start, total)}" title="{esc(title)}"></button>'
+            f'<button class="subtitle-span" data-seek="{cue.start:.3f}" style="left:{pct(cue.start, total)};width:{pct(cue.end - cue.start, total)};top:{subtitle_bar_y}px" title="{esc(title)}"></button>'
+        )
+        subtitle_stems.append(
+            f'<button class="timeline-stem subtitle-stem" data-seek="{cue.start:.3f}" style="left:{pct(cue.start, total)};top:{stem_top}px;height:{stem_height}px" title="{esc(title)}"></button>'
         )
         subtitle_pins.append(
-            f'<button class="timeline-pin subtitle-pin" data-seek="{cue.start:.3f}" style="left:{pct(cue.start, total)};top:{top}px;--stem:{stem}px" title="{esc(title)}">'
+            f'<button class="timeline-pin subtitle-pin" data-seek="{cue.start:.3f}" style="left:{pct(cue.start, total)};top:{top}px" title="{esc(title)}">'
             f'<span class="pin-label">{esc(cue.text)}</span></button>'
         )
 
     action_spans = []
+    action_stems = []
     action_pins = []
     for index, action in enumerate(actions):
         start = float(action["time"])
         duration = max(0.3, float(action["end"]) - start)
         lane = index % 7
-        top = timeline_center + 26 + lane * 39
-        stem = max(18, top - timeline_center)
+        top = timeline_center + 140 + lane * 44
+        stem_top = action_bar_y + 7
+        stem_height = max(0, top - stem_top)
         title = f'{action["scene"]}: {action["action"]} [{action["source"]}]'
         action_spans.append(
-            f'<button class="action-span" data-seek="{start:.3f}" style="left:{pct(start, total)};width:{pct(duration, total)}" title="{esc(title)}"></button>'
+            f'<button class="action-span" data-seek="{start:.3f}" style="left:{pct(start, total)};width:{pct(duration, total)};top:{action_bar_y}px" title="{esc(title)}"></button>'
+        )
+        action_stems.append(
+            f'<button class="timeline-stem action-stem" data-seek="{start:.3f}" style="left:{pct(start, total)};top:{stem_top}px;height:{stem_height}px" title="{esc(title)}"></button>'
         )
         action_pins.append(
-            f'<button class="timeline-pin action-pin" data-seek="{start:.3f}" style="left:{pct(start, total)};top:{top}px;--stem:{stem}px" title="{esc(title)}">'
+            f'<button class="timeline-pin action-pin" data-seek="{start:.3f}" style="left:{pct(start, total)};top:{top}px" title="{esc(title)}">'
             f'<span class="pin-label">{esc(action["action"])}</span></button>'
         )
 
     audio_spans = []
+    audio_stems = []
     audio_pins = []
     audio_rows = []
     audio_cards = []
+    snippet_options = []
+    snippet_cards = []
     audio_index = 0
     for analysis in audio_reports:
         provider = analysis.get("provider", "audio")
         scene = analysis.get("scene", "")
         analysis_tags = prompt_tags(analysis.get("prompt_tags", []))
-        audio_path = ROOT / str(analysis.get("audio", ""))
+        audio_path = analysis_audio_path(analysis)
         analysis_path = analysis.get("path")
+        audio_id = "snippet-audio-" + re.sub(r"[^a-z0-9]+", "-", str(scene).lower()).strip("-")
         if audio_path.is_file():
             audio_cards.append(
                 f"""
@@ -836,24 +937,150 @@ def build_html() -> str:
                 </article>
                 """
             )
+
+        duration = float(analysis.get("duration_seconds", 0.0) or 0.0)
+        snippet_options.append(f'<option value="{esc(scene)}">{esc(scene)}</option>')
+        time_marks = []
+        for tick in local_time_ticks(duration):
+            time_marks.append(
+                f'<button class="snippet-time-tick" data-audio-id="{esc(audio_id)}" data-audio-seek="{tick:.3f}" '
+                f'style="--left:{local_pct(tick, duration)}" title="seek {fmt_time(tick)}">'
+                f'<span>{fmt_time(tick)}</span></button>'
+            )
+        silence_marks = []
+        for silence in analysis.get("silences", []):
+            start = float(silence.get("start_seconds", 0.0))
+            end = float(silence.get("end_seconds", start))
+            silence_marks.append(
+                f'<button class="snippet-silence" data-audio-id="{esc(audio_id)}" data-audio-seek="{start:.3f}" '
+                f'style="--left:{local_pct(start, duration)};--width:{local_pct(max(0.0, end - start), duration)}" '
+                f'title="silence {fmt_time(start)} - {fmt_time(end)}"></button>'
+            )
+        speech_marks = []
+        for interval in analysis.get("speech_intervals", []):
+            start = float(interval.get("start_seconds", 0.0))
+            end = float(interval.get("end_seconds", start))
+            speech_marks.append(
+                f'<button class="snippet-speech" data-audio-id="{esc(audio_id)}" data-audio-seek="{start:.3f}" '
+                f'style="--left:{local_pct(start, duration)};--width:{local_pct(max(0.0, end - start), duration)}" '
+                f'title="speech {fmt_time(start)} - {fmt_time(end)}"></button>'
+            )
+        snippet_boundary_marks = []
+        snippet_marks = []
+        snippet_rows = []
+        for utterance in analysis.get("utterances", []):
+            index = int(utterance.get("index", len(snippet_rows) + 1))
+            sid = snippet_id(str(scene), index)
+            start = float(utterance.get("start_seconds", 0.0))
+            end = float(utterance.get("end_seconds", start))
+            text = str(utterance.get("text", ""))
+            tags = prompt_tags(utterance.get("prompt_tags") or utterance.get("prompt_tag"))
+            intervals = utterance.get("speech_intervals", [])
+            snippet_clip = snippets_by_id.get(sid, {})
+            clip_value = str(snippet_clip.get("clip", ""))
+            clip_path = Path(clip_value)
+            if clip_value and not clip_path.is_absolute():
+                clip_path = ROOT / clip_path
+            clip_html = f'<a href="{rel(clip_path)}">clip WAV</a>' if clip_value and clip_path.is_file() else '<span class="muted">export pending</span>'
+            transcription = transcriptions_by_id.get(sid)
+            transcript = transcription_text(transcription)
+            confidence = transcription.get("confidence") if transcription else None
+            confidence_label = ""
+            if confidence not in (None, ""):
+                try:
+                    confidence_label = f'<span class="muted">confidence {float(confidence):.2f}</span>'
+                except (TypeError, ValueError):
+                    confidence_label = f'<span class="muted">confidence {esc(confidence)}</span>'
+            transcript_html = (
+                f'<div class="transcript-text">{esc(transcript)}</div>{confidence_label}'
+                if transcript
+                else '<span class="muted">not transcribed</span>'
+            )
+            snippet_marks.append(
+                f'<button class="snippet-utterance" data-audio-id="{esc(audio_id)}" data-audio-seek="{start:.3f}" '
+                f'style="--left:{local_pct(start, duration)};--width:{local_pct(max(0.0, end - start), duration)}" '
+                f'title="#{index} {esc(text)}"><span class="snippet-index">{index}</span></button>'
+            )
+            snippet_boundary_marks.append(
+                f'<button class="snippet-boundary start" data-audio-id="{esc(audio_id)}" data-audio-seek="{start:.3f}" '
+                f'style="--left:{local_pct(start, duration)}" title="#{index} starts {fmt_time(start)}">'
+                f'<span>{fmt_time(start)}</span></button>'
+            )
+            snippet_boundary_marks.append(
+                f'<button class="snippet-boundary end" data-audio-id="{esc(audio_id)}" data-audio-seek="{end:.3f}" '
+                f'style="--left:{local_pct(end, duration)}" title="#{index} ends {fmt_time(end)}">'
+                f'<span>{fmt_time(end)}</span></button>'
+            )
+            snippet_rows.append(
+                f"""
+                <tr data-audio-id="{esc(audio_id)}" data-audio-seek="{start:.3f}">
+                  <td>{index}</td>
+                  <td>{fmt_time(start)}</td>
+                  <td>{fmt_time(end)}</td>
+                  <td>{fmt_time(max(0.0, end - start))}</td>
+                  <td>{len(intervals)}</td>
+                  <td>{tag_badges(tags)}</td>
+                  <td>{esc(text) if text else '<span class="badge bad">empty text</span>'}</td>
+                  <td>{clip_html}</td>
+                  <td>{transcript_html}</td>
+                  <td>{esc(utterance.get("text_source", ""))}</td>
+                </tr>
+                """
+            )
+
+        snippet_cards.append(
+            f"""
+            <article class="snippet-scene" data-snippet-scene="{esc(scene)}">
+              <div class="snippet-head">
+                <div>
+                  <h3>{esc(scene)}</h3>
+                  <p class="muted">{esc(provider)} source audio, duration {fmt_time(duration)}. Silences and speech intervals come from FFmpeg silencedetect; utterance groups are the snippets the placer later cuts.</p>
+                </div>
+                <audio id="{esc(audio_id)}" controls preload="metadata" src="{rel(audio_path)}"></audio>
+              </div>
+              <div class="snippet-timeline" aria-label="{esc(scene)} source audio snippet inspector">
+                <div class="snippet-track-label time">Time</div>
+                <div class="snippet-track-label silence">Silence</div>
+                <div class="snippet-track-label speech">Speech intervals</div>
+                <div class="snippet-track-label utterance">Detected snippets</div>
+                <div class="snippet-rail">
+                  <div class="snippet-ruler"></div>
+                  {''.join(time_marks)}
+                  {''.join(silence_marks)}
+                  {''.join(speech_marks)}
+                  {''.join(snippet_marks)}
+                  {''.join(snippet_boundary_marks)}
+                </div>
+              </div>
+              <table>
+                <thead><tr><th>#</th><th>Local Start</th><th>Local End</th><th>Duration</th><th>Speech Parts</th><th>Prompt Tag</th><th>Aligned Text</th><th>Snippet Clip</th><th>External Transcript</th><th>Text Source</th></tr></thead>
+                <tbody>{''.join(snippet_rows)}</tbody>
+              </table>
+            </article>
+            """
+        )
         for utterance in analysis.get("utterances", []):
             audio_index += 1
             start = float(utterance["timeline_start_seconds"])
             end = float(utterance["timeline_end_seconds"])
             duration = max(0.2, end - start)
             lane = (audio_index - 1) % 4
-            top = timeline_center + 318 + lane * 48
-            stem = max(18, top - timeline_center)
+            top = timeline_center + 490 + lane * 52
+            stem_top = audio_bar_y + 6
+            stem_height = max(0, top - stem_top)
             text = str(utterance.get("text", ""))
             tags = prompt_tags(utterance.get("prompt_tags") or utterance.get("prompt_tag"))
             tag_label = " ".join(f"[{tag}]" for tag in tags)
             timeline_label = f"{tag_label} {text}".strip()
             title = f'{provider} {scene}: {timeline_label}'
             audio_spans.append(
-                f'<button class="audio-span" data-seek="{start:.3f}" style="left:{pct(start, total)};width:{pct(duration, total)}" title="{esc(title)}"></button>'
+                f'<button class="audio-span" data-seek="{start:.3f}" style="left:{pct(start, total)};width:{pct(duration, total)};top:{audio_bar_y}px" title="{esc(title)}"></button>'
+            )
+            audio_stems.append(
+                f'<button class="timeline-stem audio-stem" data-seek="{start:.3f}" style="left:{pct(start, total)};top:{stem_top}px;height:{stem_height}px" title="{esc(title)}"></button>'
             )
             audio_pins.append(
-                f'<button class="timeline-pin audio-pin" data-seek="{start:.3f}" style="left:{pct(start, total)};top:{top}px;--stem:{stem}px" title="{esc(title)}">'
+                f'<button class="timeline-pin audio-pin" data-seek="{start:.3f}" style="left:{pct(start, total)};top:{top}px" title="{esc(title)}">'
                 f'<span class="pin-label">{esc(timeline_label)}</span></button>'
             )
             audio_rows.append(
@@ -871,6 +1098,12 @@ def build_html() -> str:
                 """
             )
 
+    snippet_file_links = []
+    if SNIPPET_MANIFEST.is_file():
+        snippet_file_links.append(f'<a href="{rel(SNIPPET_MANIFEST)}">snippet manifest</a>')
+    if SNIPPET_TRANSCRIPTIONS.is_file():
+        snippet_file_links.append(f'<a href="{rel(SNIPPET_TRANSCRIPTIONS)}">snippet transcriptions</a>')
+
     voiceover_spans = []
     voiceover_rows = []
     for index, placement in enumerate(voiceover_placements, start=1):
@@ -882,7 +1115,7 @@ def build_html() -> str:
         title = f'{placement.get("scene", "")} #{placement.get("utterance_index", index)}: {tag_label} {text}'.strip()
         target_detail = placement.get("target_event") or placement.get("target_action") or placement.get("target_source", "")
         voiceover_spans.append(
-            f'<button class="voiceover-span" data-seek="{start:.3f}" style="left:{pct(start, total)};width:{pct(duration, total)}" title="{esc(title)}"></button>'
+            f'<button class="voiceover-span" data-seek="{start:.3f}" style="left:{pct(start, total)};width:{pct(duration, total)};top:{voiceover_bar_y}px" title="{esc(title)}"></button>'
         )
         voiceover_rows.append(
             f"""
@@ -998,14 +1231,23 @@ video {{ width: 100%; background: #000; border: 1px solid var(--line); border-ra
 .badge.ok {{ background: rgba(99, 230, 190, .14); color: var(--green); border: 1px solid rgba(99, 230, 190, .4); }}
 .badge.bad, .badge.check {{ background: rgba(255, 122, 144, .14); color: var(--red); border: 1px solid rgba(255, 122, 144, .45); }}
 .muted {{ color: var(--muted); font-size: 12px; }}
-.timeline {{ position: relative; height: 836px; border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; overflow-y: hidden; background: #0b1015; }}
+.timeline {{ position: relative; height: 1140px; border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; overflow-y: hidden; background: #0b1015; }}
 .timeline-inner {{ position: relative; min-width: 5400px; height: 100%; }}
-.center-line {{ position: absolute; left: 0; right: 0; top: 310px; height: 1px; background: #5b6872; z-index: 2; }}
+.center-line {{ position: absolute; left: 0; right: 0; top: 360px; height: 1px; background: #5b6872; z-index: 2; }}
 .track-title {{ position: absolute; left: 12px; z-index: 8; color: var(--muted); font-size: 12px; font-weight: 650; letter-spacing: .02em; }}
-.track-title.upper {{ top: 10px; }}
-.track-title.lower {{ top: 612px; }}
-.track-title.audio {{ top: 802px; color: var(--audio); }}
-.scene-band, .subtitle-span, .action-span, .audio-span, .voiceover-span, .time-tick, .timeline-pin, .blackout-span {{
+.track-title.upper {{ top: 42px; }}
+.track-title.bars {{ top: 306px; }}
+.track-title.lower {{ top: 470px; }}
+.track-title.audio {{ top: 822px; color: var(--audio); }}
+.timeline-legend {{ display: flex; flex-wrap: wrap; gap: 8px 12px; margin: 10px 0 12px; color: var(--muted); font-size: 12px; }}
+.legend-item {{ display: inline-flex; align-items: center; gap: 6px; }}
+.legend-swatch {{ width: 22px; height: 7px; border-radius: 2px; display: inline-block; }}
+.legend-swatch.subtitle {{ background: rgba(250, 255, 105, .74); }}
+.legend-swatch.action {{ background: rgba(255, 178, 102, .72); }}
+.legend-swatch.audio {{ background: rgba(117, 228, 255, .82); }}
+.legend-swatch.voiceover {{ background: rgba(212, 155, 255, .78); }}
+.legend-swatch.blackout {{ background: #000; border: 1px solid #777; }}
+.scene-band, .subtitle-span, .action-span, .audio-span, .voiceover-span, .time-tick, .timeline-stem, .timeline-pin, .blackout-span {{
   position: absolute;
   border: 0;
   padding: 0;
@@ -1013,24 +1255,24 @@ video {{ width: 100%; background: #000; border: 1px solid var(--line); border-ra
 }}
 .scene-band {{ top: 0; bottom: 0; background: rgba(101, 212, 255, .045); border-left: 1px solid rgba(101, 212, 255, .28); color: var(--muted); text-align: left; z-index: 0; }}
 .scene-band.shade-1 {{ background: rgba(255, 255, 255, .025); }}
-.scene-band span {{ position: absolute; top: 292px; left: 8px; max-width: calc(100% - 12px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }}
-.time-tick {{ top: 304px; width: 1px; height: 14px; background: #73808a; z-index: 3; overflow: visible; }}
+.scene-band span {{ position: absolute; top: 9px; left: 8px; max-width: calc(100% - 14px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; line-height: 1.2; padding: 2px 5px; border-radius: 3px; background: rgba(8, 11, 15, .78); border: 1px solid rgba(101, 212, 255, .22); }}
+.time-tick {{ top: 354px; width: 1px; height: 14px; background: #73808a; z-index: 3; overflow: visible; }}
 .time-tick span {{ position: absolute; top: 18px; left: -18px; color: var(--muted); font-size: 10px; white-space: nowrap; }}
-.subtitle-span {{ top: 295px; height: 5px; background: rgba(250, 255, 105, .74); border-radius: 2px; min-width: 2px; z-index: 4; }}
-.action-span {{ top: 320px; height: 7px; background: rgba(255, 178, 102, .72); border-radius: 2px; min-width: 4px; z-index: 4; }}
-.audio-span {{ top: 334px; height: 6px; background: rgba(117, 228, 255, .82); border-radius: 2px; min-width: 3px; z-index: 5; }}
-.voiceover-span {{ top: 344px; height: 8px; background: rgba(212, 155, 255, .78); border-radius: 2px; min-width: 4px; z-index: 5; }}
-.blackout-span {{ top: 278px; height: 22px; min-width: 10px; background: #000; border: 1px solid #777; color: #c7cdd3; border-radius: 3px; z-index: 6; }}
+.subtitle-span {{ height: 5px; background: rgba(250, 255, 105, .74); border-radius: 2px; min-width: 2px; z-index: 4; }}
+.action-span {{ height: 7px; background: rgba(255, 178, 102, .72); border-radius: 2px; min-width: 4px; z-index: 4; }}
+.audio-span {{ height: 6px; background: rgba(117, 228, 255, .82); border-radius: 2px; min-width: 3px; z-index: 5; }}
+.voiceover-span {{ height: 8px; background: rgba(212, 155, 255, .78); border-radius: 2px; min-width: 4px; z-index: 5; }}
+.blackout-span {{ top: 316px; height: 22px; min-width: 10px; background: #000; border: 1px solid #777; color: #c7cdd3; border-radius: 3px; z-index: 6; }}
 .blackout-span span {{ display: block; padding: 2px 5px; font-size: 10px; white-space: nowrap; }}
-.timeline-pin {{ width: 270px; background: transparent; text-align: left; z-index: 7; transform: translateX(-1px); }}
-.timeline-pin::before, .timeline-pin::after {{ content: ""; position: absolute; left: 0; width: 1px; pointer-events: none; }}
+.timeline-stem {{ width: 1px; min-width: 1px; opacity: .86; z-index: 3; pointer-events: none; }}
+.subtitle-stem {{ background: var(--accent); }}
+.action-stem {{ background: var(--orange); }}
+.audio-stem {{ background: var(--audio); }}
+.timeline-pin {{ width: 270px; background: transparent; text-align: left; z-index: 8; transform: translateX(-1px); }}
 .subtitle-pin {{ color: var(--accent); }}
-.subtitle-pin::after {{ top: 30px; height: var(--stem); background: var(--accent); }}
 .action-pin {{ color: var(--orange); }}
-.action-pin::before {{ top: calc(-1 * var(--stem)); height: var(--stem); background: var(--orange); }}
 .audio-pin {{ color: var(--audio); }}
-.audio-pin::before {{ top: calc(-1 * var(--stem)); height: var(--stem); background: var(--audio); }}
-.pin-label {{ display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 250px; min-height: 26px; padding: 4px 6px; border-radius: 4px; background: rgba(8, 11, 15, .86); border: 1px solid rgba(255, 255, 255, .12); font-size: 11px; line-height: 1.2; }}
+.pin-label {{ position: relative; z-index: 9; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 250px; min-height: 28px; padding: 4px 6px; border-radius: 4px; background: #080b0f; border: 1px solid rgba(255, 255, 255, .12); font-size: 11px; line-height: 1.2; box-shadow: 0 0 0 3px #080b0f; }}
 .subtitle-pin .pin-label {{ border-color: rgba(250, 255, 105, .34); }}
 .action-pin .pin-label {{ border-color: rgba(255, 178, 102, .34); }}
 .audio-pin .pin-label {{ border-color: rgba(117, 228, 255, .46); }}
@@ -1051,6 +1293,36 @@ tr.key td {{ background: rgba(250, 255, 105, .045); }}
 .file-list.compact {{ margin-top: 6px; gap: 6px; }}
 .audio-cards {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }}
 .audio-card audio {{ width: 100%; }}
+.snippet-controls {{ display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }}
+.snippet-controls label {{ color: var(--muted); font-size: 12px; font-weight: 650; }}
+.snippet-controls select {{ background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 7px 9px; font: inherit; }}
+.snippet-scene {{ display: none; }}
+.snippet-scene.active {{ display: block; }}
+.snippet-head {{ display: grid; grid-template-columns: minmax(280px, 1fr) minmax(320px, 520px); gap: 16px; align-items: start; margin-bottom: 12px; }}
+.snippet-head audio {{ width: 100%; }}
+.snippet-timeline {{ position: relative; height: 220px; border: 1px solid var(--line); border-radius: 5px; background: #0b1015; margin: 10px 0 14px; overflow: hidden; }}
+.snippet-rail {{ position: absolute; left: 120px; right: 12px; top: 0; bottom: 0; }}
+.snippet-ruler {{ position: absolute; left: 0; right: 0; top: 31px; height: 1px; background: rgba(154, 168, 180, .45); }}
+.snippet-track-label {{ position: absolute; left: 12px; width: 96px; color: var(--muted); font-size: 12px; font-weight: 650; line-height: 1.15; }}
+.snippet-track-label.time {{ top: 17px; }}
+.snippet-track-label.silence {{ top: 66px; }}
+.snippet-track-label.speech {{ top: 108px; }}
+.snippet-track-label.utterance {{ top: 153px; }}
+.snippet-time-tick, .snippet-silence, .snippet-speech, .snippet-utterance, .snippet-boundary {{ position: absolute; left: var(--left); border: 0; padding: 0; cursor: pointer; }}
+.snippet-time-tick {{ top: 23px; width: 1px; height: 18px; background: rgba(154, 168, 180, .62); overflow: visible; }}
+.snippet-time-tick span {{ position: absolute; top: -17px; left: -17px; color: var(--muted); font-size: 10px; white-space: nowrap; }}
+.snippet-silence, .snippet-speech, .snippet-utterance {{ width: var(--width); }}
+.snippet-silence {{ top: 67px; height: 9px; background: rgba(154, 168, 180, .35); border-radius: 2px; }}
+.snippet-speech {{ top: 109px; height: 10px; background: rgba(117, 228, 255, .82); border-radius: 2px; }}
+.snippet-utterance {{ top: 147px; height: 24px; background: rgba(212, 155, 255, .2); border: 1px solid rgba(212, 155, 255, .75); border-radius: 4px; color: var(--voice); font-size: 11px; font-weight: 750; z-index: 6; }}
+.snippet-utterance .snippet-index {{ display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 20px; margin: 1px 0 0 2px; background: rgba(8, 11, 15, .88); border-radius: 3px; }}
+.snippet-boundary {{ top: 137px; width: 1px; height: 62px; background: rgba(212, 155, 255, .9); overflow: visible; z-index: 7; }}
+.snippet-boundary span {{ position: absolute; left: 0; transform: translateX(-50%); padding: 1px 3px; border-radius: 3px; background: #080b0f; border: 1px solid rgba(212, 155, 255, .45); color: var(--voice); font-size: 9px; line-height: 1; white-space: nowrap; }}
+.snippet-boundary.start span {{ top: -14px; }}
+.snippet-boundary.end span {{ bottom: -14px; }}
+.snippet-scene tr[data-audio-id] {{ cursor: pointer; }}
+.snippet-scene tr[data-audio-id]:hover td {{ background: rgba(212, 155, 255, .08); }}
+.transcript-text {{ max-width: 360px; }}
 .prompt-tags {{ margin: 8px 0 6px; }}
 .tag-list {{ display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }}
 .tag-badge {{ display: inline-flex; align-items: center; min-height: 20px; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(117, 228, 255, .42); background: rgba(117, 228, 255, .1); color: var(--audio); font-size: 11px; font-weight: 650; white-space: nowrap; }}
@@ -1097,11 +1369,19 @@ tr.key td {{ background: rgba(250, 255, 105, .045); }}
   </section>
 
   <h2>Timeline</h2>
+  <div class="timeline-legend" aria-label="timeline legend">
+    <span class="legend-item"><span class="legend-swatch subtitle"></span>Subtitle cues</span>
+    <span class="legend-item"><span class="legend-swatch action"></span>Screen actions</span>
+    <span class="legend-item"><span class="legend-swatch audio"></span>Detected scene-audio speech</span>
+    <span class="legend-item"><span class="legend-swatch voiceover"></span>Placed voiceover clips</span>
+    <span class="legend-item"><span class="legend-swatch blackout"></span>Blackout transitions</span>
+  </div>
   <section class="timeline" aria-label="subtitle alignment timeline">
     <div class="timeline-inner">
       <div class="track-title upper">Subtitles and blackouts</div>
-      <div class="track-title lower">Actions</div>
-      <div class="track-title audio">Audio analysis</div>
+      <div class="track-title bars">Cue/action/audio/voiceover bars</div>
+      <div class="track-title lower">Screen action labels</div>
+      <div class="track-title audio">Detected speech labels</div>
       <div class="center-line"></div>
       {''.join(scene_bands)}
       {''.join(time_ticks)}
@@ -1110,11 +1390,25 @@ tr.key td {{ background: rgba(250, 255, 105, .045); }}
       {''.join(action_spans)}
       {''.join(audio_spans)}
       {''.join(voiceover_spans)}
+      {''.join(subtitle_stems)}
+      {''.join(action_stems)}
+      {''.join(audio_stems)}
       {''.join(subtitle_pins)}
       {''.join(action_pins)}
       {''.join(audio_pins)}
     </div>
   </section>
+
+  <h2>Scene Snippet Inspector</h2>
+  <div class="panel">
+    <p class="muted">Use this section to review how each scene-level audio file was split before any final timeline placement happens. Blue marks are raw speech intervals; purple outlined marks are the grouped snippets that `place_voiceover.py` cuts. Exported snippet WAVs can be sent to an external transcription service; returned transcripts appear in the table when `audio-snippets/snippet-transcriptions.json` exists.</p>
+    <div class="snippet-controls">
+      <label for="snippet-scene-select">Scene</label>
+      <select id="snippet-scene-select">{''.join(snippet_options)}</select>
+    </div>
+    {f'<div class="file-list compact">{"".join(snippet_file_links)}</div>' if snippet_file_links else ''}
+    {''.join(snippet_cards)}
+  </div>
 
   <h2>Transition Strips</h2>
   <section class="strips">
@@ -1202,6 +1496,25 @@ document.querySelectorAll('.source-button').forEach((button) => {{
 }});
 document.querySelectorAll('[data-seek]').forEach((element) => {{
   element.addEventListener('click', () => seek(element.dataset.seek));
+}});
+const snippetSelect = document.getElementById('snippet-scene-select');
+function showSnippetScene(scene) {{
+  document.querySelectorAll('.snippet-scene').forEach((element) => {{
+    element.classList.toggle('active', element.dataset.snippetScene === scene);
+  }});
+}}
+if (snippetSelect) {{
+  showSnippetScene(snippetSelect.value);
+  snippetSelect.addEventListener('change', () => showSnippetScene(snippetSelect.value));
+}}
+document.querySelectorAll('[data-audio-id][data-audio-seek]').forEach((element) => {{
+  element.addEventListener('click', () => {{
+    const audio = document.getElementById(element.dataset.audioId);
+    if (!audio) return;
+    audio.currentTime = Number(element.dataset.audioSeek || 0);
+    audio.play().catch(() => {{}});
+    audio.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
+  }});
 }});
 </script>
 </body>
