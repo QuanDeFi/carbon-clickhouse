@@ -1,4 +1,26 @@
 {
+  "scene-01-readiness-checks": [
+    {
+      "text_contains": "Before we start the indexing pipeline",
+      "target_scene_start_seconds": 0.3
+    },
+    {
+      "text_contains": "Docker shows the ClickHouse",
+      "target_action": "List required containers"
+    }
+  ],
+  "scene-02-example-env": [
+    {
+      "text_contains": "Next we take a look",
+      "target_scene_start_seconds": 0.3
+    }
+  ],
+  "scene-03-jupiter-live": [
+    {
+      "text_contains": "Now we start the Jupiter",
+      "target_scene_start_seconds": 0.0
+    }
+  ],
   "scene-05-observability": [
     {
       "text_contains": "Token Program dashboard follows",
@@ -34,8 +56,8 @@
     },
     {
       "text_contains": "open the largest one",
-      "target_event": "clickhouse-play:largest-transfer-checked-rows:visible",
-      "lead_seconds": -0.3
+      "target_event": "clickhouse-play:largest-table-metadata:visible",
+      "lead_seconds": -0.2
     },
     {
       "text_contains": "As we scroll across the columns",

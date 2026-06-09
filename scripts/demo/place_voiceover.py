@@ -26,6 +26,7 @@ DEFAULT_OUTPUT_WAV = REVIEW_DIR / "audio/voiceover-timeline.wav"
 DEFAULT_OUTPUT_VIDEO = REVIEW_DIR / "videos/clickhouse-sink-tutorial-human-voiceover.mp4"
 DEFAULT_REPORT = REVIEW_DIR / "audio/voiceover-placement-report.json"
 DEFAULT_OVERRIDES = ROOT / "scripts/demo/voiceover-placement-overrides.json"
+DEFAULT_SNIPPET_TRANSCRIPTIONS = REVIEW_DIR / "audio-snippets/snippet-transcriptions.json"
 SUPPORTED_AUDIO_SUFFIXES = (".wav", ".mp3")
 
 
@@ -172,31 +173,39 @@ def tokenize(value: str) -> list[str]:
 
 
 def cue_score(text: str, cue: build_timeline_review.Cue) -> float:
-    query = tokenize(text)
-    candidate = tokenize(cue.text)
+    query = set(tokenize(text))
+    candidate = set(tokenize(cue.text))
     if not query or not candidate:
         return 0.0
-    q = " ".join(query)
-    c = " ".join(candidate)
-    if c and c in q:
-        return 1.0
-    if q and q in c:
-        return 0.98
     overlap = len(set(query) & set(candidate))
-    return overlap / max(1, min(len(set(query)), len(set(candidate))))
+    precision = overlap / len(candidate)
+    recall = overlap / len(query)
+    if precision + recall == 0:
+        return 0.0
+    return 2 * precision * recall / (precision + recall)
 
 
-def best_cue(text: str, scene_id: str, cues: list[build_timeline_review.Cue], fallback_index: int) -> build_timeline_review.Cue | None:
+def best_cue(text: str, scene_id: str, cues: list[build_timeline_review.Cue]) -> build_timeline_review.Cue | None:
     scene_cues = [cue for cue in cues if cue.scene == scene_id]
     if not scene_cues:
         return None
-    scored = [(cue_score(text, cue), cue) for cue in scene_cues]
+    scored: list[tuple[float, build_timeline_review.Cue]] = []
+    for start_index, first in enumerate(scene_cues):
+        max_width = min(5, len(scene_cues) - start_index)
+        for width in range(1, max_width + 1):
+            window = scene_cues[start_index : start_index + width]
+            cue = build_timeline_review.Cue(
+                index=first.index,
+                start=first.start,
+                end=window[-1].end,
+                text=" ".join(item.text for item in window),
+                scene=scene_id,
+            )
+            scored.append((cue_score(text, cue), cue))
     scored.sort(key=lambda item: item[0], reverse=True)
     if scored and scored[0][0] >= 0.34:
         return scored[0][1]
-    if 0 <= fallback_index < len(scene_cues):
-        return scene_cues[fallback_index]
-    return scene_cues[-1]
+    return None
 
 
 def actions_for_scene(actions: list[dict[str, Any]], scene_id: str) -> list[dict[str, Any]]:
@@ -209,26 +218,87 @@ def action_at(actions: list[dict[str, Any]], seconds: float) -> dict[str, Any] |
             return action
     if not actions:
         return None
-    return min(actions, key=lambda action: abs(float(action["time"]) - seconds))
+    return min(
+        actions,
+        key=lambda action: (
+            min(
+                abs(float(action["time"]) - seconds),
+                abs(float(action["end"]) - seconds),
+            ),
+            abs(float(action["time"]) - seconds),
+        ),
+    )
 
 
 def action_score(text: str, action: dict[str, Any]) -> float:
-    query = tokenize(text)
-    candidate = tokenize(f"{action.get('action', '')} {action.get('detail', '')} {action.get('kind', '')}")
+    query = set(tokenize(text))
+    candidate = set(tokenize(f"{action.get('action', '')} {action.get('detail', '')} {action.get('kind', '')}"))
     if not query or not candidate:
         return 0.0
-    overlap = len(set(query) & set(candidate))
-    return overlap / max(1, min(len(set(query)), len(set(candidate))))
+    overlap = len(query & candidate)
+    precision = overlap / len(candidate)
+    recall = overlap / len(query)
+    if precision + recall == 0:
+        return 0.0
+    return 2 * precision * recall / (precision + recall)
 
 
-def best_action(text: str, actions: list[dict[str, Any]], fallback_index: int) -> dict[str, Any] | None:
+def best_action(text: str, actions: list[dict[str, Any]]) -> dict[str, Any] | None:
     if not actions:
         return None
     scored = [(action_score(text, action), action) for action in actions]
     scored.sort(key=lambda item: item[0], reverse=True)
-    if scored and scored[0][0] >= 0.22:
+    if scored and scored[0][0] >= 0.45:
         return scored[0][1]
-    return actions[min(fallback_index, len(actions) - 1)]
+    return None
+
+
+def snippet_id(scene_id: str, index: int) -> str:
+    return f"{scene_id}--u{index:02d}"
+
+
+def load_snippet_transcriptions(path: Path) -> dict[str, dict[str, Any]]:
+    data = load_json(path, {})
+    items = data.get("items") or data.get("snippets") or data.get("transcriptions") or []
+    result: dict[str, dict[str, Any]] = {}
+    for item in items:
+        sid = str(item.get("snippet_id") or item.get("id") or "")
+        if sid:
+            result[sid] = item
+    return result
+
+
+def transcription_text(item: dict[str, Any] | None) -> str:
+    if not item or not item.get("ok", True):
+        return ""
+    return str(item.get("text") or item.get("transcript") or item.get("transcription") or "").strip()
+
+
+def apply_snippet_transcription(
+    utterance: dict[str, Any],
+    *,
+    scene_id: str,
+    index: int,
+    transcriptions: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    updated = dict(utterance)
+    aligned_text = str(utterance.get("text", ""))
+    sid = snippet_id(scene_id, index)
+    transcription = transcriptions.get(sid)
+    text = transcription_text(transcription)
+    updated["snippet_id"] = sid
+    updated["aligned_text"] = aligned_text
+    updated["placement_text_source"] = "forced-aligned-transcript"
+    if transcription:
+        updated["external_transcription_status"] = "ok" if transcription.get("ok") else "failed"
+        updated["external_transcription_text"] = transcription_text(transcription) or str(transcription.get("text", ""))
+    if text:
+        updated["text"] = text
+        updated["placement_text_source"] = "external-transcription"
+        updated["external_transcription_provider"] = transcription.get("engine") or transcription.get("provider", "")
+        updated["external_transcription_duration_ms"] = transcription.get("duration_ms")
+        updated["external_transcription_audio_duration_ms"] = transcription.get("audio_duration_ms")
+    return updated
 
 
 def action_target(action: dict[str, Any]) -> dict[str, Any]:
@@ -259,6 +329,7 @@ def matching_override(overrides: dict[str, list[dict[str, Any]]], scene_id: str,
 def event_target(
     override: dict[str, Any],
     events_by_label: dict[str, dict[str, Any]],
+    scene_actions: list[dict[str, Any]],
     scene: dict[str, Any],
 ) -> tuple[float | None, dict[str, Any]]:
     lead = float(override.get("lead_seconds", 0.0))
@@ -281,6 +352,26 @@ def event_target(
     if "target_scene_start_seconds" in override:
         details["target_source"] = "manual-scene-local"
         return float(scene["start_seconds"]) + float(override["target_scene_start_seconds"]) + lead, details
+    if "target_action" in override:
+        needle = str(override["target_action"]).lower()
+        action = next(
+            (
+                item
+                for item in scene_actions
+                if needle in str(item.get("action", "")).lower()
+                or needle in str(item.get("detail", "")).lower()
+            ),
+            None,
+        )
+        details["target_action_override"] = override["target_action"]
+        details["allow_fallback"] = bool(override.get("allow_fallback", False))
+        if not action:
+            details["missing_target_action"] = override["target_action"]
+            return None, details
+        target = float(action["time"]) + lead
+        details.update(action_target(action))
+        details["target_source"] = details.get("target_source", "runbook-action")
+        return target, details
     return None, details
 
 
@@ -300,20 +391,17 @@ def choose_target(
     details: dict[str, Any] = {}
 
     if override:
-        target, details = event_target(override, scene_events, scene)
+        target, details = event_target(override, scene_events, scene_actions, scene)
         details["override"] = override
         if target is not None:
             details["target_source"] = details.get("target_source", "manual-override")
             details["locked_to_event"] = bool(details.get("target_event"))
 
-    cue = best_cue(text, scene_id, context.cues, utterance_index - 1)
-    fallback_allowed = not (details.get("missing_target_event") and not details.get("allow_fallback"))
-    if target is None and fallback_allowed:
-        action = best_action(text, scene_actions, utterance_index - 1)
-        if action:
-            details = {**details, **action_target(action)}
-            target = float(details["target_timeline_start_seconds"])
-
+    cue = best_cue(text, scene_id, context.cues)
+    fallback_allowed = not (
+        (details.get("missing_target_event") or details.get("missing_target_action"))
+        and not details.get("allow_fallback")
+    )
     if cue:
         details.update(
             {
@@ -324,11 +412,27 @@ def choose_target(
             }
         )
 
+    if target is None and fallback_allowed:
+        action = action_at(scene_actions, cue.start) if cue else None
+        if action:
+            details = {
+                **details,
+                **action_target(action),
+                "target_action_match": "cue-contained-by-action" if float(action["time"]) <= cue.start <= float(action["end"]) else "nearest-action-to-cue",
+            }
+            target = float(details["target_timeline_start_seconds"])
+
+    if target is None and fallback_allowed:
+        action = best_action(text, scene_actions)
+        if action:
+            details = {**details, **action_target(action), "target_action_match": "text-match"}
+            target = float(details["target_timeline_start_seconds"])
+
     if target is None and cue and fallback_allowed:
         target = cue.start
         details = {
             **details,
-            "target_source": "subtitle-cue",
+            "target_source": "subtitle-cue-fallback",
             "target_timeline_start_seconds": cue.start,
         }
 
@@ -336,7 +440,7 @@ def choose_target(
         target = float(scene["start_seconds"])
         details = {
             **details,
-            "target_source": "missing-target-event" if details.get("missing_target_event") else "scene-start",
+            "target_source": "missing-target" if details.get("missing_target_event") or details.get("missing_target_action") else "scene-start",
         }
 
     unclamped_target = target
@@ -371,6 +475,14 @@ def make_placement(
         "prompt_tag": utterance.get("prompt_tag", ""),
         "prompt_tags": utterance.get("prompt_tags", []),
         "text": utterance.get("text", ""),
+        "aligned_text": utterance.get("aligned_text", utterance.get("text", "")),
+        "placement_text_source": utterance.get("placement_text_source", "forced-aligned-transcript"),
+        "snippet_id": utterance.get("snippet_id", ""),
+        "external_transcription_status": utterance.get("external_transcription_status", ""),
+        "external_transcription_text": utterance.get("external_transcription_text", ""),
+        "external_transcription_provider": utterance.get("external_transcription_provider", ""),
+        "external_transcription_duration_ms": utterance.get("external_transcription_duration_ms"),
+        "external_transcription_audio_duration_ms": utterance.get("external_transcription_audio_duration_ms"),
         "audio": rel(audio),
         "analysis": rel(analysis_path_for(audio)),
         "source_audio_start_seconds": speech_start,
@@ -392,7 +504,7 @@ def make_placement(
 
 def shift_or_report_overlaps(placements: list[dict[str, Any]], min_gap: float, shift_unlocked: bool) -> list[dict[str, Any]]:
     errors: list[dict[str, Any]] = []
-    ordered = sorted(placements, key=lambda item: (float(item["target_timeline_start_seconds"]), item["scene"], item["utterance_index"]))
+    ordered = sorted(placements, key=lambda item: (float(item["scene_start_seconds"]), item["utterance_index"]))
     previous: dict[str, Any] | None = None
     for placement in ordered:
         if previous is None:
@@ -401,8 +513,10 @@ def shift_or_report_overlaps(placements: list[dict[str, Any]], min_gap: float, s
         required = float(previous["target_timeline_end_seconds"]) + min_gap
         current = float(placement["target_timeline_start_seconds"])
         if current < required:
-            if shift_unlocked and not placement.get("locked_to_event"):
+            if shift_unlocked:
                 placement["overlap_shifted_from_seconds"] = current
+                if placement.get("locked_to_event"):
+                    placement["locked_event_overlap_shifted"] = True
                 placement["target_timeline_start_seconds"] = required
                 placement["target_timeline_end_seconds"] = required + float(placement["clip_duration_seconds"])
             else:
@@ -433,6 +547,15 @@ def validate_placements(placements: list[dict[str, Any]], context: PlacementCont
                     "scene": placement["scene"],
                     "utterance_index": placement["utterance_index"],
                     "target_event": placement.get("missing_target_event"),
+                }
+            )
+        if placement.get("missing_target_action") and not placement.get("allow_fallback"):
+            errors.append(
+                {
+                    "type": "missing-target-action",
+                    "scene": placement["scene"],
+                    "utterance_index": placement["utterance_index"],
+                    "target_action": placement.get("missing_target_action"),
                 }
             )
         if float(placement["target_timeline_end_seconds"]) > context.video_duration + args.duration_tolerance:
@@ -620,6 +743,11 @@ def load_context(args: argparse.Namespace) -> PlacementContext:
 def build_placements(args: argparse.Namespace, context: PlacementContext) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     scenes = selected_scenes(context.scenes, args.scenes)
     directory = root_path(args.audio_dir)
+    transcriptions = (
+        {}
+        if args.no_snippet_transcriptions
+        else load_snippet_transcriptions(root_path(args.snippet_transcriptions))
+    )
     errors: list[dict[str, Any]] = []
     placements: list[dict[str, Any]] = []
     for scene in scenes:
@@ -638,6 +766,12 @@ def build_placements(args: argparse.Namespace, context: PlacementContext) -> tup
             errors.append({"type": "no-utterances", "scene": scene_id, "audio": rel(audio)})
             continue
         for index, utterance in enumerate(utterances, start=1):
+            utterance = apply_snippet_transcription(
+                utterance,
+                scene_id=scene_id,
+                index=index,
+                transcriptions=transcriptions,
+            )
             placements.append(make_placement(scene, audio, audio_duration, analysis, utterance, index, context, args))
     if any(error["type"] == "missing-audio" for error in errors) and not args.allow_missing_audio:
         return placements, errors
@@ -656,6 +790,7 @@ def report_data(args: argparse.Namespace, context: PlacementContext, placements:
         "audio_dir": rel(root_path(args.audio_dir)),
         "audio_stem_template": args.audio_stem_template,
         "overrides": rel(root_path(args.overrides)),
+        "snippet_transcriptions": None if args.no_snippet_transcriptions else rel(root_path(args.snippet_transcriptions)),
         "cutting": {
             "source_cut_lead_seconds": args.cut_lead,
             "source_cut_tail_seconds": args.cut_tail,
@@ -677,6 +812,8 @@ def main() -> int:
     parser.add_argument("--provider", default="gemini")
     parser.add_argument("--scenes", default="", help="Comma-separated scene ids for focused placement tests.")
     parser.add_argument("--overrides", default=str(DEFAULT_OVERRIDES))
+    parser.add_argument("--snippet-transcriptions", default=str(DEFAULT_SNIPPET_TRANSCRIPTIONS))
+    parser.add_argument("--no-snippet-transcriptions", action="store_true")
     parser.add_argument("--output-wav", default=str(DEFAULT_OUTPUT_WAV))
     parser.add_argument("--output-video", default=str(DEFAULT_OUTPUT_VIDEO))
     parser.add_argument("--report", default=str(DEFAULT_REPORT))

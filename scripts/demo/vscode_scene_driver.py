@@ -17,6 +17,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 STATE_FILE = ROOT / "demo-artifacts/pids/vscode-window.json"
+EDIT_BACKUP_DIR = ROOT / "demo-artifacts/pids/vscode-edit-backups"
 DEFAULT_LAUNCHER = Path("/home/ops/dev/vnc/vscode-recording/launch-code-recording.sh")
 DEFAULT_PROFILE_DIR = Path("/home/ops/dev/vnc/vscode-recording/profile")
 
@@ -354,6 +355,8 @@ def show_file(window_id: str, step: dict[str, Any]) -> str:
         focus_editor(window_id)
     else:
         focus_explorer(window_id)
+    if ("edit_line" in step or step.get("uncomment_and_set_true")) and step.get("save_after_edit"):
+        save_current_file(window_id, step)
     print(f"shown {relative}:{line}")
     return window_id
 
@@ -368,6 +371,55 @@ def edited_runbook_steps() -> list[dict[str, Any]]:
             if ("edit_line" in step or step.get("uncomment_and_set_true")) and "file" in step:
                 steps.append(step)
     return steps
+
+
+def backup_name(relative: str) -> str:
+    return relative.replace("/", "__")
+
+
+def snapshot_recording_edits(steps: list[dict[str, Any]]) -> None:
+    shutil.rmtree(EDIT_BACKUP_DIR, ignore_errors=True)
+    EDIT_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    manifest: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for step in steps:
+        if not (("edit_line" in step or step.get("uncomment_and_set_true")) and "file" in step):
+            continue
+        relative = str(step["file"])
+        if relative in seen:
+            continue
+        seen.add(relative)
+        path = ROOT / relative
+        if not path.is_file():
+            continue
+        backup = EDIT_BACKUP_DIR / backup_name(relative)
+        backup.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, backup)
+        manifest.append({"file": relative, "backup": backup.name})
+    (EDIT_BACKUP_DIR / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+
+
+def restore_recording_edits() -> None:
+    manifest_path = EDIT_BACKUP_DIR / "manifest.json"
+    if not manifest_path.is_file():
+        return
+    try:
+        manifest = json.loads(manifest_path.read_text())
+    except json.JSONDecodeError:
+        return
+    if not isinstance(manifest, list):
+        return
+    for item in manifest:
+        if not isinstance(item, dict):
+            continue
+        relative = str(item.get("file", ""))
+        backup = EDIT_BACKUP_DIR / str(item.get("backup", ""))
+        if not relative or not backup.is_file():
+            continue
+        target = ROOT / relative
+        if target.is_file():
+            shutil.copy2(backup, target)
+    shutil.rmtree(EDIT_BACKUP_DIR, ignore_errors=True)
 
 
 def edit_current_line(window_id: str, replacement: str, step: dict[str, Any]) -> None:
@@ -402,6 +454,26 @@ def uncomment_and_set_true_current_line(window_id: str, step: dict[str, Any]) ->
     hide_mouse()
 
 
+def save_current_file(window_id: str, step: dict[str, Any]) -> None:
+    focus_editor(window_id)
+    xdo("key", "ctrl+s", check=False)
+    time.sleep(float(step.get("pause_after_save", 0.35)))
+    if step.get("defocus_after_save"):
+        defocus_editor(window_id, step)
+        return
+    hide_mouse()
+
+
+def defocus_editor(window_id: str, step: dict[str, Any]) -> None:
+    xdo("windowraise", window_id, check=False)
+    xdo("windowfocus", window_id, check=False)
+    xdo("key", "Escape", check=False)
+    time.sleep(0.08)
+    xdo("key", "ctrl+shift+e", check=False)
+    time.sleep(float(step.get("pause_after_defocus", 0.25)))
+    hide_mouse()
+
+
 def discard_recording_edits(window_id: str) -> None:
     xdo("windowraise", window_id, check=False)
     xdo("windowfocus", window_id, check=False)
@@ -413,6 +485,7 @@ def discard_recording_edits(window_id: str) -> None:
         focus_editor(window_id)
         xdo("key", "ctrl+alt+shift+r", check=False)
         time.sleep(0.35)
+    restore_recording_edits()
     close_all_editors(window_id)
 
 
@@ -423,6 +496,7 @@ def write_state(window_id: str) -> None:
 
 def close_window() -> None:
     if not STATE_FILE.is_file():
+        restore_recording_edits()
         terminate_recording_code()
         return
     try:
@@ -490,6 +564,7 @@ def run_scene(scene_id: str) -> None:
     if not steps:
         raise RuntimeError(f"{scene_id} has no VS Code steps")
     close_window()
+    snapshot_recording_edits(steps)
     window_id = open_workspace()
     window_id = preload_tabs(window_id, steps)
     mark_ready()

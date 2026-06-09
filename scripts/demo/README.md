@@ -123,11 +123,9 @@ python scripts/demo/voice.py all
 Gemini and other TTS providers generate coherent scene-level audio. The final
 tutorial sync is handled separately: `place_voiceover.py` cuts the scene audio
 at detected silence/speech boundaries, places each utterance on the review-video
-timeline using browser workflow events, runbook action timings, subtitle cues,
-and `scripts/demo/voiceover-placement-overrides.json`, then muxes the final
-voiceover video.
-Overrides and action timings are primary; subtitle cues are used as fallback
-and comparison metadata.
+timeline using explicit overrides, browser workflow events, and runbook action
+timings, then muxes the final voiceover video. Subtitle cues are fallback and
+comparison metadata only.
 
 ```sh
 source .venv-demo/bin/activate
@@ -141,6 +139,16 @@ Outputs:
 - `demo-artifacts/review-human/audio/voiceover-timeline.wav`
 - `demo-artifacts/review-human/audio/voiceover-placement-report.json`
 - `demo-artifacts/review-human/videos/clickhouse-sink-tutorial-human-voiceover.mp4`
+
+For browser review from another machine, serve the exported review root with
+HTTP byte-range support so MP4 scrubbing works:
+
+```sh
+python scripts/demo/serve_timeline_review.py \
+  --directory demo-artifacts/review-human \
+  --host 0.0.0.0 \
+  --port 18085
+```
 
 ## Export Snippet Clips for Transcription Review
 
@@ -248,8 +256,7 @@ Current human-scene flow:
 - `scene-01-readiness-checks`: terminal health checks prove ClickHouse,
   Prometheus, Grafana, and RPC reachability are online.
 - `scene-02-example-env`: VS Code shows both example `.env.example` files and
-  points to `crates/core/src/clickhouse/config.rs` as the full sink config
-  reference.
+  enables async-wait inserts in each example configuration.
 - `scene-03-jupiter-live`: terminal starts the Jupiter live example with
   async-wait inserts.
 - `scene-04-token-live`: terminal starts the Token Program example with

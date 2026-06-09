@@ -9,6 +9,3 @@ For this tutorial we will run two pipelines in parallel and enable async-wait in
 which allow ClickHouse to batch inserts from multiple concurrent writers server-side.
 
 If you only run one pipeline, you can leave it in default sync mode.
-
-For more details on the env config, read each example's `main.rs`; the full sink config surface is in
-`crates/core/src/clickhouse/config.rs`.

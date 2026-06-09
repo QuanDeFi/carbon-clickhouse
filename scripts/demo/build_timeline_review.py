@@ -286,6 +286,12 @@ def vscode_step_seconds(step: dict[str, Any]) -> float:
         duration += float(step.get("pause_after_edit", 0.4))
     else:
         duration += 0.35
+    if step.get("save_after_edit"):
+        duration += 0.12
+        duration += float(step.get("pause_after_save", 0.35))
+    if step.get("defocus_after_save"):
+        duration += 0.08
+        duration += float(step.get("pause_after_defocus", 0.25))
     return max(0.5, duration)
 
 
@@ -328,10 +334,15 @@ def normalized_vscode_action(step: dict[str, Any]) -> tuple[str, str, str]:
         example = "example"
 
     if step.get("uncomment_and_set_true"):
+        save_note = "sets CLICKHOUSE_ASYNC_INSERT=true"
+        if step.get("save_after_edit"):
+            save_note = "sets and saves CLICKHOUSE_ASYNC_INSERT=true"
+        if step.get("defocus_after_save"):
+            save_note = "sets, saves, and defocuses CLICKHOUSE_ASYNC_INSERT=true"
         return (
             "VS Code",
             f"Enable {example} async inserts",
-            f"{file}:{line} sets CLICKHOUSE_ASYNC_INSERT=true",
+            f"{file}:{line} {save_note}",
         )
     if "edit_line" in step:
         return "VS Code", f"Edit {example} environment file", f"{file}:{line}"
@@ -1339,7 +1350,7 @@ tr.key td {{ background: rgba(250, 255, 105, .045); }}
 <main>
   <section class="top-grid">
     <div>
-      <video id="review-video" controls preload="metadata">
+      <video id="review-video" controls preload="auto" playsinline>
         <source id="review-video-source" src="{rel(default_video)}" type="video/mp4">
         <track src="{rel(VTT)}" kind="subtitles" srclang="en" label="English" default>
       </video>
@@ -1476,9 +1487,24 @@ tr.key td {{ background: rgba(250, 255, 105, .045); }}
 const video = document.getElementById('review-video');
 const videoSource = document.getElementById('review-video-source');
 function seek(seconds) {{
-  video.currentTime = Number(seconds);
-  video.play().catch(() => {{}});
-  video.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
+  const target = Number(seconds);
+  if (!Number.isFinite(target)) return;
+  const applySeek = () => {{
+    const duration = Number.isFinite(video.duration) ? video.duration : target + 0.1;
+    const clamped = Math.max(0, Math.min(target, Math.max(0, duration - 0.05)));
+    if (typeof video.fastSeek === 'function') {{
+      try {{ video.fastSeek(clamped); }} catch (_error) {{ video.currentTime = clamped; }}
+    }} else {{
+      video.currentTime = clamped;
+    }}
+    video.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
+  }};
+  if (video.readyState < 1) {{
+    video.addEventListener('loadedmetadata', applySeek, {{ once: true }});
+    video.load();
+  }} else {{
+    applySeek();
+  }}
 }}
 document.querySelectorAll('.source-button').forEach((button) => {{
   button.addEventListener('click', () => {{
@@ -1487,11 +1513,11 @@ document.querySelectorAll('.source-button').forEach((button) => {{
     document.querySelectorAll('.source-button').forEach((item) => item.classList.remove('active'));
     button.classList.add('active');
     videoSource.src = button.dataset.videoSrc;
-    video.load();
     video.addEventListener('loadedmetadata', () => {{
       video.currentTime = Math.min(current, Math.max(0, video.duration - 0.1));
       if (!wasPaused) video.play().catch(() => {{}});
     }}, {{ once: true }});
+    video.load();
   }});
 }});
 document.querySelectorAll('[data-seek]').forEach((element) => {{
