@@ -16,7 +16,7 @@ BLOCK_CRAWLER_START_SLOT=<start-slot>
 BLOCK_CRAWLER_END_SLOT=<end-slot-or-empty>
 BLOCK_CRAWLER_HEAD_LAG_SLOTS=3
 PROMETHEUS_METRICS_ADDR=0.0.0.0:9464
-LOG_LEVEL=debug
+LOG_LEVEL=info
 ```
 
 Use the production/provider RPC URL from the local `.env`. The public
