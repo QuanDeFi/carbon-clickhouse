@@ -772,6 +772,11 @@ def build_placements(args: argparse.Namespace, context: PlacementContext) -> tup
                 index=index,
                 transcriptions=transcriptions,
             )
+            if not any(
+                str(utterance.get(key, "")).strip()
+                for key in ("text", "aligned_text", "external_transcription_text")
+            ):
+                continue
             placements.append(make_placement(scene, audio, audio_duration, analysis, utterance, index, context, args))
     if any(error["type"] == "missing-audio" for error in errors) and not args.allow_missing_audio:
         return placements, errors

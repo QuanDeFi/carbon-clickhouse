@@ -6,11 +6,9 @@ Before looking at the table data, we group each example's tables into three fami
 
 Account tables store account state. Instruction tables store decoded program calls. CPI event tables store event activity emitted through inner instructions.
 
-Then we show the largest populated landing tables by rows and bytes.
+Then we show the largest populated landing tables by rows and bytes, and open the largest one, which is Token Program checked transfers.
 
-Then we open the largest one: Token Program checked transfers.
-
-For a stablecoin such as USDC, checked transfers are wallet-to-wallet sends, user deposits into protocols, or swap settlements.
+For stablecoins such as USDC: checked transfers are among other things wallet-to-wallet transactions, user deposits into protocols, or swap settlements.
 
 As we scroll across the columns, ClickHouse is showing decoded token movement activity from the live pipeline.
 

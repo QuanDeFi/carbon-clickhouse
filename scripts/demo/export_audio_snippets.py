@@ -110,6 +110,8 @@ def export_snippets(args: argparse.Namespace) -> dict[str, Any]:
             raise RuntimeError(f"Source audio missing for {scene}: {source_audio}")
         scene_dir = output_dir / scene
         for utterance in analysis.get("utterances", []):
+            if not str(utterance.get("text", "")).strip():
+                continue
             index = int(utterance.get("index", len(snippets) + 1))
             start = max(0.0, float(utterance.get("start_seconds", 0.0)) - args.padding_before)
             end = min(

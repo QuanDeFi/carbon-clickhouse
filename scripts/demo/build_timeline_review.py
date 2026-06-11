@@ -1007,10 +1007,12 @@ def build_html() -> str:
                 if transcript
                 else '<span class="muted">not transcribed</span>'
             )
+            marker_text = transcript or text
+            marker_source = "external transcript" if transcript else "aligned text"
             snippet_marks.append(
                 f'<button class="snippet-utterance" data-audio-id="{esc(audio_id)}" data-audio-seek="{start:.3f}" '
                 f'style="--left:{local_pct(start, duration)};--width:{local_pct(max(0.0, end - start), duration)}" '
-                f'title="#{index} {esc(text)}"><span class="snippet-index">{index}</span></button>'
+                f'title="#{index} {esc(marker_source)}: {esc(marker_text)}"><span class="snippet-index">{index}</span></button>'
             )
             snippet_boundary_marks.append(
                 f'<button class="snippet-boundary start" data-audio-id="{esc(audio_id)}" data-audio-seek="{start:.3f}" '
