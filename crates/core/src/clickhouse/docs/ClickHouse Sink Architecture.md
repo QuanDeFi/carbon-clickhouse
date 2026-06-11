@@ -323,13 +323,13 @@ Those control-plane responsibilities intentionally do not live inside `carbon-co
 
 Generated ClickHouse output is intentionally canary-limited in this repository.
 
-The architecture supports broader decoder generation, but committed output remains limited until upstream v1 stabilizes and broader decoder validation is intentionally rolled out.
+The architecture supports broader decoder generation, but committed output remains limited while broader decoder validation and rollout remain deliberate future work.
 
 The current canary boundary validates:
 
 - Jupiter swap instruction and CPI/event rows
 - Jupiter swap TokenLedger account rows in the live head-follow example path
-- Token Program account rows
+- Token Program account and instruction rows
 
 The committed canaries are renderer-generated and use generated managed schema
 metadata for bootstrap and drift validation. That boundary is a release-risk
@@ -368,7 +368,7 @@ The ClickHouse sink does not implement:
 - destructive drop/recreate repair during ingestion startup
 - universal JSON landing tables
 - fire-and-forget async inserts
-- committed broad decoder regeneration before upstream v1 stabilizes
+- committed broad decoder regeneration without explicit rollout validation
 
 ## Architectural Invariants
 

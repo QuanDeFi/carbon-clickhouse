@@ -171,6 +171,11 @@ Token Program account canary modules:
 - `decoders/token-program-decoder/src/accounts/clickhouse/multisig_row.rs`
 - `decoders/token-program-decoder/src/accounts/clickhouse/token_row.rs`
 
+Token Program instruction canary modules:
+
+- `decoders/token-program-decoder/src/instructions/clickhouse/mod.rs`
+- `decoders/token-program-decoder/src/instructions/clickhouse/*_row.rs`
+
 Those modules provide:
 
 - typed row structs
@@ -226,7 +231,7 @@ Minimal example environment:
 DATABASE_URL=http://user:password@clickhouse-host:8123
 RPC_URL=<provider-rpc-url>
 PROMETHEUS_METRICS_ADDR=0.0.0.0:9464
-LOG_LEVEL=debug
+LOG_LEVEL=info
 ```
 
 The committed examples also support:
@@ -496,6 +501,7 @@ The generated row scope is canary-limited and covers account, instruction, and C
 - Jupiter swap typed CPI-event landing rows.
 - Jupiter swap typed TokenLedger account landing rows.
 - Token Program typed account landing rows for mint, token, and multisig.
+- Token Program typed instruction landing rows.
 - Renderer templates for typed account, instruction, and CPI-event ClickHouse generation.
 - `withClickHouse` feature-gated generated modules.
 - `withClickHouse: true` for default `MergeTree` DDL.
@@ -701,7 +707,7 @@ arbitrary old slot.
 
 It does not validate:
 
-- Token Program account rows
+- Token Program account or instruction rows
 - multi-decoder fan-in
 - replicated/distributed ClickHouse DDL
 
@@ -1046,6 +1052,6 @@ Committed decoder output stays canary-limited:
 
 - Jupiter swap validates instruction and CPI-event ClickHouse rows.
 - Token Program validates account and instruction ClickHouse rows.
-- Other decoders stay without committed ClickHouse modules until upstream v1 stabilizes.
+- Other decoders stay without committed ClickHouse modules until broader decoder validation is intentionally rolled out.
 
-Broad decoder validation is done without committing generated output. Use `scripts/validate-clickhouse-decoder-rollout.sh` for current canary validation, `--compile-all` for a broader baseline compile scan, `--regenerate-idl-dir` for local IDL files, and `--regenerate-from-readme --rpc-url "$RPC_URL"` for README-listed program IDs. When upstream v1 stabilizes, run broader `withClickHouse` regeneration in a temporary branch or worktree, compile with `--allow-broad-clickhouse`, and commit only the intended rollout set.
+Broad decoder validation is done without committing generated output. Use `scripts/validate-clickhouse-decoder-rollout.sh` for current canary validation, `--compile-all` for a broader baseline compile scan, `--regenerate-idl-dir` for local IDL files, and `--regenerate-from-readme --rpc-url "$RPC_URL"` for README-listed program IDs. For broader `withClickHouse` regeneration, use a temporary branch or worktree, compile with `--allow-broad-clickhouse`, and commit only the intended rollout set.
