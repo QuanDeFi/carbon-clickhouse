@@ -1,6 +1,8 @@
-# Branch Diff: `sevenlabs-hq/carbon:v1.0-rc` To `clickhouse-upstream-v1`
+# Branch Diff: `sevenlabs-hq/carbon:main` To `clickhouse-upstream-v1`
 
-This document is a technical summary of the actual Git diff from `sevenlabs-hq/carbon`'s `v1.0-rc` branch to `clickhouse-upstream-v1`, filtered to implementation code. It is intentionally derived from Git commands and should be recomputed whenever either branch moves.
+This document is a technical summary of the actual Git diff from `sevenlabs-hq/carbon`'s `main` branch to `clickhouse-upstream-v1`, filtered to implementation code. It is intentionally derived from Git commands and should be recomputed whenever either branch moves.
+
+`main` in this worktree is our fork's mirror of `sevenlabs-hq/carbon:main`. At the time of this recomputation, `main` and `upstream/main` point to the same commit.
 
 ## Diff Basis
 
@@ -9,14 +11,15 @@ Commands used:
 ```bash
 TZ=UTC date '+%Y-%m-%d %H:%M:%S %Z (%z)'
 git rev-parse --abbrev-ref HEAD
-git rev-parse upstream/v1.0-rc
+git rev-parse main
+git rev-parse upstream/main
 git rev-parse HEAD
-git merge-base upstream/v1.0-rc HEAD
-git rev-list --left-right --count upstream/v1.0-rc...HEAD
-git diff --name-status upstream/v1.0-rc...HEAD -- '*.rs' '*.ts' '*.njk' '*.cjs'
-git diff --numstat upstream/v1.0-rc...HEAD -- '*.rs' '*.ts' '*.njk' '*.cjs'
-git diff --stat upstream/v1.0-rc...HEAD -- '*.rs' '*.ts' '*.njk' '*.cjs'
-git diff --shortstat upstream/v1.0-rc...HEAD -- '*.rs' '*.ts' '*.njk' '*.cjs'
+git merge-base main HEAD
+git rev-list --left-right --count main...HEAD
+git diff --name-status main...HEAD -- '*.rs' '*.ts' '*.njk' '*.cjs'
+git diff --numstat main...HEAD -- '*.rs' '*.ts' '*.njk' '*.cjs'
+git diff --stat main...HEAD -- '*.rs' '*.ts' '*.njk' '*.cjs'
+git diff --shortstat main...HEAD -- '*.rs' '*.ts' '*.njk' '*.cjs'
 ```
 
 Filtered scope:
@@ -29,14 +32,17 @@ Legend:
 - `A`: added implementation file.
 - `M`: modified implementation file.
 
+The `A`/`M` inventory is recomputed from `git diff --name-status main...HEAD`. The current filtered inventory is `80` added implementation files and `36` modified implementation files; the consolidated summaries below follow that status split.
+
 Computed values:
 
-- Diff check timestamp: `2026-05-26 06:41:58 UTC (+0000)`
+- Diff check timestamp: `2026-06-11 06:44:52 UTC (+0000)`
 - Current branch: `clickhouse-upstream-v1`
-- Reference branch tip: `sevenlabs-hq/carbon:v1.0-rc` at `713a3f55272243c0a2a5357d0dc52d60fcd8054c`
-- Compare branch tip: `clickhouse-upstream-v1` at `d947509269c1f5fe63a845872a11a4f44f1d4463`
-- Merge base: `713a3f55272243c0a2a5357d0dc52d60fcd8054c`
-- Commit relation: `0` commits behind `sevenlabs-hq/carbon:v1.0-rc`, `60` commits ahead
+- Reference branch tip: `sevenlabs-hq/carbon:main` at `f1797b485ed3232d2f95a7e0e5fb0316eafd770a`
+- Local mirror tip: `main` at `f1797b485ed3232d2f95a7e0e5fb0316eafd770a`
+- Compare branch tip: `clickhouse-upstream-v1` at `f5905dd4b84ab42cbef4e967e1133cb558911034`
+- Merge base: `f1797b485ed3232d2f95a7e0e5fb0316eafd770a`
+- Commit relation: `0` commits behind `sevenlabs-hq/carbon:main`, `63` commits ahead
 - Total changed implementation files: `116`
 - Added implementation files: `80`
 - Modified implementation files: `36`
@@ -185,11 +191,11 @@ New ClickHouse sink runtime, row contracts, schema reconciliation, HTTP transpor
 <tr>
 <td align="left" style="white-space: nowrap;"><code>1052/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>clickhouse/<wbr>admin.rs</code></td>
-<td>Implements ClickHouse admin execution, managed-table DDL helpers, schema/layout reconciliation, safe enum-extension repair, default MergeTree settings, and admin retry tests.</td>
+<td>Implements ClickHouse admin execution, managed-table DDL helpers, schema/layout reconciliation, safe enum-extension repair, non-replicated MergeTree dedup defaults, and admin retry tests.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>376/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>clickhouse/<wbr>config.rs</code></td>
-<td>Defines ClickHouse endpoint/auth config, row context, batching/backpressure, transport, retry, sync/async insert settings, exact-batch dedup defaults, and database-URL parsing.</td>
+<td>Defines ClickHouse endpoint/auth config, row context, batching/backpressure, transport, retry, sync default and async-wait insert settings, exact-batch dedup defaults, and database-URL parsing.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>248/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">crates/<wbr>core/<wbr>src/<wbr>clickhouse/<wbr>http.rs</code></td>
@@ -417,19 +423,19 @@ Generated Jupiter Swap ClickHouse account, instruction, CPI/event rows, and deco
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>19/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>cpi_<wbr>event.rs</code></td>
-<td>Adds generated CPI/event decoder variants used by ClickHouse event landing output.</td>
+<td>Adds CPI/event account metadata construction so decoded Anchor event CPIs can retain program, event-authority, and remaining-account context.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>14/1</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>instructions/<wbr>mod.rs</code></td>
-<td>Wires generated ClickHouse modules into the decoder family behind the feature gate.</td>
+<td>Feature-gates the ClickHouse instruction module and decodes Anchor event-CPI payloads before ordinary Jupiter instruction matching.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>1/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>types/<wbr>candidate_<wbr>swap.rs</code></td>
-<td>Decoder-owned schema or type support used by generated ClickHouse rows.</td>
+<td>Adds the `ZeroFiSwapV2` candidate-swap variant used by regenerated Jupiter route-plan ClickHouse helper types.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>7/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>jupiter-swap-decoder/<wbr>src/<wbr>types/<wbr>swap.rs</code></td>
-<td>Decoder-owned schema or type support used by generated ClickHouse rows.</td>
+<td>Adds regenerated Jupiter swap variants including `PumpWrappedBuyV5`, `PumpWrappedSellV5`, and `ZeroFiSwapV2` for route-plan row mapping.</td>
 </tr>
 </tbody>
 </table>
@@ -459,159 +465,159 @@ Generated Token Program ClickHouse account/instruction rows plus SPL Token accou
 <tr>
 <td align="left" style="white-space: nowrap;"><code>73/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>accounts/<wbr>clickhouse/<wbr>mint_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse account landing row for this decoder-owned account family.</td>
+<td>Persists SPL Token mint account snapshots with mint/freeze authorities, supply, decimals, and initialization payload columns.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>125/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>accounts/<wbr>clickhouse/<wbr>mod.rs</code></td>
-<td>Defines generated ClickHouse account row enum dispatch, setup helpers, account table options, and migration bundle.</td>
+<td>Defines explicit Token Program account row exports, enum dispatch, MergeTree options, managed schema migration, config defaults, and setup helpers.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>68/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>accounts/<wbr>clickhouse/<wbr>multisig_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse account landing row for this decoder-owned account family.</td>
+<td>Persists SPL Token multisig account snapshots with signer threshold, signer count, initialization state, and signer pubkey payload columns.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>82/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>accounts/<wbr>clickhouse/<wbr>token_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse account landing row for this decoder-owned account family.</td>
+<td>Persists SPL Token account snapshots with mint, token owner, balance, delegate, state, native reserve, delegated amount, and close authority columns.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>8/10</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>accounts/<wbr>mint.rs</code></td>
-<td>Updates Token Program account decoding to use official SPL Token unpacking semantics and expose generated ClickHouse account coverage.</td>
+<td>Replaces Borsh byte decoding with conversion from official SPL Token mint state so generated mint rows use the correct Pack layout.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>79/33</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>accounts/<wbr>mod.rs</code></td>
-<td>Wires generated ClickHouse modules into the decoder family behind the feature gate.</td>
+<td>Adds the ClickHouse account module and decodes Token Program Mint, Token, and Multisig accounts through official SPL Token Pack unpacking, with a token-account layout regression test.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>7/10</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>accounts/<wbr>multisig.rs</code></td>
-<td>Updates Token Program account decoding to use official SPL Token unpacking semantics and expose generated ClickHouse account coverage.</td>
+<td>Replaces Borsh byte decoding with conversion from official SPL Token multisig state so signer fields use the correct Pack layout.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>21/10</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>accounts/<wbr>token.rs</code></td>
-<td>Updates Token Program account decoding to use official SPL Token unpacking semantics and expose generated ClickHouse account coverage.</td>
+<td>Replaces Borsh byte decoding with conversion from official SPL Token account state, including COption, owner, delegate, native reserve, and account-state mapping.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>54/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>amount_<wbr>to_<wbr>ui_<wbr>amount_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists `amount_to_ui_amount` instruction rows with the raw token amount payload column.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>58/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>approve_<wbr>checked_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists checked approval instruction rows with amount and decimals payload columns.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>53/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>approve_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists approval instruction rows with the delegated amount payload column.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>62/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>batch_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists batch instruction rows with structured batch-item payload data.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>57/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>burn_<wbr>checked_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists checked burn instruction rows with amount and decimals payload columns.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>53/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>burn_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists burn instruction rows with the burned amount payload column.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>50/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>close_<wbr>account_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists close-account instruction rows with common instruction landing metadata and no extra payload columns.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>50/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>freeze_<wbr>account_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists freeze-account instruction rows with common instruction landing metadata and no extra payload columns.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>51/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>get_<wbr>account_<wbr>data_<wbr>size_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists get-account-data-size instruction rows with common instruction landing metadata and no extra payload columns.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>54/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>initialize_<wbr>account2_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists `initialize_account2` instruction rows with the owner payload column.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>54/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>initialize_<wbr>account3_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists `initialize_account3` instruction rows with the owner payload column.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>51/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>initialize_<wbr>account_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists initialize-account instruction rows with common instruction landing metadata and no extra payload columns.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>51/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>initialize_<wbr>immutable_<wbr>owner_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists initialize-immutable-owner instruction rows with common instruction landing metadata and no extra payload columns.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>64/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>initialize_<wbr>mint2_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists `initialize_mint2` instruction rows with decimals, mint authority, and freeze authority payload columns.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>64/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>initialize_<wbr>mint_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists initialize-mint instruction rows with decimals, mint authority, and freeze authority payload columns.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>54/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>initialize_<wbr>multisig2_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists `initialize_multisig2` instruction rows with the required signer count payload column.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>54/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>initialize_<wbr>multisig_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists initialize-multisig instruction rows with the required signer count payload column.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>58/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>mint_<wbr>to_<wbr>checked_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists checked mint-to instruction rows with amount and decimals payload columns.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>53/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>mint_<wbr>to_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists mint-to instruction rows with the minted amount payload column.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>243/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>mod.rs</code></td>
-<td>Defines generated ClickHouse instruction/event row enum dispatch, setup helpers, table options, and migration bundle.</td>
+<td>Defines explicit Token Program instruction row exports, enum dispatch, MergeTree options, managed schema migration, config defaults, and setup helpers.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>50/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>revoke_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists revoke instruction rows with common instruction landing metadata and no extra payload columns.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>60/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>set_<wbr>authority_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists set-authority instruction rows with authority type and optional new-authority payload columns.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>50/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>sync_<wbr>native_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists sync-native instruction rows with common instruction landing metadata and no extra payload columns.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>50/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>thaw_<wbr>account_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists thaw-account instruction rows with common instruction landing metadata and no extra payload columns.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>58/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>transfer_<wbr>checked_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists checked transfer instruction rows with amount and decimals payload columns.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>53/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>transfer_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists transfer instruction rows with the transferred amount payload column.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>27/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>types.rs</code></td>
-<td>Defines generated ClickHouse helper types, enum/tuple serializers, and shared DDL constants for structured payload columns.</td>
+<td>Defines the generated ClickHouse helper type for structured Token Program batch instruction items.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>54/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>ui_<wbr>amount_<wbr>to_<wbr>amount_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists `ui_amount_to_amount` instruction rows with the UI amount payload column.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>54/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>unwrap_<wbr>lamports_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists unwrap-lamports instruction rows with the lamport amount payload column.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>51/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>clickhouse/<wbr>withdraw_<wbr>excess_<wbr>lamports_<wbr>row.rs</code></td>
-<td>Generated typed ClickHouse instruction landing row for this decoder-owned instruction family.</td>
+<td>Persists withdraw-excess-lamports instruction rows with common instruction landing metadata and no extra payload columns.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>3/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">decoders/<wbr>token-program-decoder/<wbr>src/<wbr>instructions/<wbr>mod.rs</code></td>
-<td>Wires generated ClickHouse modules into the decoder family behind the feature gate.</td>
+<td>Feature-gates the Token Program instruction ClickHouse module in the generated instruction decoder family.</td>
 </tr>
 </tbody>
 </table>
@@ -641,7 +647,7 @@ Codama renderer support for ClickHouse typed rows, structured mapping, DDL modes
 <tr>
 <td align="left" style="white-space: nowrap;"><code>43/3</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>src/<wbr>cargoTomlGenerator.ts</code></td>
-<td>Adds ClickHouse dependencies/features to generated decoder Cargo manifests.</td>
+<td>Adds generated decoder ClickHouse feature wiring, `chrono` dependency support, and classic SPL Token Program Pack dependencies.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>232/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>src/<wbr>clickhouseDdl.ts</code></td>
@@ -653,63 +659,63 @@ Codama renderer support for ClickHouse typed rows, structured mapping, DDL modes
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>226/5</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>src/<wbr>getRenderMapVisitor.ts</code></td>
-<td>Routes renderer options into generated ClickHouse account, instruction, event, and type pages.</td>
+<td>Routes ClickHouse render options into generated account, instruction, event, and type pages, including helper de-duplication, DDL contexts, and token-program Pack imports.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>4/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>src/<wbr>index.ts</code></td>
-<td>Supports ClickHouse renderer configuration, exports, or helper behavior.</td>
+<td>Exports ClickHouse DDL helpers, row mapper, render options, and row-plan types from the renderer package API.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>13/1</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>src/<wbr>utils/<wbr>helpers.ts</code></td>
-<td>Supports ClickHouse renderer configuration, exports, or helper behavior.</td>
+<td>Normalizes program, original IDL, and package names for Token and Token-2022 program detection.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>136/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>accountsClickHouseMod.njk</code></td>
-<td>Generates ClickHouse modules, row files, table options, schema metadata, and feature-gated exports from renderer templates.</td>
+<td>Generates account ClickHouse modules with explicit row exports, account processor aliases, table options, migration runner, config defaults, and setup helpers.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>94/3</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>accountsMod.njk</code></td>
-<td>Generates ClickHouse modules, row files, table options, schema metadata, and feature-gated exports from renderer templates.</td>
+<td>Adds feature-gated account ClickHouse modules and emits official SPL Token Pack-based account decoding/tests for classic Token Program accounts.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>52/1</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>accountsPage.njk</code></td>
-<td>Generates ClickHouse modules, row files, table options, schema metadata, and feature-gated exports from renderer templates.</td>
+<td>Emits classic SPL Token `From` conversions for Mint, Token, and Multisig account structs alongside the existing Token-2022 conversion path.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>114/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>clickhouseRowPage.njk</code></td>
-<td>Generates ClickHouse modules, row files, table options, schema metadata, and feature-gated exports from renderer templates.</td>
+<td>Generates typed account/instruction ClickHouse row structs with landing metadata, payload column specs, source-to-row conversion, and row macros.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>11/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>clickhouseTypesPage.njk</code></td>
-<td>Generates ClickHouse modules, row files, table options, schema metadata, and feature-gated exports from renderer templates.</td>
+<td>Emits shared ClickHouse helper definitions and enum helper imports for generated structured payload types.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>67/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>eventInstructionClickHouseRowPage.njk</code></td>
-<td>Generates ClickHouse modules, row files, table options, schema metadata, and feature-gated exports from renderer templates.</td>
+<td>Generates event ClickHouse row structs with event landing metadata, payload column specs, source-to-row conversion, and event row macros.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>17/1</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>eventInstructionPage.njk</code></td>
-<td>Generates ClickHouse modules, row files, table options, schema metadata, and feature-gated exports from renderer templates.</td>
+<td>Adds `from_instruction_accounts` so generated CPI event instructions preserve program, event-authority, and remaining account metadata.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>194/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>instructionsClickHouseMod.njk</code></td>
-<td>Generates ClickHouse modules, row files, table options, schema metadata, and feature-gated exports from renderer templates.</td>
+<td>Generates instruction/event ClickHouse modules with explicit row exports, dispatch, table options, migration runner, config defaults, and setup helpers.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>20/4</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>instructionsMod.njk</code></td>
-<td>Generates ClickHouse modules, row files, table options, schema metadata, and feature-gated exports from renderer templates.</td>
+<td>Adds feature-gated instruction ClickHouse modules and decodes CPI events before ordinary instruction matching in generated instruction decoders.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>1/1</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>lib.njk</code></td>
-<td>Generates ClickHouse modules, row files, table options, schema metadata, and feature-gated exports from renderer templates.</td>
+<td>Normalizes the generated `lib.rs` template trailing newline without changing generated decoder behavior.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>15/1</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>templates/<wbr>macros.njk</code></td>
-<td>Generates ClickHouse modules, row files, table options, schema metadata, and feature-gated exports from renderer templates.</td>
+<td>Adds the `clickHouseColumnSpec` template macro for generated payload column specs, including custom DDL types and codecs.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>634/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>renderer/<wbr>test/<wbr>clickhouse-renderer.test.cjs</code></td>
-<td>Tests ClickHouse renderer output, structured schema mapping, DDL options, schema metadata, and no-JSON-fallback canaries.</td>
+<td>Tests ClickHouse module templates, DDL modes/options/codecs, structured row mapping, Token Program Pack generation, reserved-column collisions, strict JSON fallback behavior, and generated canaries.</td>
 </tr>
 </tbody>
 </table>
@@ -739,23 +745,23 @@ CLI plumbing for ClickHouse generation and renderer option parity.
 <tr>
 <td align="left" style="white-space: nowrap;"><code>70/4</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>cli/<wbr>src/<wbr>cli.ts</code></td>
-<td>Adds CLI support for ClickHouse generation flags and `--clickhouse-options` parity.</td>
+<td>Adds `--with-clickhouse` and `--clickhouse-options` parsing, accepts JSON or file-based options, resolves enabled state, and passes ClickHouse options through parse/scaffold commands.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>10/1</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>cli/<wbr>src/<wbr>lib/<wbr>cargoTomlGenerator.ts</code></td>
-<td>Adds CLI support for ClickHouse generation flags and `--clickhouse-options` parity.</td>
+<td>Adds ClickHouse feature propagation to scaffolded decoder and `carbon-core` dependencies plus the scaffolded indexer feature list.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>10/1</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>cli/<wbr>src/<wbr>lib/<wbr>decoder.ts</code></td>
-<td>Adds CLI support for ClickHouse generation flags and `--clickhouse-options` parity.</td>
+<td>Threads `withClickHouse` render options through Codama and Anchor decoder generation paths.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>2/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>cli/<wbr>src/<wbr>lib/<wbr>prompts.ts</code></td>
-<td>Adds CLI support for ClickHouse generation flags and `--clickhouse-options` parity.</td>
+<td>Carries the optional `withClickHouse` scaffold setting through interactive scaffold options.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>3/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>cli/<wbr>src/<wbr>lib/<wbr>scaffold.ts</code></td>
-<td>Adds CLI support for ClickHouse generation flags and `--clickhouse-options` parity.</td>
+<td>Adds `withClickHouse` to scaffold options, generated template context, and generated README feature output.</td>
 </tr>
 </tbody>
 </table>
@@ -785,11 +791,11 @@ Thin real-world ClickHouse canaries for Jupiter Swap and Token Program data inge
 <tr>
 <td align="left" style="white-space: nowrap;"><code>261/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">examples/<wbr>jupiter-swap-clickhouse/<wbr>src/<wbr>main.rs</code></td>
-<td>Runs the Jupiter Swap ClickHouse canary with finalized block crawling, instruction/event rows, live TokenLedger account snapshots, metrics, and async insert opt-in.</td>
+<td>Runs the Jupiter Swap ClickHouse canary with finalized block crawling, instruction/event rows, metrics, async insert opt-in, and live-mode TokenLedger account snapshots.</td>
 </tr><tr>
 <td align="left" style="white-space: nowrap;"><code>196/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">examples/<wbr>token-program-clickhouse/<wbr>src/<wbr>main.rs</code></td>
-<td>Runs the fixed-USDC Token Program ClickHouse canary: fetches finalized `getMultipleAccounts` snapshots for mint, multisig, and token accounts, then tails finalized blocks for Token Program instruction rows.</td>
+<td>Runs the fixed-USDC Token Program ClickHouse canary: snapshots the hardwired USDC mint, authority multisigs, and holding account with finalized `getMultipleAccounts`, then tails finalized blocks for instruction rows.</td>
 </tr>
 </tbody>
 </table>
@@ -799,7 +805,7 @@ Thin real-world ClickHouse canaries for Jupiter Swap and Token Program data inge
 <details>
 <summary style="white-space: nowrap;"><span style="display: inline-block; width: 45%;"><strong>Datasource reliability</strong></span><span style="display: inline-block; width: 19%; text-align: left;"><code>1 files</code></span><span style="display: inline-block; width: 36%; text-align: right;"><code>197 / 84 lines</code></span></summary>
 
-RPC block crawler reliability, cancellation, retry, and skip/error classification changes.
+RPC block crawler drain, backpressure, retry, cancellation, and skip/error classification changes.
 
 <div style="width: 100%; overflow-x: auto;">
 <table style="width: 100%; table-layout: fixed;">
@@ -819,7 +825,7 @@ RPC block crawler reliability, cancellation, retry, and skip/error classificatio
 <tr>
 <td align="left" style="white-space: nowrap;"><code>197/84</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">datasources/<wbr>rpc-block-crawler-datasource/<wbr>src/<wbr>lib.rs</code></td>
-<td>Hardens RPC block crawler behavior around channel drain, cancellation, retries, and Solana block error classification.</td>
+<td>Makes the RPC block crawler drain queued blocks after the fetcher exits, await transaction sends for downstream backpressure, retry transient block-fetch errors, and skip permanent Solana block errors.</td>
 </tr>
 </tbody>
 </table>
@@ -879,7 +885,7 @@ Version export update needed by generated package plumbing.
 <tr>
 <td align="left" style="white-space: nowrap;"><code>1/0</code></td>
 <td style="white-space: normal; overflow-wrap: anywhere; word-break: break-word;"><code style="white-space: normal; overflow-wrap: anywhere; word-break: break-all;">packages/<wbr>versions/<wbr>src/<wbr>index.ts</code></td>
-<td>Supporting implementation change included in the filtered diff.</td>
+<td>Adds the `chrono` crate version used by generated ClickHouse row timestamp dependencies.</td>
 </tr>
 </tbody>
 </table>
