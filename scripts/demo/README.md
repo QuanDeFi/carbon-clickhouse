@@ -131,6 +131,7 @@ comparison metadata only.
 source .venv-demo/bin/activate
 TTS_PROVIDER=gemini python scripts/demo/voice.py all
 python scripts/demo/place_voiceover.py
+python scripts/demo/subtitles.py --source voiceover
 python scripts/demo/build_timeline_review.py
 ```
 
@@ -139,6 +140,14 @@ Outputs:
 - `demo-artifacts/review-human/audio/voiceover-timeline.wav`
 - `demo-artifacts/review-human/audio/voiceover-placement-report.json`
 - `demo-artifacts/review-human/videos/clickhouse-sink-tutorial-human-voiceover.mp4`
+- `demo-artifacts/review-human/subtitles/clickhouse-sink-tutorial-human-voiceover.{srt,vtt,ass}`
+- `demo-artifacts/review-human/videos/clickhouse-sink-tutorial-human-voiceover-subtitled.mp4`
+
+Final subtitle timing should be generated from the placement report. The text
+comes from the known Gemini prompt transcript carried through audio analysis and
+placement, not from external snippet transcriptions. External transcriptions are
+validation aids only because ASR can change words such as code terms,
+filenames, or product names.
 
 For browser review from another machine, serve the exported review root with
 HTTP byte-range support so MP4 scrubbing works:

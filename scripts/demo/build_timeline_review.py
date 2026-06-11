@@ -28,9 +28,13 @@ OUTPUT = REVIEW_DIR / "subtitle-alignment-timeline.html"
 VIDEO = VIDEO_DIR / "clickhouse-sink-tutorial-human-no-audio-subtitled.mp4"
 RAW_VIDEO = VIDEO_DIR / "clickhouse-sink-tutorial-human-no-audio.mp4"
 VOICEOVER_VIDEO = VIDEO_DIR / "clickhouse-sink-tutorial-human-voiceover.mp4"
+VOICEOVER_SUBTITLED_VIDEO = VIDEO_DIR / "clickhouse-sink-tutorial-human-voiceover-subtitled.mp4"
 VTT = SUBTITLE_DIR / "clickhouse-sink-tutorial-human-no-audio.vtt"
 SRT = SUBTITLE_DIR / "clickhouse-sink-tutorial-human-no-audio.srt"
 SUBTITLE_REPORT = SUBTITLE_DIR / "subtitle-report.json"
+VOICEOVER_VTT = SUBTITLE_DIR / "clickhouse-sink-tutorial-human-voiceover.vtt"
+VOICEOVER_SRT = SUBTITLE_DIR / "clickhouse-sink-tutorial-human-voiceover.srt"
+VOICEOVER_SUBTITLE_REPORT = SUBTITLE_DIR / "voiceover-subtitle-report.json"
 TIMING_VALIDATION = LOG_DIR / "timing-validation.json"
 RUNBOOK = ROOT / "scripts/demo/runbook.yaml"
 
@@ -254,6 +258,8 @@ def voiceover_status(report: dict[str, Any]) -> str:
 
 def available_video_sources() -> list[dict[str, Any]]:
     sources: list[dict[str, Any]] = []
+    if VOICEOVER_SUBTITLED_VIDEO.is_file():
+        sources.append({"label": "Voiceover subtitled review", "path": VOICEOVER_SUBTITLED_VIDEO, "kind": "voiceover-subtitled"})
     if VOICEOVER_VIDEO.is_file():
         sources.append({"label": "Voiceover review", "path": VOICEOVER_VIDEO, "kind": "voiceover"})
     if VIDEO.is_file():
@@ -261,6 +267,12 @@ def available_video_sources() -> list[dict[str, Any]]:
     if RAW_VIDEO.is_file():
         sources.append({"label": "No-audio raw review", "path": RAW_VIDEO, "kind": "raw"})
     return sources
+
+
+def active_subtitle_assets() -> tuple[Path, Path, Path, str]:
+    if VOICEOVER_SRT.is_file() and VOICEOVER_VTT.is_file() and VOICEOVER_SUBTITLE_REPORT.is_file():
+        return VOICEOVER_SRT, VOICEOVER_VTT, VOICEOVER_SUBTITLE_REPORT, "voiceover-placement"
+    return SRT, VTT, SUBTITLE_REPORT, "scene-script"
 
 
 def command_typing_seconds(command: str, step: dict[str, Any]) -> float:
@@ -746,13 +758,14 @@ def status_badge(status: str) -> str:
 
 
 def build_html() -> str:
-    for path in (SRT, SUBTITLE_REPORT, TIMING_VALIDATION):
+    active_srt, active_vtt, active_report, subtitle_source = active_subtitle_assets()
+    for path in (active_srt, active_report, TIMING_VALIDATION):
         if not path.is_file():
             raise FileNotFoundError(path)
-    report = load_json(SUBTITLE_REPORT)
+    report = load_json(active_report)
     validation = load_json(TIMING_VALIDATION)
     scenes = report["scenes"]
-    cues = parse_srt(SRT, scenes)
+    cues = parse_srt(active_srt, scenes)
     checks = timing_checks(validation)
     events = browser_events(scenes)
     actions = runbook_actions(scenes, events)
@@ -1354,15 +1367,15 @@ tr.key td {{ background: rgba(250, 255, 105, .045); }}
     <div>
       <video id="review-video" controls preload="auto" playsinline>
         <source id="review-video-source" src="{rel(default_video)}" type="video/mp4">
-        <track src="{rel(VTT)}" kind="subtitles" srclang="en" label="English" default>
+        <track src="{rel(active_vtt)}" kind="subtitles" srclang="en" label="English" default>
       </video>
       <div class="source-buttons">{''.join(video_source_buttons)}</div>
       <div class="file-list">
         {''.join(f'<a href="{rel(source["path"])}">{esc(source["label"])}</a>' for source in video_sources)}
-        <a href="{rel(SRT)}">SRT</a>
-        <a href="{rel(VTT)}">VTT</a>
+        <a href="{rel(active_srt)}">SRT</a>
+        <a href="{rel(active_vtt)}">VTT</a>
         <a href="{rel(TIMING_VALIDATION)}">timing JSON</a>
-        <a href="{rel(SUBTITLE_REPORT)}">subtitle report</a>
+        <a href="{rel(active_report)}">subtitle report</a>
         <a href="{rel(REVIEW_DIR / "runbook.yaml")}">review runbook</a>
       </div>
     </div>
@@ -1370,6 +1383,7 @@ tr.key td {{ background: rgba(250, 255, 105, .045); }}
       <div class="facts">
         <div class="fact"><b>Timing Validation</b><span>{esc(validation.get("status", "unknown"))}</span></div>
         <div class="fact"><b>Total Duration</b><span>{fmt_time(total)}</span></div>
+        <div class="fact"><b>Subtitle Source</b><span>{esc(subtitle_source)}</span></div>
         <div class="fact"><b>Subtitle Cues</b><span>{len(cues)}</span></div>
         <div class="fact"><b>Runbook Actions</b><span>{len(actions)}</span></div>
         <div class="fact"><b>Audio Utterances</b><span>{audio_index}</span></div>
@@ -1462,6 +1476,7 @@ tr.key td {{ background: rgba(250, 255, 105, .045); }}
       {f'<a href="{rel(VOICEOVER_REPORT)}">placement report</a>' if VOICEOVER_REPORT.is_file() else ''}
       {f'<a href="{rel(REVIEW_DIR / "audio/voiceover-timeline.wav")}">voiceover WAV</a>' if (REVIEW_DIR / "audio/voiceover-timeline.wav").is_file() else ''}
       {f'<a href="{rel(REVIEW_DIR / "videos/clickhouse-sink-tutorial-human-voiceover.mp4")}">voiceover video</a>' if (REVIEW_DIR / "videos/clickhouse-sink-tutorial-human-voiceover.mp4").is_file() else ''}
+      {f'<a href="{rel(VOICEOVER_SUBTITLED_VIDEO)}">voiceover subtitled video</a>' if VOICEOVER_SUBTITLED_VIDEO.is_file() else ''}
     </div>
     <table>
       <thead><tr><th>Scene</th><th>#</th><th>Target Start</th><th>Duration</th><th>Source Cut</th><th>Target Source</th><th>Target Detail</th><th>Prompt Tag</th><th>Text</th></tr></thead>

@@ -19,6 +19,9 @@ VIDEOS_DIR = REVIEW_DIR / "videos"
 SUBTITLE_DIR = REVIEW_DIR / "subtitles"
 FINAL_VIDEO = VIDEOS_DIR / "clickhouse-sink-tutorial-human-no-audio.mp4"
 SUBTITLED_VIDEO = VIDEOS_DIR / "clickhouse-sink-tutorial-human-no-audio-subtitled.mp4"
+VOICEOVER_VIDEO = VIDEOS_DIR / "clickhouse-sink-tutorial-human-voiceover.mp4"
+VOICEOVER_SUBTITLED_VIDEO = VIDEOS_DIR / "clickhouse-sink-tutorial-human-voiceover-subtitled.mp4"
+VOICEOVER_PLACEMENT_REPORT = REVIEW_DIR / "audio/voiceover-placement-report.json"
 MAX_SUBTITLE_LINE_CHARS = 42
 MAX_SUBTITLE_CHARS = MAX_SUBTITLE_LINE_CHARS * 2
 MAX_SUBTITLE_WORDS = 20
@@ -465,6 +468,87 @@ def make_scene_cues(scene: str, scene_start: float, scene_duration: float, first
     return cues
 
 
+def placement_text(placement: dict) -> str:
+    text = str(placement.get("aligned_text") or placement.get("text") or "").strip()
+    return " ".join(text.split())
+
+
+def make_span_cues(
+    *,
+    scene: str,
+    text: str,
+    start: float,
+    end: float,
+    first_index: int,
+) -> list[Cue]:
+    layout = scene_layout(scene)
+    chunks = sentence_chunks(text, layout)
+    if not chunks or end <= start:
+        return []
+
+    span = end - start
+    gap = MIN_INTER_CUE_GAP_SECONDS if len(chunks) > 1 and span / len(chunks) >= 1.15 else 0.0
+    available = max(0.05, span - gap * (len(chunks) - 1))
+    weights = [max(8, len(chunk.replace("\n", " "))) for chunk in chunks]
+    total_weight = max(1, sum(weights))
+    durations = [available * weight / total_weight for weight in weights]
+
+    cues: list[Cue] = []
+    cursor = start
+    for offset, (chunk, cue_duration) in enumerate(zip(chunks, durations), start=0):
+        cue_start = cursor
+        cue_end = end if offset == len(chunks) - 1 else min(end, cursor + cue_duration)
+        cues.append(Cue(first_index + offset, cue_start, cue_end, wrap_caption(chunk, layout), scene, layout))
+        cursor = cue_end + gap
+    return cues
+
+
+def build_voiceover_cues() -> tuple[list[Cue], dict]:
+    if not VOICEOVER_PLACEMENT_REPORT.is_file():
+        raise FileNotFoundError(VOICEOVER_PLACEMENT_REPORT)
+    if not (SUBTITLE_DIR / "subtitle-report.json").is_file():
+        raise FileNotFoundError(SUBTITLE_DIR / "subtitle-report.json")
+
+    base_report = json.loads((SUBTITLE_DIR / "subtitle-report.json").read_text())
+    placement_report = json.loads(VOICEOVER_PLACEMENT_REPORT.read_text())
+    placements = sorted(
+        placement_report.get("placements", []),
+        key=lambda item: (float(item.get("target_timeline_start_seconds", 0)), str(item.get("scene", ""))),
+    )
+
+    cues: list[Cue] = []
+    for placement in placements:
+        text = placement_text(placement)
+        if not text:
+            continue
+        scene = str(placement["scene"])
+        start = float(placement["target_timeline_start_seconds"])
+        end = float(placement["target_timeline_end_seconds"])
+        cues.extend(make_span_cues(scene=scene, text=text, start=start, end=end, first_index=len(cues) + 1))
+
+    scenes = []
+    for base_scene in base_report.get("scenes", []):
+        scene = dict(base_scene)
+        scene_cues = [cue for cue in cues if cue.scene == scene["scene"]]
+        cue_words = sum(word_count(cue.text.replace("\n", " ")) for cue in scene_cues)
+        cue_seconds = sum(cue.end - cue.start for cue in scene_cues)
+        scene["cue_count"] = len(scene_cues)
+        scene["subtitle_source"] = "voiceover-placement"
+        scene["caption_words_per_minute"] = round((cue_words / cue_seconds) * 60, 1) if cue_seconds else 0
+        scene["natural_pacing_fits_scene"] = True
+        scenes.append(scene)
+
+    report = {
+        "source": "voiceover-placement",
+        "source_report": str(VOICEOVER_PLACEMENT_REPORT.relative_to(ROOT)),
+        "voiceover_video": str(VOICEOVER_VIDEO.relative_to(ROOT)),
+        "scenes": scenes,
+        "total_cues": len(cues),
+        "total_duration_seconds": base_report.get("total_duration_seconds", 0),
+    }
+    return cues, report
+
+
 def srt_time(seconds: float) -> str:
     millis = int(round(seconds * 1000))
     hours, remainder = divmod(millis, 3_600_000)
@@ -564,21 +648,26 @@ def ffmpeg_subtitle_path(path: Path) -> str:
     return str(path.resolve()).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
 
 
-def burn_subtitles(ass: Path, output: Path) -> None:
-    if not FINAL_VIDEO.is_file():
-        raise FileNotFoundError(FINAL_VIDEO)
-    subprocess.run(
+def burn_subtitles(ass: Path, output: Path, *, source_video: Path, keep_audio: bool) -> None:
+    if not source_video.is_file():
+        raise FileNotFoundError(source_video)
+    command = [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-i",
+        str(source_video),
+        "-vf",
+        f"ass='{ffmpeg_subtitle_path(ass)}'",
+    ]
+    if keep_audio:
+        command.extend(["-c:a", "copy"])
+    else:
+        command.append("-an")
+    command.extend(
         [
-            "ffmpeg",
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-y",
-            "-i",
-            str(FINAL_VIDEO),
-            "-vf",
-            f"ass='{ffmpeg_subtitle_path(ass)}'",
-            "-an",
             "-c:v",
             "libx264",
             "-preset",
@@ -586,18 +675,35 @@ def burn_subtitles(ass: Path, output: Path) -> None:
             "-pix_fmt",
             "yuv420p",
             str(output),
-        ],
+        ]
+    )
+    subprocess.run(
+        command,
         cwd=ROOT,
         check=True,
     )
 
 
-def generate(*, burn: bool) -> dict:
+def generate(*, burn: bool, source: str = "scene") -> dict:
     SUBTITLE_DIR.mkdir(parents=True, exist_ok=True)
-    cues, report = build_cues()
-    srt = SUBTITLE_DIR / "clickhouse-sink-tutorial-human-no-audio.srt"
-    vtt = SUBTITLE_DIR / "clickhouse-sink-tutorial-human-no-audio.vtt"
-    ass = SUBTITLE_DIR / "clickhouse-sink-tutorial-human-no-audio.ass"
+    if source == "voiceover":
+        cues, report = build_voiceover_cues()
+        stem = "clickhouse-sink-tutorial-human-voiceover"
+        source_video = VOICEOVER_VIDEO
+        subtitled_video = VOICEOVER_SUBTITLED_VIDEO
+        report_path = SUBTITLE_DIR / "voiceover-subtitle-report.json"
+        keep_audio = True
+    else:
+        cues, report = build_cues()
+        stem = "clickhouse-sink-tutorial-human-no-audio"
+        source_video = FINAL_VIDEO
+        subtitled_video = SUBTITLED_VIDEO
+        report_path = SUBTITLE_DIR / "subtitle-report.json"
+        keep_audio = False
+
+    srt = SUBTITLE_DIR / f"{stem}.srt"
+    vtt = SUBTITLE_DIR / f"{stem}.vtt"
+    ass = SUBTITLE_DIR / f"{stem}.ass"
     write_srt(cues, srt)
     write_vtt(cues, vtt)
     write_ass(cues, ass)
@@ -612,7 +718,7 @@ def generate(*, burn: bool) -> dict:
             "srt": str(srt.relative_to(ROOT)),
             "vtt": str(vtt.relative_to(ROOT)),
             "ass": str(ass.relative_to(ROOT)),
-            "source_video": str(FINAL_VIDEO.relative_to(ROOT)),
+            "source_video": str(source_video.relative_to(ROOT)),
             "subtitle_style": {
                 "placement": "centered lower subtitle",
                 "terminal_placement": "right side, vertically centered when DEMO_SUBTITLE_TERMINAL_RIGHT=true",
@@ -633,10 +739,9 @@ def generate(*, burn: bool) -> dict:
         }
     )
     if burn:
-        burn_subtitles(ass, SUBTITLED_VIDEO)
-        report["subtitled_video"] = str(SUBTITLED_VIDEO.relative_to(ROOT))
-        report["subtitled_video_duration_seconds"] = round(duration(SUBTITLED_VIDEO), 3)
-    report_path = SUBTITLE_DIR / "subtitle-report.json"
+        burn_subtitles(ass, subtitled_video, source_video=source_video, keep_audio=keep_audio)
+        report["subtitled_video"] = str(subtitled_video.relative_to(ROOT))
+        report["subtitled_video_duration_seconds"] = round(duration(subtitled_video), 3)
     report_path.write_text(json.dumps(report, indent=2))
     report["report"] = str(report_path.relative_to(ROOT))
     return report
@@ -645,8 +750,11 @@ def generate(*, burn: bool) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--no-burn", action="store_true", help="Only write SRT/VTT sidecars.")
+    parser.add_argument("--source", choices=["scene", "voiceover"], default="scene")
+    parser.add_argument("--voiceover", action="store_true", help="Shortcut for --source voiceover.")
     args = parser.parse_args()
-    report = generate(burn=not args.no_burn)
+    source = "voiceover" if args.voiceover else args.source
+    report = generate(burn=not args.no_burn, source=source)
     print(json.dumps(report, indent=2))
     return 0
 

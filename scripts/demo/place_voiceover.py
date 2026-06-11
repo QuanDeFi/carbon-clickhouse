@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -274,6 +275,82 @@ def transcription_text(item: dict[str, Any] | None) -> str:
     return str(item.get("text") or item.get("transcript") or item.get("transcription") or "").strip()
 
 
+def clean_scene_markdown(scene_id: str) -> str:
+    path = ROOT / "docs/tutorial-video" / f"{scene_id}.md"
+    lines: list[str] = []
+    in_fence = False
+    for raw in path.read_text().splitlines():
+        line = raw.strip()
+        if line.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence or line.startswith("#"):
+            continue
+        if not line:
+            lines.append("")
+            continue
+        line = re.sub(r"`([^`]+)`", r"\1", line)
+        line = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", line)
+        line = re.sub(r"[*_]{1,2}([^*_]+)[*_]{1,2}", r"\1", line)
+        lines.append(line)
+
+    paragraphs: list[str] = []
+    current: list[str] = []
+    for line in lines:
+        if not line:
+            if current:
+                paragraphs.append(" ".join(current))
+                current = []
+            continue
+        current.append(line)
+    if current:
+        paragraphs.append(" ".join(current))
+    return "\n\n".join(paragraphs)
+
+
+def scene_script_units(scene_id: str) -> list[str]:
+    units: list[str] = []
+    for paragraph in [part.strip() for part in clean_scene_markdown(scene_id).split("\n\n") if part.strip()]:
+        units.extend(part.strip() for part in re.split(r"(?<=[.!?])\s+", paragraph) if part.strip())
+    return units
+
+
+def text_similarity(left: str, right: str) -> float:
+    left_tokens = set(tokenize(left))
+    right_tokens = set(tokenize(right))
+    if not left_tokens or not right_tokens:
+        return 0.0
+    overlap = len(left_tokens & right_tokens)
+    precision = overlap / len(right_tokens)
+    recall = overlap / len(left_tokens)
+    if precision + recall == 0:
+        return 0.0
+    return 2 * precision * recall / (precision + recall)
+
+
+def best_script_range(
+    asr_text: str,
+    units: list[str],
+    cursor: int,
+) -> tuple[int, int, str, float] | None:
+    if not asr_text or cursor >= len(units):
+        return None
+    best: tuple[float, int, int, str, float] | None = None
+    max_start = min(len(units), cursor + 2)
+    for start in range(cursor, max_start):
+        max_end = min(len(units), start + 6)
+        for end in range(start + 1, max_end + 1):
+            candidate = " ".join(units[start:end])
+            score = text_similarity(asr_text, candidate)
+            adjusted = score - (start - cursor) * 0.05 - (end - start - 1) * 0.01
+            if best is None or adjusted > best[0]:
+                best = (adjusted, start, end, candidate, score)
+    if best and best[4] >= 0.34:
+        _, start, end, candidate, score = best
+        return start, end, candidate, score
+    return None
+
+
 def apply_snippet_transcription(
     utterance: dict[str, Any],
     *,
@@ -285,20 +362,47 @@ def apply_snippet_transcription(
     aligned_text = str(utterance.get("text", ""))
     sid = snippet_id(scene_id, index)
     transcription = transcriptions.get(sid)
-    text = transcription_text(transcription)
     updated["snippet_id"] = sid
     updated["aligned_text"] = aligned_text
     updated["placement_text_source"] = "forced-aligned-transcript"
     if transcription:
         updated["external_transcription_status"] = "ok" if transcription.get("ok") else "failed"
         updated["external_transcription_text"] = transcription_text(transcription) or str(transcription.get("text", ""))
-    if text:
-        updated["text"] = text
-        updated["placement_text_source"] = "external-transcription"
         updated["external_transcription_provider"] = transcription.get("engine") or transcription.get("provider", "")
         updated["external_transcription_duration_ms"] = transcription.get("duration_ms")
         updated["external_transcription_audio_duration_ms"] = transcription.get("audio_duration_ms")
     return updated
+
+
+def apply_scene_text_alignment(
+    utterances: list[dict[str, Any]],
+    *,
+    scene_id: str,
+    transcriptions: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    units = scene_script_units(scene_id)
+    cursor = 0
+    result: list[dict[str, Any]] = []
+    for index, utterance in enumerate(utterances, start=1):
+        updated = apply_snippet_transcription(
+            utterance,
+            scene_id=scene_id,
+            index=index,
+            transcriptions=transcriptions,
+        )
+        asr_text = transcription_text(transcriptions.get(snippet_id(scene_id, index)))
+        match = best_script_range(asr_text, units, cursor)
+        if match:
+            start, end, text, score = match
+            updated["text"] = text
+            updated["aligned_text"] = text
+            updated["placement_text_source"] = "scene-script-aligned-by-transcription"
+            updated["script_unit_start_index"] = start + 1
+            updated["script_unit_end_index"] = end
+            updated["script_unit_match_score"] = round(score, 3)
+            cursor = end
+        result.append(updated)
+    return result
 
 
 def action_target(action: dict[str, Any]) -> dict[str, Any]:
@@ -765,13 +869,12 @@ def build_placements(args: argparse.Namespace, context: PlacementContext) -> tup
         if not utterances:
             errors.append({"type": "no-utterances", "scene": scene_id, "audio": rel(audio)})
             continue
-        for index, utterance in enumerate(utterances, start=1):
-            utterance = apply_snippet_transcription(
-                utterance,
-                scene_id=scene_id,
-                index=index,
-                transcriptions=transcriptions,
-            )
+        aligned_utterances = apply_scene_text_alignment(
+            utterances,
+            scene_id=scene_id,
+            transcriptions=transcriptions,
+        )
+        for index, utterance in enumerate(aligned_utterances, start=1):
             if not any(
                 str(utterance.get(key, "")).strip()
                 for key in ("text", "aligned_text", "external_transcription_text")
