@@ -264,3 +264,16 @@ pub async fn run_metrics_server_with_config(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::sanitize_name;
+
+    #[test]
+    fn sanitizes_metric_names_for_prometheus() {
+        assert_eq!(
+            sanitize_name("rpc.block-crawler.fetch.failed"),
+            "rpc_block_crawler_fetch_failed"
+        );
+    }
+}

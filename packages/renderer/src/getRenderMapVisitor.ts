@@ -40,6 +40,7 @@ import {
     isClickHouseEnabled,
     type ClickHouseRenderOptions,
 } from './clickhouseDdl';
+import { LEGACY_ANCHOR_EVENT_CPI_DISCRIMINATOR, normalizeCodamaEvents, type RenderEvent } from './eventNodes';
 
 export type GetRenderMapOptions = {
     renderParentInstructions?: boolean;
@@ -146,6 +147,11 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
     const renderParentInstructions = options.renderParentInstructions ?? false;
     const clickHouseEnabled = isClickHouseEnabled(options.withClickHouse);
     const clickHouseOptions = getClickHouseRenderOptions(options.withClickHouse);
+    const hasExplicitAnchorEvents = options.anchorEvents !== undefined;
+    let renderEvents: RenderEvent[] = options.anchorEvents ?? [];
+    let eventCpiDiscriminator = LEGACY_ANCHOR_EVENT_CPI_DISCRIMINATOR;
+    let eventDataOffset =
+        (renderEvents[0]?.discriminator.length ?? 0) > eventCpiDiscriminator.length ? 0 : eventCpiDiscriminator.length;
     let definedTypesMap: Map<string, any> | null = null;
     const newtypeWrapperTypes = new Set<string>();
     const optionalBoolWrapperTypes = new Set<string>(); // single-bool tuples: EOF → false (e.g. pump.fun OptionBool)
@@ -450,7 +456,7 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
 
                     let renderMap = new RenderMap().add(`src/types/${snakeCase(node.name)}.rs`, typeContent);
 
-                    for (let event of options.anchorEvents ?? []) {
+                    for (let event of renderEvents) {
                         if (camelCase(event.name) == node.name) {
                             let discriminatorManifest: DiscriminatorManifest = {
                                 bytes: `[${event.discriminator.join(', ')}]`,
@@ -808,8 +814,17 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                 },
 
                 visitRoot(node, { self }) {
+                    let renderRoot = node;
+                    const normalizedEvents = hasExplicitAnchorEvents ? null : normalizeCodamaEvents(node);
+                    if (normalizedEvents !== null) {
+                        renderRoot = normalizedEvents.root;
+                        renderEvents = normalizedEvents.events;
+                        eventCpiDiscriminator = normalizedEvents.cpiDiscriminator;
+                        eventDataOffset = normalizedEvents.eventDataOffset;
+                    }
+
                     // Only use the main program, ignore additionalPrograms
-                    const program = node.program;
+                    const program = renderRoot.program;
 
                     if (!program) {
                         throw new Error('No program found in IDL');
@@ -817,7 +832,7 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
 
                     // Build a map of defined types for type resolution
                     definedTypesMap = new Map();
-                    const allDefinedTypes = getAllDefinedTypes(node);
+                    const allDefinedTypes = getAllDefinedTypes(renderRoot);
                     for (const definedType of allDefinedTypes) {
                         definedTypesMap.set(definedType.name, definedType);
                     }
@@ -841,14 +856,14 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                     const programRenderMap = visit(program, self);
 
                     // Use getAll* functions but they will only process the main program
-                    const accountsToExport = getAllAccounts(node);
+                    const accountsToExport = getAllAccounts(renderRoot);
                     const instructionsToExport = getAllInstructionsWithSubs(program, {
                         leavesOnly: !renderParentInstructions,
                     });
                     const definedTypesToExport = allDefinedTypes;
 
                     // Compute hasGraphQLFields: whether any GraphQL query fields will be generated
-                    const hasAnchorEvents = (options.anchorEvents?.length ?? 0) > 0;
+                    const hasAnchorEvents = renderEvents.length > 0;
                     const hasGraphQLFields = (() => {
                         if (hasAnchorEvents) return true;
                         if (options.postgresMode === 'generic') {
@@ -869,12 +884,14 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                         definedTypesToExport,
                         instructionsToExport,
                         program: programWithCustomName,
-                        root: node,
+                        root: renderRoot,
                         packageName: options.packageName,
                         originalProgramName: originalProgramName, // Keep original program name for token-2022 checks
                         hasAnchorEvents,
                         hasGraphQLFields,
-                        events: options.anchorEvents ?? [],
+                        events: renderEvents,
+                        eventCpiDiscriminator,
+                        eventDataOffset,
                         postgresMode: options.postgresMode || 'typed',
                         withPostgres: options.withPostgres !== false,
                         withGraphQL: options.withGraphql !== false,
@@ -990,7 +1007,7 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}) {
                         }
                     }
 
-                    if (options.anchorEvents?.length ?? 0 > 0) {
+                    if (renderEvents.length > 0) {
                         const eventInstructionImports = new ImportMap()
                             .add('carbon_core::borsh')
                             .add('carbon_core::deserialize::ArrangeAccounts');
